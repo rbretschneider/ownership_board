@@ -11,6 +11,7 @@ func (s *server) agentRoutes(rt *router) {
 	rt.agentOnly("POST /api/v1/agent/tickets/{id}/heartbeat", s.heartbeat)
 	rt.agentOnly("POST /api/v1/agent/tickets/{id}/release", s.release)
 	rt.agentOnly("GET /api/v1/agent/tickets/{id}/brief", s.brief)
+	rt.agentOnly("POST /api/v1/agent/tickets/{id}/pr-state", s.reportPRState)
 	rt.agentOnly("POST /mcp", s.mcp)
 	rt.agentOnly("GET /mcp", s.mcpStreamUnsupported)
 	rt.agentOnly("DELETE /mcp", s.mcpStreamUnsupported)
@@ -87,4 +88,20 @@ func (s *server) mcpStreamUnsupported(w http.ResponseWriter, _ *http.Request, _ 
 	w.Header().Set("Allow", http.MethodPost)
 	writeErrorCode(w, http.StatusMethodNotAllowed, codeBadRequest, "this MCP server does not open a server-sent event stream")
 	return nil
+}
+
+func (s *server) reportPRState(w http.ResponseWriter, r *http.Request, who caller) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	var body struct {
+		State string `json:"state"`
+		Note  string `json:"note"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		return err
+	}
+	detail, err := s.deps.Board.ReportPullRequest(r.Context(), who.actor, id, app.PullRequestState(body.State), body.Note)
+	return respondDetail(w, http.StatusOK, detail, err)
 }

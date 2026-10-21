@@ -28,6 +28,7 @@ func BoardTools(services Services) []Tool {
 		saveSpec{services}, moveTicket{services}, addComment{services}, updateTicket{services},
 		heartbeat{services}, releaseTicket{services}, createTicket{services},
 		addWorkLink{services}, recordDecision{services}, linkTickets{services}, findTicketsForWork{services},
+		listTickets{services}, reportPRState{services},
 	}
 }
 

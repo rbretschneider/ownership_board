@@ -380,3 +380,50 @@ const (
 	minFence  = 3
 	fenceChar = "\x60"
 )
+
+// inReview puts a ticket with a PR into review the way an agent would.
+func (f *fixture) inReview(title string) int64 {
+	f.t.Helper()
+	repo := f.syncedRepo("acme/api", "https://git.example.com/acme/api", true)
+	id := f.ticket(title, repo.ID)
+	f.move(owner, id, domain.LaneReady, nil)
+	f.mustClaim(agent, app.ClaimInput{})
+	pr := "https://git.example.com/acme/api/pulls/9"
+	if _, err := f.board.Edit(f.ctx, agent, id, domain.TicketEdit{PRURL: &pr}); err != nil {
+		f.t.Fatalf("link PR: %v", err)
+	}
+	f.move(agent, id, domain.LaneReview, nil)
+	return id
+}
+
+func TestMergedPullRequestMovesReviewToDone(t *testing.T) {
+	f := newFixture(t)
+	id := f.inReview("ship it")
+	if _, err := f.board.ReportPullRequest(f.ctx, agent, id, app.PullRequestOpen, ""); err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	f.requireLane(id, domain.LaneReview)
+	if _, err := f.board.ReportPullRequest(f.ctx, agent, id, app.PullRequestMerged, "merged as abc1234"); err != nil {
+		t.Fatalf("merged: %v", err)
+	}
+	f.requireLane(id, domain.LaneDone)
+}
+
+func TestClosedPullRequestSendsTicketBack(t *testing.T) {
+	f := newFixture(t)
+	id := f.inReview("rejected")
+	if _, err := f.board.ReportPullRequest(f.ctx, agent, id, app.PullRequestClosed, "closed by the owner"); err != nil {
+		t.Fatalf("closed: %v", err)
+	}
+	f.requireLane(id, domain.LaneInProgress)
+}
+
+func TestPullRequestReportsOnlyApplyToReviewTickets(t *testing.T) {
+	f := newFixture(t)
+	review := f.inReview("people drag")
+	id := f.ticket("not in review", 0)
+	_, err := f.board.ReportPullRequest(f.ctx, agent, id, app.PullRequestMerged, "")
+	requireErrorKind(t, err, domain.KindConflict)
+	_, err = f.board.ReportPullRequest(f.ctx, owner, review, app.PullRequestMerged, "")
+	requireErrorKind(t, err, domain.KindForbidden)
+}

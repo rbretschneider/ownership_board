@@ -72,6 +72,8 @@ The MCP server offers these tools:
 | `record_decision` | Records a significant choice; agents cannot replace the owner's binding decisions. |
 | `link_tickets` | Relates two tickets (`caused_by`, `follow_up_of`, `duplicate_of`, `relates_to`). |
 | `find_tickets_for_work` | Commit sha or PR URL → the tickets it was recorded on. |
+| `list_tickets` | Read-only overview, optionally by lane or repo. |
+| `report_pr_state` | For a ticket in review: `merged` → Done, `closed` → back to In Progress, `open` → no change. The only agent write that needs no lease, and it only ever moves review tickets along those two edges. |
 
 **Traceability rules agents follow** (they are also in every brief): end each
 commit with the trailer `Ownership-Ticket: <id>`, record commits and PRs with
@@ -81,6 +83,31 @@ comments) out of commits, branches and PRs. These are instructions, not
 enforcement: review each PR before merging.
 
 ## 3. Pick a loop
+
+**The full pipeline loop.** `agent/claude/board-loop.md` does one pass over
+the whole board each time it runs:
+
+1. Checks every PR in review with `gh` and reports merged (→ Done) or closed
+   (→ In Progress).
+2. Claims one ticket. New tickets are refined by a `business_developer`
+   subagent on a model sized to the ticket (haiku, sonnet or opus).
+   Re-answered tickets are refined again rather than pushed straight to Ready.
+3. Ready tickets go through `architect` → `security_researcher` →
+   `senior_dev` → `qa_engineer` → `technical_writer` in a separate git
+   worktree, then the `pr` skill opens the PR and waits for green CI.
+4. Reports work links, the PR and a summary to the board and moves the ticket
+   to review.
+
+It expects those subagents and the `pr` skill to exist in your Claude Code
+setup, and `OWNERSHIP_REPOS_DIR` (or the session's parent folder) to hold your
+clones. Copy it to `~/.claude/commands/` and run:
+
+```
+/loop /board-loop
+```
+
+With no interval, Claude paces itself. It never merges, deploys or pushes to a
+default branch.
 
 **Inside an interactive session.** Copy `agent/claude/board-work.md` to
 `.claude/commands/` in the repo (or `~/.claude/commands/` for every repo),
