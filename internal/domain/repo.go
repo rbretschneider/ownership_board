@@ -20,7 +20,9 @@ type Repo struct {
 	IsPrivate     bool
 	IsArchived    bool
 	SyncedAt      *time.Time
-	CreatedAt     time.Time
+	// MissingSince is set while the provider no longer lists the repo.
+	MissingSince *time.Time
+	CreatedAt    time.Time
 }
 
 // RepoListing is a repository as a provider reports it during a sync.
@@ -105,7 +107,21 @@ func (r *Repo) Refresh(listing RepoListing, now time.Time) error {
 	r.FullName, r.URL, r.Description = fullName, repoURL, description
 	r.DefaultBranch, r.IsPrivate, r.IsArchived = strings.TrimSpace(listing.DefaultBranch), listing.IsPrivate, listing.IsArchived
 	r.SyncedAt = &now
+	r.MissingSince = nil
 	return nil
+}
+
+// MarkMissing records that the provider stopped listing the repo. The first
+// sighting of its absence is kept.
+func (r *Repo) MarkMissing(now time.Time) {
+	if r.MissingSince == nil {
+		r.MissingSince = &now
+	}
+}
+
+// IsMissing reports whether the provider no longer lists the repo.
+func (r Repo) IsMissing() bool {
+	return r.MissingSince != nil
 }
 
 // Restyle applies a person's display changes.

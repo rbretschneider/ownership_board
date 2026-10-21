@@ -11,6 +11,7 @@ import (
 	"github.com/rbretschneider/ownership_board/internal/app"
 	"github.com/rbretschneider/ownership_board/internal/auth"
 	"github.com/rbretschneider/ownership_board/internal/broker"
+	"github.com/rbretschneider/ownership_board/internal/connections"
 	"github.com/rbretschneider/ownership_board/internal/domain"
 )
 
@@ -30,10 +31,12 @@ type Deps struct {
 	Board  *app.BoardService
 	Agents *app.AgentService
 	Repos  *app.RepoService
-	Auth   *auth.Service
-	OIDC   *auth.OIDC
-	Broker *broker.Broker
-	Health Pinger
+	// Connections manages provider accounts in Settings.
+	Connections *connections.Service
+	Auth        *auth.Service
+	OIDC        *auth.OIDC
+	Broker      *broker.Broker
+	Health      Pinger
 	// MCP serves the Model Context Protocol endpoint for agents.
 	MCP    MCPHandler
 	Logger *slog.Logger
@@ -68,6 +71,7 @@ func (s *server) routes(rt *router) {
 	s.authRoutes(rt)
 	s.boardRoutes(rt)
 	s.repoRoutes(rt)
+	s.connectionRoutes(rt)
 	s.agentRoutes(rt)
 	rt.human("GET /api/v1/tokens", s.listTokens)
 	rt.human("POST /api/v1/tokens", s.createToken)

@@ -11,13 +11,17 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rbretschneider/ownership_board/internal/app"
 	"github.com/rbretschneider/ownership_board/internal/auth"
 	"github.com/rbretschneider/ownership_board/internal/broker"
 	"github.com/rbretschneider/ownership_board/internal/clock"
+	"github.com/rbretschneider/ownership_board/internal/connections"
 	"github.com/rbretschneider/ownership_board/internal/httpapi"
 	"github.com/rbretschneider/ownership_board/internal/mcp"
+	"github.com/rbretschneider/ownership_board/internal/notify"
+	"github.com/rbretschneider/ownership_board/internal/reposource"
 	"github.com/rbretschneider/ownership_board/internal/store/sqlite"
 )
 
@@ -49,12 +53,20 @@ func newServer(t *testing.T) *apiClient {
 	services := mcp.Services{
 		Board:  app.NewBoardService(db, clk, hub),
 		Agents: app.NewAgentService(db, clk, hub, hub),
-		Repos:  app.NewRepoService(db, clk, nil, logger),
+		Repos:  app.NewRepoService(db, clk, noSources{}, logger),
+	}
+	catalog, err := connections.NewCatalog(connections.CatalogDeps{
+		Store: sqlite.NewConnectionStore(db), MasterSecret: "0123456789abcdef0123456789abcdef",
+		GitHub: reposource.NewGitHubApp(http.DefaultClient, "", "", "", time.Now), HTTP: http.DefaultClient, Clock: clk, Logger: logger,
+	})
+	if err != nil {
+		t.Fatalf("catalog: %v", err)
 	}
 	handler := httpapi.New(httpapi.Deps{
 		Board: services.Board, Agents: services.Agents, Repos: services.Repos, Auth: authService,
 		OIDC: auth.NewOIDC(auth.OIDCConfig{}, authService), Broker: hub, Health: db, Logger: logger,
-		MCP: mcp.NewServer("test", logger, mcp.BoardTools(services)...),
+		MCP:         mcp.NewServer("test", logger, mcp.BoardTools(services)...),
+		Connections: connections.NewService(catalog, services.Repos, notify.Noop{}, connections.Policy{}),
 	})
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
@@ -188,4 +200,58 @@ func TestMCPRejectsPeople(t *testing.T) {
 func jsonNumber(value any) string {
 	encoded, _ := json.Marshal(value)
 	return string(encoded)
+}
+
+type noSources struct{}
+
+func (noSources) Sources(context.Context) ([]app.RepoSource, error) {
+	return nil, nil
+}
+
+func TestConnectionsArePeopleOnly(t *testing.T) {
+	browser, token := signedIn(t)
+	agent := browser.asAgent(token)
+	routes := []struct{ method, path, body string }{
+		{"GET", "/api/v1/connections", ""},
+		{"POST", "/api/v1/connections/sync", ""},
+		{"POST", "/api/v1/connections/github/device", ""},
+		{"POST", "/api/v1/connections/github/device/x/poll", ""},
+		{"POST", "/api/v1/connections/github/device/x/confirm", ""},
+		{"DELETE", "/api/v1/connections/github/device/x", ""},
+		{"PUT", "/api/v1/connections/forgejo", `{"base_url":"http://192.168.1.50:3021","token":"x"}`},
+		{"PUT", "/api/v1/connections/bitbucket", `{"email":"","token":"x"}`},
+		{"DELETE", "/api/v1/connections/github", ""},
+	}
+	for _, route := range routes {
+		agent.expect(http.StatusForbidden, route.method, route.path, route.body)
+	}
+}
+
+func TestConnectionListShowsEveryProvider(t *testing.T) {
+	browser, _ := signedIn(t)
+	status, _ := browser.do("GET", "/api/v1/connections", "")
+	if status != http.StatusOK {
+		t.Fatalf("status %d", status)
+	}
+	request, _ := http.NewRequest("GET", browser.base+"/api/v1/connections", nil)
+	response, err := browser.http.Do(request)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	defer response.Body.Close()
+	var views []map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&views); err != nil || len(views) != 3 {
+		t.Fatalf("views %v err %v", views, err)
+	}
+	if views[0]["provider"] != "github" || views[0]["is_available"] != false {
+		t.Fatalf("github view %v", views[0])
+	}
+}
+
+func TestGitHubSignInWithoutClientIDExplainsItself(t *testing.T) {
+	browser, _ := signedIn(t)
+	body := browser.expect(http.StatusConflict, "POST", "/api/v1/connections/github/device", "")
+	if !strings.Contains(body["error"].(map[string]any)["message"].(string), "GITHUB_APP_CLIENT_ID") {
+		t.Fatalf("error %v", body)
+	}
 }

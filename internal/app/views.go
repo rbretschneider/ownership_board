@@ -40,12 +40,3 @@ type SyncOutcome struct {
 	At    time.Time
 	Error string
 }
-
-// SourceStatus describes a repo source for the settings screen.
-type SourceStatus struct {
-	Provider     domain.Provider
-	Label        string
-	IsConfigured bool
-	RepoCount    int
-	LastSync     *SyncOutcome
-}

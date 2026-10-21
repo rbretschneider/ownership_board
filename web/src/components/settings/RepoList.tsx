@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Repo } from "../../api/types";
-import { repoColor } from "../../lib/repos";
+import { PROVIDER_LABELS, repoColor } from "../../lib/repos";
 import { ProviderGlyph } from "../repos/ProviderGlyph";
 import { RepoColorPicker } from "./RepoColorPicker";
 
@@ -14,7 +14,7 @@ export function RepoList({ repos, onUpdated }: { repos: Repo[]; onUpdated: (repo
   const shown = needle === "" ? repos : repos.filter((r) => r.full_name.toLowerCase().includes(needle));
 
   if (repos.length === 0) {
-    return <p className="muted">No repositories yet. Sync a provider or add one manually below.</p>;
+    return <p className="muted">No repositories yet. Connect a provider above, or add one by hand.</p>;
   }
   return (
     <div className="repo-list">
@@ -44,6 +44,7 @@ export function RepoList({ repos, onUpdated }: { repos: Repo[]; onUpdated: (repo
               <span className="repo-row__name">{repo.full_name}</span>
               {repo.is_private && <span className="badge">private</span>}
               {repo.is_archived && <span className="badge">archived</span>}
+              {repo.missing_since !== null && <span className="muted small">No longer on {PROVIDER_LABELS[repo.provider]}</span>}
             </div>
             {editingId === repo.id && (
               <RepoColorPicker

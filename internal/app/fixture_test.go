@@ -49,7 +49,7 @@ func newFixture(t *testing.T, sources ...app.RepoSource) *fixture {
 		t: t, ctx: ctx, clock: clk, events: events,
 		board:  app.NewBoardService(db, clk, sink),
 		agents: app.NewAgentService(db, clk, sink, hub),
-		repos:  app.NewRepoService(db, clk, sources, logger),
+		repos:  app.NewRepoService(db, clk, staticCatalog(sources), logger),
 	}
 }
 
@@ -164,4 +164,11 @@ func (r *recordingSink) types() []domain.TimelineType {
 		types = append(types, event.Type)
 	}
 	return types
+}
+
+// staticCatalog is a fixed list of repo sources.
+type staticCatalog []app.RepoSource
+
+func (c staticCatalog) Sources(context.Context) ([]app.RepoSource, error) {
+	return c, nil
 }

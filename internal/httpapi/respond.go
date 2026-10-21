@@ -10,6 +10,7 @@ import (
 
 	"github.com/rbretschneider/ownership_board/internal/auth"
 	"github.com/rbretschneider/ownership_board/internal/domain"
+	"github.com/rbretschneider/ownership_board/internal/reposource"
 )
 
 // maxBodyBytes caps a request body; the largest legitimate one is a spec.
@@ -26,6 +27,7 @@ const (
 	codeConflict     errorCode = "conflict"
 	codeRateLimited  errorCode = "rate_limited"
 	codeInternal     errorCode = "internal"
+	codeProvider     errorCode = "provider_error"
 )
 
 type errorBody struct {
@@ -73,6 +75,8 @@ func classify(err error) (int, errorCode, bool) {
 		return http.StatusTooManyRequests, codeRateLimited, true
 	case errors.Is(err, auth.ErrUnauthorized):
 		return http.StatusUnauthorized, codeUnauthorized, true
+	case reposource.IsProviderError(err):
+		return http.StatusBadGateway, codeProvider, true
 	}
 	switch domain.KindOf(err) {
 	case domain.KindInvalid:

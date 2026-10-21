@@ -15,10 +15,12 @@ import (
 	"github.com/rbretschneider/ownership_board/internal/broker"
 	"github.com/rbretschneider/ownership_board/internal/clock"
 	"github.com/rbretschneider/ownership_board/internal/config"
+	"github.com/rbretschneider/ownership_board/internal/connections"
 	"github.com/rbretschneider/ownership_board/internal/httpapi"
 	"github.com/rbretschneider/ownership_board/internal/mcp"
 	"github.com/rbretschneider/ownership_board/internal/notify"
 	"github.com/rbretschneider/ownership_board/internal/reposource"
+	"github.com/rbretschneider/ownership_board/internal/secretbox"
 	"github.com/rbretschneider/ownership_board/internal/store/sqlite"
 	"github.com/rbretschneider/ownership_board/internal/webui"
 )
@@ -53,14 +55,20 @@ func build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*applic
 	}
 	hub := broker.New()
 	sink := app.FanoutSink{hub, app.NewNotifyingSink(notificationPolicy(cfg), boardNotifier(cfg), logger)}
+	catalog, err := newCatalog(cfg, db, logger)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
 	services := mcp.Services{
 		Board:  app.NewBoardService(db, systemClock, sink),
 		Agents: app.NewAgentService(db, systemClock, sink, hub),
-		Repos:  app.NewRepoService(db, systemClock, repoSources(cfg), logger),
+		Repos:  app.NewRepoService(db, systemClock, catalog, logger),
 	}
 	handler := httpapi.New(httpapi.Deps{
 		Board: services.Board, Agents: services.Agents, Repos: services.Repos,
-		Auth: authService, OIDC: auth.NewOIDC(oidcConfig(cfg), authService),
+		Connections: connections.NewService(catalog, services.Repos, boardNotifier(cfg), connectionPolicy(cfg)),
+		Auth:        authService, OIDC: auth.NewOIDC(oidcConfig(cfg), authService),
 		Broker: hub, Health: db, Logger: logger,
 		MCP:           mcp.NewServer(version, logger, mcp.BoardTools(services)...),
 		PublicBaseURL: cfg.PublicBaseURL, TrustedHops: cfg.TrustProxyHops, Frontend: webui.FS(),
@@ -93,7 +101,7 @@ func (a *application) syncReposEvery(ctx context.Context, interval time.Duration
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
-		if _, err := a.repos.Sync(ctx); err != nil && ctx.Err() == nil {
+		if err := a.repos.Sync(ctx); err != nil && ctx.Err() == nil {
 			a.logger.Error("repo sync failed", "error", err)
 		}
 		select {
@@ -104,14 +112,26 @@ func (a *application) syncReposEvery(ctx context.Context, interval time.Duration
 	}
 }
 
-func repoSources(cfg config.Config) []app.RepoSource {
-	client := &http.Client{Timeout: outboundTimeout}
+// newCatalog builds the repo-source catalog: connections stored in Settings,
+// falling back to env tokens. Every provider call goes through the guarded
+// client (no redirects, no loopback or link-local destinations).
+func newCatalog(cfg config.Config, db *sqlite.DB, logger *slog.Logger) (*connections.Catalog, error) {
+	client := reposource.NewHTTPClient(reposource.ClientOptions{Timeout: outboundTimeout})
 	sources := cfg.Sources
-	return []app.RepoSource{
-		reposource.NewGitHub(client, sources.GitHubAPIURL, sources.GitHubToken),
-		reposource.NewForgejo(client, sources.ForgejoURL, sources.ForgejoToken),
-		reposource.NewBitbucket(client, sources.BitbucketEmail, sources.BitbucketToken),
-	}
+	return connections.NewCatalog(connections.CatalogDeps{
+		Store: sqlite.NewConnectionStore(db), MasterSecret: cfg.AuthTokenSecret,
+		GitHub: reposource.NewGitHubApp(client, sources.GitHubAppClientID, "", "", systemClock.Now),
+		HTTP:   client, Clock: systemClock, Logger: logger, Alerts: boardNotifier(cfg),
+		Env: connections.EnvCredentials{
+			GitHubToken: secretbox.NewSecret(sources.GitHubToken), GitHubAPIURL: sources.GitHubAPIURL,
+			ForgejoURL: sources.ForgejoURL, ForgejoToken: secretbox.NewSecret(sources.ForgejoToken),
+			BitbucketEmail: sources.BitbucketEmail, BitbucketToken: secretbox.NewSecret(sources.BitbucketToken),
+		},
+	})
+}
+
+func connectionPolicy(cfg config.Config) connections.Policy {
+	return connections.Policy{AllowedGitHubLogins: cfg.Sources.AllowedGitHubLogins, AllowedForgejoHosts: cfg.Sources.AllowedForgejoHosts}
 }
 
 func boardNotifier(cfg config.Config) app.Notifier {

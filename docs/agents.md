@@ -1,3 +1,40 @@
+# Connect GitHub (one-time setup)
+
+The board lists your repos through a GitHub App that can only read repository
+metadata (names, descriptions, default branches). It cannot read code or write
+anything. You register the App once; after that Settings > Repositories has a
+**Connect GitHub** button that works like signing in to GitHub Desktop.
+
+1. On GitHub: **Settings → Developer settings → GitHub Apps → New GitHub App**.
+2. **GitHub App name:** anything unique, such as `ownership-board-<you>`.
+   **Homepage URL:** your board's address (any URL works).
+3. **Identifying and authorizing users:** leave *Callback URL* empty, keep
+   **Expire user authorization tokens** ticked, leave *Request user
+   authorization during installation* unticked, and tick **Enable Device Flow**.
+4. **Webhook:** untick *Active*.
+5. **Permissions:** under *Repository permissions*, leave **Metadata: Read-only**
+   (the default) and add nothing else. No account or organization permissions.
+6. **Where can this GitHub App be installed?** *Only on this account*. Choose
+   *Any account* only if you need to install it on an organization; that lets
+   other accounts install your app, which grants them nothing on your board.
+7. **Create GitHub App**, then copy the **Client ID** (it starts with `Iv`).
+   You do not need a client secret or a private key.
+8. **Install App** (left menu) → your account → **All repositories**, so
+   repos you create later are included automatically. Repeat for each
+   organization whose repos you want.
+9. Put `GITHUB_APP_CLIENT_ID=<the Client ID>` in the board's `.env` and
+   restart it. Open Settings > Repositories > **Connect GitHub**, enter the
+   code at github.com/login/device, and confirm the account the board shows.
+
+The board refreshes its token by itself (tokens last 8 hours, renewal lasts 6
+months) and re-syncs every hour. Disconnect in Settings forgets the board's
+copy; to revoke the grant on GitHub too, remove the app under **GitHub →
+Settings → Applications → Authorized GitHub Apps**.
+
+Forgejo/Gitea and Bitbucket have a token form under **Add another provider**.
+Use a Forgejo token with `read:user` and `read:repository` only, or a Bitbucket
+scoped API token with `read:repository:bitbucket` and `read:user:bitbucket`.
+
 # Running an agent
 
 An agent is any program holding an agent token. It claims a ticket, reads the

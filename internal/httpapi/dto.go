@@ -42,15 +42,7 @@ type repoDTO struct {
 	IsPrivate     bool            `json:"is_private"`
 	IsArchived    bool            `json:"is_archived"`
 	SyncedAt      *time.Time      `json:"synced_at"`
-}
-
-type sourceDTO struct {
-	Provider     domain.Provider `json:"provider"`
-	Label        string          `json:"label"`
-	IsConfigured bool            `json:"is_configured"`
-	RepoCount    int             `json:"repo_count"`
-	LastSyncedAt *time.Time      `json:"last_synced_at"`
-	LastError    string          `json:"last_error"`
+	MissingSince  *time.Time      `json:"missing_since"`
 }
 
 type ticketSummaryDTO struct {
@@ -146,7 +138,7 @@ func toRepo(repo domain.Repo) repoDTO {
 	return repoDTO{
 		ID: repo.ID, Provider: repo.Provider, FullName: repo.FullName, Name: repo.Name(), URL: repo.URL,
 		Description: repo.Description, Color: repo.Color, DefaultBranch: repo.DefaultBranch,
-		IsPrivate: repo.IsPrivate, IsArchived: repo.IsArchived, SyncedAt: repo.SyncedAt,
+		IsPrivate: repo.IsPrivate, IsArchived: repo.IsArchived, SyncedAt: repo.SyncedAt, MissingSince: repo.MissingSince,
 	}
 }
 
@@ -154,19 +146,6 @@ func toRepos(repos []domain.Repo) []repoDTO {
 	out := make([]repoDTO, 0, len(repos))
 	for _, repo := range repos {
 		out = append(out, toRepo(repo))
-	}
-	return out
-}
-
-func toSources(statuses []app.SourceStatus) []sourceDTO {
-	out := make([]sourceDTO, 0, len(statuses))
-	for _, status := range statuses {
-		source := sourceDTO{Provider: status.Provider, Label: status.Label, IsConfigured: status.IsConfigured, RepoCount: status.RepoCount}
-		if status.LastSync != nil {
-			at := status.LastSync.At
-			source.LastSyncedAt, source.LastError = &at, status.LastSync.Error
-		}
-		out = append(out, source)
 	}
 	return out
 }

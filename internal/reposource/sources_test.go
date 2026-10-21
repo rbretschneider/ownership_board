@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/rbretschneider/ownership_board/internal/reposource"
+	"github.com/rbretschneider/ownership_board/internal/secretbox"
 )
 
 func TestGitHubPagesUntilAShortPage(t *testing.T) {
@@ -29,7 +30,7 @@ func TestGitHubPagesUntilAShortPage(t *testing.T) {
 		fmt.Fprint(w, `[{"full_name":"acme/last","description":null,"archived":true,"default_branch":"main"}]`)
 	}))
 	defer server.Close()
-	listings, err := reposource.NewGitHub(server.Client(), server.URL, "gh-token").List(context.Background())
+	listings, err := reposource.NewGitHub(server.Client(), server.URL, secretbox.NewSecret("gh-token")).List(context.Background())
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -57,7 +58,7 @@ func TestForgejoPagesUntilEmpty(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	listings, err := reposource.NewForgejo(server.Client(), server.URL, "fj-token").List(context.Background())
+	listings, err := reposource.NewForgejo(server.Client(), server.URL, secretbox.NewSecret("fj-token")).List(context.Background())
 	if err != nil || len(listings) != 3 {
 		t.Fatalf("got %d listings, err %v", len(listings), err)
 	}
@@ -68,7 +69,7 @@ func TestRejectedTokenExplainsItself(t *testing.T) {
 		http.Error(w, `{"message":"Bad credentials"}`, http.StatusUnauthorized)
 	}))
 	defer server.Close()
-	_, err := reposource.NewGitHub(server.Client(), server.URL, "bad").List(context.Background())
+	_, err := reposource.NewGitHub(server.Client(), server.URL, secretbox.NewSecret("bad")).List(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "token was rejected") {
 		t.Fatalf("error = %v", err)
 	}
@@ -76,13 +77,13 @@ func TestRejectedTokenExplainsItself(t *testing.T) {
 
 func TestSourcesReportConfiguration(t *testing.T) {
 	client := http.DefaultClient
-	if reposource.NewGitHub(client, "", "").IsConfigured() || !reposource.NewGitHub(client, "", "x").IsConfigured() {
+	if reposource.NewGitHub(client, "", secretbox.Secret{}).IsConfigured() || !reposource.NewGitHub(client, "", secretbox.NewSecret("x")).IsConfigured() {
 		t.Fatal("GitHub configuration is wrong")
 	}
-	if reposource.NewForgejo(client, "https://git.example.com", "").IsConfigured() {
+	if reposource.NewForgejo(client, "https://git.example.com", secretbox.Secret{}).IsConfigured() {
 		t.Fatal("Forgejo without a token reported configured")
 	}
-	if got := reposource.NewForgejo(client, "https://git.example.com/", "x").Label(); got != "Forgejo (git.example.com)" {
+	if got := reposource.NewForgejo(client, "https://git.example.com", secretbox.NewSecret("x")).Label(); got != "Forgejo (git.example.com)" {
 		t.Fatalf("label %q", got)
 	}
 }

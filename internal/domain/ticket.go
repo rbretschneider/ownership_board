@@ -236,8 +236,8 @@ func parseOptionalURL(field, raw string) (string, error) {
 		return "", err
 	}
 	parsed, err := url.Parse(value)
-	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" {
-		return "", Invalidf("%s must be an absolute http or https URL", field)
+	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" || parsed.User != nil {
+		return "", Invalidf("%s must be an absolute http or https URL without a user name or password", field)
 	}
 	return value, nil
 }

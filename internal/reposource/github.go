@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/rbretschneider/ownership_board/internal/domain"
+	"github.com/rbretschneider/ownership_board/internal/secretbox"
 )
 
 // DefaultGitHubAPIURL is github.com's API. GitHub Enterprise Server uses
@@ -19,19 +20,19 @@ const githubPageSize = 100
 // organisation repos.
 type GitHub struct {
 	apiURL string
-	token  string
+	token  secretbox.Secret
 	getter jsonGetter
 }
 
 // NewGitHub builds the source. An empty token leaves it unconfigured.
-func NewGitHub(client *http.Client, apiURL, token string) *GitHub {
+func NewGitHub(client *http.Client, apiURL string, token secretbox.Secret) *GitHub {
 	base := strings.TrimRight(firstSet(apiURL, DefaultGitHubAPIURL), "/")
 	headers := map[string]string{
-		"Authorization":        "Bearer " + token,
+		"Authorization":        "Bearer " + token.Reveal(),
 		"Accept":               "application/vnd.github+json",
 		"X-GitHub-Api-Version": "2022-11-28",
 	}
-	return &GitHub{apiURL: base, token: token, getter: jsonGetter{http: client, headers: headers}}
+	return &GitHub{apiURL: base, token: token, getter: jsonGetter{http: noRedirects(client), headers: headers}}
 }
 
 // Provider implements app.RepoSource.
@@ -46,7 +47,7 @@ func (g *GitHub) Label() string {
 }
 
 // IsConfigured implements app.RepoSource.
-func (g *GitHub) IsConfigured() bool { return g.token != "" }
+func (g *GitHub) IsConfigured() bool { return !g.token.IsEmpty() }
 
 // List implements app.RepoSource.
 func (g *GitHub) List(ctx context.Context) ([]domain.RepoListing, error) {

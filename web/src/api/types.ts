@@ -61,6 +61,8 @@ export interface Repo {
   is_private: boolean;
   is_archived: boolean;
   synced_at: string | null;
+  /** Set while the provider no longer lists the repo. */
+  missing_since: string | null;
 }
 
 /** Body of POST /repos (a manually added repository). */
@@ -74,14 +76,76 @@ export interface ManualRepoInput {
 /** Body of PATCH /repos/{id}. */
 export type RepoEdit = Partial<{ color: string; description: string }>;
 
-/** Status of a configured repository provider. */
-export interface RepoSource {
-  provider: Provider;
+/** A provider the board can connect to for repo sync. */
+export type ConnectionProvider = Exclude<Provider, "manual">;
+
+/** Whether a provider is connected, and whether it needs attention. */
+export type ConnectionStatus = "disconnected" | "connected" | "needs_reconnect";
+
+/** Who configured a provider: an admin in Settings, or the server's env vars. */
+export type ConnectionManager = "settings" | "server_env" | null;
+
+/** Outcome of a provider's most recent sync. */
+export interface SyncOutcome {
+  at: string;
+  /** "" when the sync succeeded. */
+  error: string;
+}
+
+/** One row of GET /connections. */
+export interface Connection {
+  provider: ConnectionProvider;
   label: string;
-  is_configured: boolean;
+  /** GitHub: a client ID is configured on the server. Always true for the others. */
+  is_available: boolean;
+  is_connected: boolean;
+  status: ConnectionStatus;
+  managed_by: ConnectionManager;
+  /** Provider login, e.g. "octocat"; "" when unknown. */
+  account: string;
+  /** Forgejo instance URL; "" otherwise. */
+  base_url: string;
+  /** Bitbucket email; "" otherwise. */
+  email: string;
+  connected_at: string | null;
   repo_count: number;
-  last_synced_at: string | null;
-  last_error: string;
+  last_sync: SyncOutcome | null;
+}
+
+/** Answer to POST /connections/github/device. */
+export interface DeviceFlow {
+  flow_id: string;
+  user_code: string;
+  verification_uri: string;
+  expires_at: string;
+  interval_seconds: number;
+}
+
+/** Status of a GitHub device-flow poll. */
+export type DevicePollStatus = "pending" | "confirm" | "expired" | "denied";
+
+/** Answer to POST /connections/github/device/{flow_id}/poll. */
+export interface DevicePoll {
+  status: DevicePollStatus;
+  interval_seconds: number;
+  /** Set with `confirm`: the GitHub login that entered the code. */
+  login?: string;
+  /** Set with `confirm` when another login is connected now; "" otherwise. */
+  replaces?: string;
+  /** Optional reason with `denied`. */
+  message?: string;
+}
+
+/** Body of PUT /connections/forgejo. */
+export interface ForgejoConnectionInput {
+  base_url: string;
+  token: string;
+}
+
+/** Body of PUT /connections/bitbucket. */
+export interface BitbucketConnectionInput {
+  email: string;
+  token: string;
 }
 
 /** An agent's claim on a ticket. */

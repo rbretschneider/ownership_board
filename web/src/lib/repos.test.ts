@@ -7,7 +7,7 @@ function repo(id: number, fullName: string, overrides: Partial<Repo> = {}): Repo
   return {
     id, provider: "github", full_name: fullName, name: fullName.split("/").pop() ?? fullName,
     url: "", description: "", color: "", default_branch: "main",
-    is_private: false, is_archived: false, synced_at: null, ...overrides,
+    is_private: false, is_archived: false, synced_at: null, missing_since: null, ...overrides,
   };
 }
 
@@ -58,5 +58,11 @@ describe("searchRepos", () => {
   });
   it("shows an archived repo when named exactly", () => {
     expect(searchRepos(repos, "acme/legacy").map((r) => r.id)).toEqual([4]);
+  });
+  it("hides repos the provider no longer lists unless named exactly", () => {
+    const withGone = [...repos, repo(7, "acme/gone", { missing_since: "2026-01-01T00:00:00Z" })];
+    expect(searchRepos(withGone, "").map((r) => r.id)).toEqual([1, 2, 3]);
+    expect(searchRepos(withGone, "gone").map((r) => r.id)).toEqual([]);
+    expect(searchRepos(withGone, "acme/gone").map((r) => r.id)).toEqual([7]);
   });
 });

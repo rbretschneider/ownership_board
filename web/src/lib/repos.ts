@@ -51,7 +51,9 @@ export function repoColor(repo: Pick<Repo, "color" | "full_name">): string {
 
 /**
  * Filters repos for a picker. Matching is case-insensitive on `full_name`;
- * archived repos only appear when the query names them exactly.
+ * archived repos, and repos the provider no longer lists, only appear when the
+ * query names them exactly. (A picker shows its current value separately, so
+ * an already-selected hidden repo still displays.)
  * Prefix matches on the short name sort first.
  */
 export function searchRepos(repos: readonly Repo[], query: string): Repo[] {
@@ -67,7 +69,8 @@ export function searchRepos(repos: readonly Repo[], query: string): Repo[] {
 }
 
 function isVisible(repo: Repo, needle: string): boolean {
-  return !repo.is_archived || repo.full_name.toLowerCase() === needle;
+  const isHidden = repo.is_archived || repo.missing_since !== null;
+  return !isHidden || repo.full_name.toLowerCase() === needle;
 }
 
 function rank(repo: Repo, needle: string): number {

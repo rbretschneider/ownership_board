@@ -74,8 +74,7 @@ places it at the top.
 | DELETE | `/api/v1/tickets/{id}` | | `204` |
 | POST   | `/api/v1/repos` | `{full_name, url?, description?, color?}` | `Repo` (added by hand) |
 | PATCH  | `/api/v1/repos/{id}` | `{color?, description?}` | `Repo` |
-| GET    | `/api/v1/repo-sources` | | `RepoSource[]` |
-| POST   | `/api/v1/repo-sources/sync` | | `RepoSource[]`, after syncing every configured provider |
+| *      | `/api/v1/connections/...` | | Provider connections, admin only: see [connections.md](connections.md#api-admins-only-agents-get-403) |
 | GET    | `/api/v1/tokens` | | `Token[]` |
 | POST   | `/api/v1/tokens` | `{name}` | `Token & {secret}` (the secret is shown once) |
 | DELETE | `/api/v1/tokens/{id}` | | `204` |
@@ -117,10 +116,7 @@ type Repo = {
   name: string;            // "api"
   url: string; description: string; color: string; default_branch: string;
   is_private: boolean; is_archived: boolean; synced_at: string | null;
-};
-type RepoSource = {
-  provider: Provider; label: string; is_configured: boolean; repo_count: number;
-  last_synced_at: string | null; last_error: string;
+  missing_since: string | null;  // set while the provider no longer lists it
 };
 
 type Lease = { holder: string; expires_at: string };

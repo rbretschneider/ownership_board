@@ -62,6 +62,15 @@ type Sources struct {
 	ForgejoToken   string
 	BitbucketEmail string
 	BitbucketToken string
+	// GitHubAppClientID turns on "Connect GitHub" (device flow). It is a public
+	// identifier, not a secret.
+	GitHubAppClientID string
+	// AllowedGitHubLogins, when set, is the only GitHub accounts that may be
+	// connected.
+	AllowedGitHubLogins []string
+	// AllowedForgejoHosts, when set, is the only Forgejo hosts a token may be
+	// connected for in Settings.
+	AllowedForgejoHosts []string
 }
 
 // DatabasePath is the SQLite file.
@@ -119,6 +128,10 @@ func loadSources(r *reader) Sources {
 		ForgejoToken:   r.text("FORGEJO_TOKEN", ""),
 		BitbucketEmail: r.text("BITBUCKET_EMAIL", ""),
 		BitbucketToken: r.text("BITBUCKET_TOKEN", ""),
+
+		GitHubAppClientID:   r.text("GITHUB_APP_CLIENT_ID", ""),
+		AllowedGitHubLogins: r.list("GITHUB_ALLOWED_LOGINS"),
+		AllowedForgejoHosts: r.list("FORGEJO_ALLOWED_HOSTS"),
 	}
 	if (sources.ForgejoURL == "") != (sources.ForgejoToken == "") {
 		r.fail("FORGEJO_URL and FORGEJO_TOKEN must be set together")
@@ -148,6 +161,17 @@ func (r *reader) text(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// list reads a comma-separated value, dropping blanks.
+func (r *reader) list(key string) []string {
+	var values []string
+	for _, part := range strings.Split(r.text(key, ""), ",") {
+		if value := strings.TrimSpace(part); value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
 }
 
 func (r *reader) integer(key string, fallback, min, max int) int {

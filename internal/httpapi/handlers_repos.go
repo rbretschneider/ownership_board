@@ -10,8 +10,6 @@ func (s *server) repoRoutes(rt *router) {
 	rt.anyone("GET /api/v1/repos", s.listRepos)
 	rt.human("POST /api/v1/repos", s.createRepo)
 	rt.human("PATCH /api/v1/repos/{id}", s.restyleRepo)
-	rt.human("GET /api/v1/repo-sources", s.repoSources)
-	rt.human("POST /api/v1/repo-sources/sync", s.syncRepos)
 }
 
 func (s *server) listRepos(w http.ResponseWriter, r *http.Request, _ caller) error {
@@ -59,23 +57,5 @@ func (s *server) restyleRepo(w http.ResponseWriter, r *http.Request, who caller)
 		return err
 	}
 	writeJSON(w, http.StatusOK, toRepo(repo))
-	return nil
-}
-
-func (s *server) repoSources(w http.ResponseWriter, r *http.Request, _ caller) error {
-	statuses, err := s.deps.Repos.Sources(r.Context())
-	if err != nil {
-		return err
-	}
-	writeJSON(w, http.StatusOK, toSources(statuses))
-	return nil
-}
-
-func (s *server) syncRepos(w http.ResponseWriter, r *http.Request, _ caller) error {
-	statuses, err := s.deps.Repos.Sync(r.Context())
-	if err != nil {
-		return err
-	}
-	writeJSON(w, http.StatusOK, toSources(statuses))
 	return nil
 }

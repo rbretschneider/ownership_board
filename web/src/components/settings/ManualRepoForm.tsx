@@ -41,9 +41,9 @@ export function ManualRepoForm({ onAdded }: { onAdded: (repo: Repo) => void }) {
 
   if (!isOpen) {
     return (
-      <button type="button" className="button button--ghost button--small" onClick={() => setOpen(true)}>
+      <button type="button" className="link-button manual-repo__toggle" onClick={() => setOpen(true)}>
         <Plus size={14} aria-hidden="true" />
-        Add repo manually
+        Add a repo by hand
       </button>
     );
   }

@@ -237,7 +237,7 @@ func briefInput(ctx context.Context, repos Repos, detail TicketDetail, action do
 func activeRepos(all []domain.Repo) []domain.Repo {
 	active := make([]domain.Repo, 0, len(all))
 	for _, repo := range all {
-		if !repo.IsArchived {
+		if !repo.IsArchived && !repo.IsMissing() {
 			active = append(active, repo)
 		}
 	}

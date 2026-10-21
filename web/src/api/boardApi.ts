@@ -10,7 +10,12 @@ import type {
   ManualRepoInput,
   Repo,
   RepoEdit,
-  RepoSource,
+  BitbucketConnectionInput,
+  Connection,
+  ConnectionProvider,
+  DeviceFlow,
+  DevicePoll,
+  ForgejoConnectionInput,
   TicketDetail,
   Token,
   User,
@@ -39,8 +44,15 @@ export interface BoardApi {
   repos(): Promise<Repo[]>;
   addRepo(input: ManualRepoInput): Promise<Repo>;
   editRepo(id: number, input: RepoEdit): Promise<Repo>;
-  repoSources(): Promise<RepoSource[]>;
-  syncRepoSources(): Promise<RepoSource[]>;
+  connections(): Promise<Connection[]>;
+  syncConnections(): Promise<Connection[]>;
+  startGitHubDevice(): Promise<DeviceFlow>;
+  pollGitHubDevice(flowId: string): Promise<DevicePoll>;
+  confirmGitHubDevice(flowId: string): Promise<Connection>;
+  cancelGitHubDevice(flowId: string): Promise<void>;
+  connectForgejo(input: ForgejoConnectionInput): Promise<Connection>;
+  connectBitbucket(input: BitbucketConnectionInput): Promise<Connection>;
+  disconnect(provider: ConnectionProvider): Promise<void>;
   tokens(): Promise<Token[]>;
   createToken(name: string): Promise<CreatedToken>;
   revokeToken(id: number): Promise<void>;
@@ -65,8 +77,15 @@ export function createBoardApi(http: HttpClient): BoardApi {
     repos: () => http.request("GET", "/repos"),
     addRepo: (input) => http.request("POST", "/repos", input),
     editRepo: (id, input) => http.request("PATCH", `/repos/${id}`, input),
-    repoSources: () => http.request("GET", "/repo-sources"),
-    syncRepoSources: () => http.request("POST", "/repo-sources/sync"),
+    connections: () => http.request("GET", "/connections"),
+    syncConnections: () => http.request("POST", "/connections/sync"),
+    startGitHubDevice: () => http.request("POST", "/connections/github/device"),
+    pollGitHubDevice: (flowId) => http.request("POST", `${deviceFlowPath(flowId)}/poll`),
+    confirmGitHubDevice: (flowId) => http.request("POST", `${deviceFlowPath(flowId)}/confirm`),
+    cancelGitHubDevice: (flowId) => http.request("DELETE", deviceFlowPath(flowId)),
+    connectForgejo: (input) => http.request("PUT", "/connections/forgejo", input),
+    connectBitbucket: (input) => http.request("PUT", "/connections/bitbucket", input),
+    disconnect: (provider) => http.request("DELETE", `/connections/${provider}`),
     tokens: () => http.request("GET", "/tokens"),
     createToken: (name) => http.request("POST", "/tokens", { name }),
     revokeToken: (id) => http.request("DELETE", `/tokens/${id}`),
@@ -83,4 +102,9 @@ export function boardQuery(filter: RepoFilter): string {
     case "repo":
       return `?repo=${filter.id}`;
   }
+}
+
+/** Path of one GitHub device flow; the id is opaque, so it is encoded. */
+export function deviceFlowPath(flowId: string): string {
+  return `/connections/github/device/${encodeURIComponent(flowId)}`;
 }
