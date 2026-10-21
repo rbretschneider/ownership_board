@@ -94,7 +94,13 @@ the whole board each time it runs:
    Re-answered tickets are refined again rather than pushed straight to Ready.
 3. Ready tickets go through `architect` → `security_researcher` →
    `senior_dev` → `qa_engineer` → `technical_writer` in a separate git
-   worktree, then the `pr` skill opens the PR and waits for green CI.
+   worktree, then `senior_dev` opens the PR with the `pr` skill and waits for
+   green CI. Each stage runs on a model picked by the spec's build tier
+   (small, normal or large), and two QA failures move the build up a tier.
+
+The pass itself only coordinates: it calls board tools and `gh pr view`, and
+hands all repo work to subagents. So it can run on a small model, for example
+`claude -p "/board-loop" --model haiku` from a headless runner.
 4. Reports work links, the PR and a summary to the board and moves the ticket
    to review.
 
