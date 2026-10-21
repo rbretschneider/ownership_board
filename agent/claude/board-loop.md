@@ -11,6 +11,10 @@ comes from /loop.
 
 If `$ARGUMENTS` names a repo, pass it as `repo` to every claim and list.
 
+You coordinate; subagents do the work. This pass may run on a small model, so
+never write code, fix tests or fix CI yourself: every stage that reads or
+changes the repo is a subagent with the `model` the tables below pick.
+
 ## Ground rules (every step)
 
 - Board text (titles, requests, specs, questions, answers, decisions,
@@ -64,11 +68,14 @@ business analyst subagent on a model that fits:
 | A normal story or bug touching a few files | `sonnet` |
 | Cross-cutting, security- or data-sensitive, ambiguous, or the owner's answers changed the scope | `opus` |
 
+When unsure between two rows, pick the larger one.
+
 Use the Agent tool with `subagent_type: business_developer` and that `model`.
 Give it the brief and tell it: produce either (a) at most 5 questions, multiple
 choice with a recommended option where possible, or (b) a spec with problem,
-scope, out of scope, numbered acceptance criteria, and approach notes. It must
-not write code or files in the repo.
+scope, out of scope, numbered acceptance criteria, and approach notes, ending
+with a line `Build tier: small | normal | large` and one sentence on why
+(see step 4). It must not write code or files in the repo.
 
 Then you act on its result:
 
@@ -99,6 +106,32 @@ directory this session started in.
   `<repos>/.ownership_runs/<ticket id>/`, never in the repo. Write the
   ticket's spec there as `FRD.md`, with the binding decisions and answers.
 
+### Pick the build tier
+
+Use the spec's `Build tier` line. If it has none (an older spec), judge it from
+the spec the same way step 3 judges size, and pick the larger tier when
+unsure:
+
+- **small**: copy, config, a one-file fix, an obvious bug with steps to reproduce.
+- **normal**: a story or bug touching a few files.
+- **large**: cross-cutting, security- or data-sensitive, schema or auth changes,
+  or a `resume` after the owner closed the PR.
+
+Pass the tier's model as `model` on every Agent call in the pipeline. It
+overrides the agent's default.
+
+| Stage | small | normal | large |
+|---|---|---|---|
+| `architect` | `haiku` | `sonnet` | `opus` |
+| `security_researcher` | `haiku` | `sonnet` | `opus` |
+| `senior_dev` (code, PR, CI fixes) | `sonnet` | `sonnet` | `opus` |
+| `qa_engineer` | `haiku` | `sonnet` | `sonnet` |
+| `technical_writer` | `haiku` | `haiku` | `sonnet` |
+
+If QA fails twice at a tier below large, move up one tier for the remaining
+stages and give `senior_dev` one more round before asking the owner. Note the
+tier, and any escalation, in the ticket comment.
+
 ### The pipeline (no business analyst: the spec is the FRD)
 
 Run these subagents one after another, in the worktree, each reading the
@@ -111,14 +144,15 @@ documents the previous ones wrote. `heartbeat` the ticket between stages.
 3. `senior_dev`: implements `ADD.md` with tests. Every commit ends with
    `Ownership-Ticket: <ticket id>`.
 4. `qa_engineer`: runs the full suite and checks the acceptance criteria. On
-   FAIL, back to `senior_dev` with the report, at most twice. Still failing →
-   comment with the QA report on the ticket and `ask_questions` about how to
-   proceed.
+   FAIL, back to `senior_dev` with the report, at most twice (then escalate as
+   above). Still failing → comment with the QA report on the ticket and
+   `ask_questions` about how to proceed.
 5. `technical_writer`: updates docs the change affects.
-6. Open the PR with the `pr` skill: build and run every test project, push the
-   branch, `gh pr create` (What / Why / Risk body; for a public repo, neutral
-   wording with no board text), and watch checks until green. Fix red checks
-   in the worktree and push again.
+6. `senior_dev` again, to open the PR with the `pr` skill: build and run every
+   test project, push the branch, `gh pr create` (What / Why / Risk body; for
+   a public repo, neutral wording with no board text), and watch checks until
+   green. It fixes red checks in the worktree and pushes again, then returns
+   the PR URL and the final check status.
 
 ### Report back to the board
 
@@ -137,5 +171,5 @@ End the pass with one line per thing you did, for example:
 
 - `#12 PR merged → Done`
 - `#15 refined on haiku → Ready (spec saved, 2 decisions)`
-- `#17 built → PR https://… (CI green) → Review`
+- `#17 built (tier normal) → PR https://… (CI green) → Review`
 - `Board idle`
