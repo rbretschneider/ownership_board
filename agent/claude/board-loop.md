@@ -123,7 +123,7 @@ overrides the agent's default.
 | Stage | small | normal | large |
 |---|---|---|---|
 | `architect` | `haiku` | `sonnet` | `opus` |
-| `security_researcher` | `haiku` | `sonnet` | `opus` |
+| `security_researcher` (never below `sonnet`) | `sonnet` | `sonnet` | `opus` |
 | `senior_dev` (code, PR, CI fixes) | `sonnet` | `sonnet` | `opus` |
 | `qa_engineer` | `haiku` | `sonnet` | `sonnet` |
 | `technical_writer` | `haiku` | `haiku` | `sonnet` |
