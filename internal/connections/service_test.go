@@ -122,7 +122,8 @@ func newHarnessLogging(t *testing.T, policy connections.Policy, logger *slog.Log
 	h.logger = logger
 	h.catalog = h.newCatalog(masterSecret)
 	h.repos = app.NewRepoService(db, h.clock, h.catalog, logger)
-	h.service = connections.NewService(h.catalog, h.repos, notify.Noop{}, policy)
+	h.service = connections.NewService(h.catalog, h.repos, notify.Noop{}, policy).
+		WithBackgroundRunner(func(work func()) { work() })
 	return h
 }
 
@@ -276,7 +277,8 @@ func TestSyncListsRepoThroughTheConnection(t *testing.T) {
 
 func TestConcurrentSyncsRefreshOnlyOnce(t *testing.T) {
 	h := newHarness(t, connections.Policy{})
-	h.connect(60)
+	h.connect(28800)
+	h.expireSoon()
 	var wg sync.WaitGroup
 	for i := 0; i < 4; i++ {
 		wg.Add(1)
@@ -296,7 +298,8 @@ func TestConcurrentSyncsRefreshOnlyOnce(t *testing.T) {
 
 func TestRefusedRefreshAsksForReconnect(t *testing.T) {
 	h := newHarness(t, connections.Policy{})
-	h.connect(60)
+	h.connect(28800)
+	h.expireSoon()
 	h.github.refreshBody.Store(`{"error":"bad_refresh_token"}`)
 	_ = h.repos.SyncProvider(h.ctx, domain.ProviderGitHub)
 	if status := h.githubView().Status; status != connections.StatusNeedsReconnect {
@@ -306,7 +309,8 @@ func TestRefusedRefreshAsksForReconnect(t *testing.T) {
 
 func TestTransientRefreshFailureKeepsTheConnection(t *testing.T) {
 	h := newHarness(t, connections.Policy{})
-	h.connect(60)
+	h.connect(28800)
+	h.expireSoon()
 	h.github.refreshStatus.Store(http.StatusBadGateway)
 	_ = h.repos.SyncProvider(h.ctx, domain.ProviderGitHub)
 	view := h.githubView()
@@ -344,7 +348,8 @@ func TestTokensNeverLeak(t *testing.T) {
 		return logged.Write(p)
 	}), &slog.HandlerOptions{Level: slog.LevelDebug}))
 	h := newHarnessLogging(t, connections.Policy{}, logger)
-	h.connect(60)
+	h.connect(28800)
+	h.expireSoon()
 	h.github.refreshStatus.Store(http.StatusBadGateway)
 	_ = h.repos.SyncProvider(h.ctx, domain.ProviderGitHub)
 	h.github.refreshStatus.Store(http.StatusOK)
@@ -378,3 +383,9 @@ func TestFailedValidationGivesOneFixedMessage(t *testing.T) {
 type writerFunc func([]byte) (int, error)
 
 func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
+
+// expireSoon moves the clock to just inside the refresh window of a token
+// issued with an 8-hour lifetime.
+func (h *harness) expireSoon() {
+	h.clock.Advance(8*time.Hour - 5*time.Minute)
+}

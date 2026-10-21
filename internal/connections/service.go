@@ -32,6 +32,9 @@ type Service struct {
 	alerts  app.Notifier
 	policy  Policy
 	logger  *slog.Logger
+	// background runs work that must not hold up a request, such as the sync
+	// after connecting.
+	background func(func())
 }
 
 // Policy holds the optional operator restrictions.
@@ -44,7 +47,17 @@ type Policy struct {
 
 // NewService wires the service.
 func NewService(catalog *Catalog, repos *app.RepoService, alerts app.Notifier, policy Policy) *Service {
-	return &Service{catalog: catalog, flows: newFlows(catalog.clock), repos: repos, alerts: alerts, policy: policy, logger: catalog.logger}
+	return &Service{
+		catalog: catalog, flows: newFlows(catalog.clock), repos: repos, alerts: alerts, policy: policy, logger: catalog.logger,
+		background: func(work func()) { go work() },
+	}
+}
+
+// WithBackgroundRunner replaces how background work is started, for example
+// to run it inline so a test can observe its result deterministically.
+func (s *Service) WithBackgroundRunner(run func(func())) *Service {
+	s.background = run
+	return s
 }
 
 // List describes every provider for Settings.
@@ -221,7 +234,8 @@ func (s *Service) connect(ctx context.Context, admin Admin, record Record) (View
 	if err := s.store(ctx, admin, record); err != nil {
 		return View{}, err
 	}
-	go s.syncInBackground(record.Provider)
+	provider := record.Provider
+	s.background(func() { s.syncInBackground(provider) })
 	summaries, err := s.repos.Summaries(ctx)
 	if err != nil {
 		return View{}, err
