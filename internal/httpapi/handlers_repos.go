@@ -46,13 +46,14 @@ func (s *server) restyleRepo(w http.ResponseWriter, r *http.Request, who caller)
 		return err
 	}
 	var body struct {
-		Color       *string `json:"color"`
-		Description *string `json:"description"`
+		Color         *string `json:"color"`
+		TreatAsPublic *bool   `json:"treat_as_public"`
+		Description   *string `json:"description"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
 	}
-	repo, err := s.deps.Repos.Restyle(r.Context(), who.actor, id, domain.RepoStyle{Color: body.Color, Description: body.Description})
+	repo, err := s.deps.Repos.Restyle(r.Context(), who.actor, id, domain.RepoStyle{Color: body.Color, Description: body.Description, TreatAsPublic: body.TreatAsPublic})
 	if err != nil {
 		return err
 	}

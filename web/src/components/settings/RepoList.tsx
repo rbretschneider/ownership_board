@@ -3,6 +3,7 @@ import type { Repo } from "../../api/types";
 import { PROVIDER_LABELS, repoColor } from "../../lib/repos";
 import { ProviderGlyph } from "../repos/ProviderGlyph";
 import { RepoColorPicker } from "./RepoColorPicker";
+import { RepoVisibilityToggle } from "./RepoVisibilityToggle";
 
 const SEARCH_ID = "repo-list-search";
 
@@ -42,10 +43,10 @@ export function RepoList({ repos, onUpdated }: { repos: Repo[]; onUpdated: (repo
                 onClick={() => setEditingId(editingId === repo.id ? null : repo.id)}
               />
               <span className="repo-row__name">{repo.full_name}</span>
-              {repo.is_private && <span className="badge">private</span>}
               {repo.is_archived && <span className="badge">archived</span>}
               {repo.missing_since !== null && <span className="muted small">No longer on {PROVIDER_LABELS[repo.provider]}</span>}
             </div>
+            <RepoVisibilityToggle repo={repo} onUpdated={onUpdated} />
             {editingId === repo.id && (
               <RepoColorPicker
                 repo={repo}

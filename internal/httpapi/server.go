@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/rbretschneider/ownership_board/internal/app"
 	"github.com/rbretschneider/ownership_board/internal/auth"
@@ -58,7 +59,7 @@ func New(deps Deps) http.Handler {
 	net := network{trustedHops: deps.TrustedHops}
 	s := &server{deps: deps, cookies: cookieJar{network: net}, network: net}
 	mux := http.NewServeMux()
-	rt := &router{mux: mux, auth: deps.Auth, origin: deps.PublicBaseURL, logger: deps.Logger, network: net}
+	rt := &router{mux: mux, auth: deps.Auth, origin: deps.PublicBaseURL, logger: deps.Logger, network: net, writes: newWriteLimiter(time.Now)}
 	s.routes(rt)
 	mux.Handle("/api/", http.HandlerFunc(apiNotFound))
 	mux.Handle("/", readOnly(newSPA(deps.Frontend)))
@@ -72,6 +73,7 @@ func (s *server) routes(rt *router) {
 	s.boardRoutes(rt)
 	s.repoRoutes(rt)
 	s.connectionRoutes(rt)
+	s.traceRoutes(rt)
 	s.agentRoutes(rt)
 	rt.human("GET /api/v1/tokens", s.listTokens)
 	rt.human("POST /api/v1/tokens", s.createToken)

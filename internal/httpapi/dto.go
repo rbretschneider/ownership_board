@@ -31,18 +31,20 @@ type oidcDTO struct {
 }
 
 type repoDTO struct {
-	ID            int64           `json:"id"`
-	Provider      domain.Provider `json:"provider"`
-	FullName      string          `json:"full_name"`
-	Name          string          `json:"name"`
-	URL           string          `json:"url"`
-	Description   string          `json:"description"`
-	Color         string          `json:"color"`
-	DefaultBranch string          `json:"default_branch"`
-	IsPrivate     bool            `json:"is_private"`
-	IsArchived    bool            `json:"is_archived"`
-	SyncedAt      *time.Time      `json:"synced_at"`
-	MissingSince  *time.Time      `json:"missing_since"`
+	ID            int64             `json:"id"`
+	Provider      domain.Provider   `json:"provider"`
+	FullName      string            `json:"full_name"`
+	Name          string            `json:"name"`
+	URL           string            `json:"url"`
+	Description   string            `json:"description"`
+	Color         string            `json:"color"`
+	DefaultBranch string            `json:"default_branch"`
+	IsPrivate     bool              `json:"is_private"`
+	IsArchived    bool              `json:"is_archived"`
+	SyncedAt      *time.Time        `json:"synced_at"`
+	MissingSince  *time.Time        `json:"missing_since"`
+	TreatAsPublic bool              `json:"treat_as_public"`
+	Visibility    domain.Visibility `json:"visibility"`
 }
 
 type ticketSummaryDTO struct {
@@ -68,6 +70,9 @@ type ticketDetailDTO struct {
 	CreatedBy string        `json:"created_by"`
 	Questions []questionDTO `json:"questions"`
 	Timeline  []timelineDTO `json:"timeline"`
+	WorkLinks []workLinkDTO `json:"work_links"`
+	Decisions []decisionDTO `json:"decisions"`
+	Relations []relationDTO `json:"relations"`
 }
 
 type questionDTO struct {
@@ -139,6 +144,7 @@ func toRepo(repo domain.Repo) repoDTO {
 		ID: repo.ID, Provider: repo.Provider, FullName: repo.FullName, Name: repo.Name(), URL: repo.URL,
 		Description: repo.Description, Color: repo.Color, DefaultBranch: repo.DefaultBranch,
 		IsPrivate: repo.IsPrivate, IsArchived: repo.IsArchived, SyncedAt: repo.SyncedAt, MissingSince: repo.MissingSince,
+		TreatAsPublic: repo.TreatAsPublic, Visibility: repo.Visibility(time.Now()),
 	}
 }
 
@@ -188,6 +194,7 @@ func toDetail(detail app.TicketDetail) ticketDetailDTO {
 	return ticketDetailDTO{
 		ticketSummaryDTO: toSummary(detail.TicketSummary), Body: t.Body, Spec: t.Spec, CreatedBy: t.CreatedBy,
 		Questions: questions, Timeline: timeline,
+		WorkLinks: toWorkLinks(detail.WorkLinks), Decisions: toDecisions(detail.Decisions), Relations: toRelations(detail.Related),
 	}
 }
 

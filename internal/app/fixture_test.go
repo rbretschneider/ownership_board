@@ -30,6 +30,7 @@ type fixture struct {
 	board  *app.BoardService
 	agents *app.AgentService
 	repos  *app.RepoService
+	store  *sqlite.DB
 }
 
 func newFixture(t *testing.T, sources ...app.RepoSource) *fixture {
@@ -46,7 +47,7 @@ func newFixture(t *testing.T, sources ...app.RepoSource) *fixture {
 	sink := app.FanoutSink{events, hub}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	return &fixture{
-		t: t, ctx: ctx, clock: clk, events: events,
+		t: t, ctx: ctx, clock: clk, events: events, store: db,
 		board:  app.NewBoardService(db, clk, sink),
 		agents: app.NewAgentService(db, clk, sink, hub),
 		repos:  app.NewRepoService(db, clk, staticCatalog(sources), logger),
@@ -171,4 +172,14 @@ type staticCatalog []app.RepoSource
 
 func (c staticCatalog) Sources(context.Context) ([]app.RepoSource, error) {
 	return c, nil
+}
+
+// agentAsk claims the next ticket, which must be id, and asks on it, the way a
+// real agent does.
+func (f *fixture) agentAsk(id int64, input app.AskInput) (app.TicketDetail, error) {
+	f.t.Helper()
+	if work := f.mustClaim(agent, app.ClaimInput{}); work.Ticket.Ticket.ID != id {
+		f.t.Fatalf("claimed #%d, want #%d", work.Ticket.Ticket.ID, id)
+	}
+	return f.board.Ask(f.ctx, agent, id, input)
 }

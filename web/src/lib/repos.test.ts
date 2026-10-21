@@ -7,7 +7,8 @@ function repo(id: number, fullName: string, overrides: Partial<Repo> = {}): Repo
   return {
     id, provider: "github", full_name: fullName, name: fullName.split("/").pop() ?? fullName,
     url: "", description: "", color: "", default_branch: "main",
-    is_private: false, is_archived: false, synced_at: null, missing_since: null, ...overrides,
+    is_private: false, is_archived: false, synced_at: null, missing_since: null,
+    treat_as_public: false, visibility: "public", ...overrides,
   };
 }
 

@@ -54,8 +54,7 @@ func TestMoveAfterTicketInAnotherLaneIsRejected(t *testing.T) {
 func TestAskingMovesTicketToPendingAnswers(t *testing.T) {
 	f := newFixture(t)
 	id := f.ticket("vague idea", 0)
-	f.mustClaim(agent, app.ClaimInput{})
-	detail, err := f.board.Ask(f.ctx, agent, id, ask("Mobile too?", "Dark by default?"))
+	detail, err := f.agentAsk(id, ask("Mobile too?", "Dark by default?"))
 	if err != nil {
 		t.Fatalf("Ask: %v", err)
 	}
@@ -67,7 +66,7 @@ func TestAskingMovesTicketToPendingAnswers(t *testing.T) {
 func TestAnsweringEverythingSendsTicketBackToRefinement(t *testing.T) {
 	f := newFixture(t)
 	id := f.ticket("vague idea", 0)
-	asked, err := f.board.Ask(f.ctx, agent, id, ask("One?", "Two?"))
+	asked, err := f.agentAsk(id, ask("One?", "Two?"))
 	if err != nil {
 		t.Fatalf("Ask: %v", err)
 	}
@@ -85,10 +84,14 @@ func TestAnsweringEverythingSendsTicketBackToRefinement(t *testing.T) {
 func TestSecondRoundIsNumberedAfterTheFirst(t *testing.T) {
 	f := newFixture(t)
 	id := f.ticket("idea", 0)
-	if _, err := f.board.Ask(f.ctx, agent, id, ask("One?")); err != nil {
+	first, err := f.agentAsk(id, ask("One?"))
+	if err != nil {
 		t.Fatalf("first ask: %v", err)
 	}
-	detail, err := f.board.Ask(f.ctx, agent, id, ask("Two?"))
+	if _, err := f.board.Answer(f.ctx, owner, id, []domain.AnswerDraft{{QuestionID: first.Questions[0].ID, Text: "yes"}}); err != nil {
+		t.Fatalf("answer: %v", err)
+	}
+	detail, err := f.agentAsk(id, ask("Two?"))
 	if err != nil {
 		t.Fatalf("second ask: %v", err)
 	}
@@ -100,7 +103,7 @@ func TestSecondRoundIsNumberedAfterTheFirst(t *testing.T) {
 func TestOnlyPeopleAnswer(t *testing.T) {
 	f := newFixture(t)
 	id := f.ticket("idea", 0)
-	asked, _ := f.board.Ask(f.ctx, agent, id, ask("One?"))
+	asked, _ := f.agentAsk(id, ask("One?"))
 	_, err := f.board.Answer(f.ctx, agent, id, []domain.AnswerDraft{{QuestionID: asked.Questions[0].ID, Text: "me"}})
 	requireErrorKind(t, err, domain.KindForbidden)
 }
@@ -108,7 +111,7 @@ func TestOnlyPeopleAnswer(t *testing.T) {
 func TestAnswerForAnotherTicketsQuestionIsRejected(t *testing.T) {
 	f := newFixture(t)
 	a, b := f.ticket("a", 0), f.ticket("b", 0)
-	asked, _ := f.board.Ask(f.ctx, agent, a, ask("One?"))
+	asked, _ := f.agentAsk(a, ask("One?"))
 	_, err := f.board.Answer(f.ctx, owner, b, []domain.AnswerDraft{{QuestionID: asked.Questions[0].ID, Text: "x"}})
 	requireErrorKind(t, err, domain.KindInvalid)
 }
@@ -116,6 +119,7 @@ func TestAnswerForAnotherTicketsQuestionIsRejected(t *testing.T) {
 func TestAgentCannotQueueATicketWithoutARepo(t *testing.T) {
 	f := newFixture(t)
 	id := f.ticket("no repo", 0)
+	f.mustClaim(agent, app.ClaimInput{})
 	_, err := f.board.Move(f.ctx, agent, id, app.MoveInput{Lane: string(domain.LaneReady)})
 	requireErrorKind(t, err, domain.KindInvalid)
 	f.move(owner, id, domain.LaneReady, nil)
@@ -166,5 +170,18 @@ func TestEventsArePublishedAfterChanges(t *testing.T) {
 	want := []domain.TimelineType{domain.TimelineCreated, domain.TimelineMoved, domain.TimelineDeleted}
 	if got := f.events.types(); !slices.Equal(got, want) {
 		t.Fatalf("events = %v, want %v", got, want)
+	}
+}
+
+func TestAgentCannotChangeATicketItDoesNotHold(t *testing.T) {
+	f := newFixture(t)
+	id := f.ticket("someone else's", 0)
+	title := "rewritten"
+	_, editErr := f.board.Edit(f.ctx, agent, id, domain.TicketEdit{Title: &title})
+	_, specErr := f.board.SetSpec(f.ctx, agent, id, "new spec")
+	_, commentErr := f.board.Comment(f.ctx, agent, id, "hello")
+	_, moveErr := f.board.Move(f.ctx, agent, id, app.MoveInput{Lane: string(domain.LaneDone)})
+	for _, err := range []error{editErr, specErr, commentErr, moveErr} {
+		requireErrorKind(t, err, domain.KindForbidden)
 	}
 }

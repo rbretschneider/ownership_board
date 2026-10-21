@@ -226,3 +226,13 @@ func scanAPIToken(row scanner) (auth.APIToken, error) {
 	token.RevokedAt, err = parseOptionalTime(revoked)
 	return token, err
 }
+
+// IsPersonName implements auth.Store.
+func (s *AuthStore) IsPersonName(ctx context.Context, name string) (bool, error) {
+	var exists bool
+	err := s.db.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE name = ? COLLATE NOCASE)`, name).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("sqlite: check user name: %w", err)
+	}
+	return exists, nil
+}

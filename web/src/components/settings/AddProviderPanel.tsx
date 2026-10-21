@@ -14,7 +14,7 @@ export interface AddProviderPanelProps {
 
 /**
  * The collapsed "Add another provider" disclosure: token forms for Forgejo and
- * Bitbucket, plus a note when the server has no GitHub client ID.
+ * Bitbucket. GitHub setup has its own card in the Repositories section.
  */
 export function AddProviderPanel({ connections, onConnected }: AddProviderPanelProps) {
   const api = useApi();
@@ -22,14 +22,12 @@ export function AddProviderPanel({ connections, onConnected }: AddProviderPanelP
   const [isOpen, setOpen] = useState(false);
   const [chosen, setChosen] = useState<TokenProviderSpec | null>(null);
   const unset = (provider: Connection["provider"]) => !connections.some((c) => c.provider === provider && hasCard(c));
-  const github = connections.find((c) => c.provider === "github");
   const offers = [
     { spec: FORGEJO_FORM, isShown: unset("forgejo") },
     { spec: BITBUCKET_FORM, isShown: unset("bitbucket") },
   ].filter((offer) => offer.isShown);
-  const isGitHubMissing = github !== undefined && !github.is_available;
 
-  if (offers.length === 0 && !isGitHubMissing) {
+  if (offers.length === 0) {
     return null;
   }
   return (
@@ -64,9 +62,6 @@ export function AddProviderPanel({ connections, onConnected }: AddProviderPanelP
               }}
               onCancel={() => setChosen(null)}
             />
-          )}
-          {isGitHubMissing && (
-            <p className="field__hint">GitHub sign-in needs GITHUB_APP_CLIENT_ID on the server (see docs/agents.md).</p>
           )}
         </div>
       )}

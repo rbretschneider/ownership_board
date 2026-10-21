@@ -195,3 +195,11 @@ func TestPasswordHashRoundTrip(t *testing.T) {
 		t.Fatal("wrong password matched")
 	}
 }
+
+func TestAgentTokenCannotTakeAPersonsName(t *testing.T) {
+	h := newHarness(t)
+	owner := h.setup().User
+	if _, _, err := h.auth.CreateAPIToken(h.ctx, owner, "owner"); domain.KindOf(err) != domain.KindConflict {
+		t.Fatalf("token named like a person: %v", err)
+	}
+}

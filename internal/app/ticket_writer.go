@@ -15,15 +15,21 @@ type ticketChange func(ctx context.Context, repos Repos, ticket *domain.Ticket) 
 type ticketWriter struct {
 	store Store
 	sink  EventSink
+	clock Clock
 }
 
-// change applies fn to ticket id and returns the ticket as it now stands.
-func (w ticketWriter) change(ctx context.Context, id int64, fn ticketChange) (TicketDetail, error) {
+// change applies fn to ticket id and returns the ticket as it now stands. An
+// agent may change only a ticket it holds the lease on: this is the one place
+// every ticket write passes through, so no use case can forget the check.
+func (w ticketWriter) change(ctx context.Context, actor domain.Actor, id int64, fn ticketChange) (TicketDetail, error) {
 	var detail TicketDetail
 	var events []Event
 	err := w.store.Write(ctx, func(repos Repos) error {
 		ticket, err := repos.Tickets().Get(ctx, id)
 		if err != nil {
+			return err
+		}
+		if err := requireLeaseForAgent(ticket, actor, w.clock.Now()); err != nil {
 			return err
 		}
 		detail, events, err = w.apply(ctx, repos, &ticket, fn)
@@ -76,8 +82,65 @@ func loadDetail(ctx context.Context, repos Repos, ticket domain.Ticket) (TicketD
 	if err != nil {
 		return TicketDetail{}, err
 	}
-	summary := TicketSummary{Ticket: ticket, OpenQuestions: countOpen(questions)}
-	return TicketDetail{TicketSummary: summary, Questions: questions, Timeline: timeline}, nil
+	detail := TicketDetail{
+		TicketSummary: TicketSummary{Ticket: ticket, OpenQuestions: countOpen(questions)},
+		Questions:     questions, Timeline: timeline,
+	}
+	if detail.Repo, err = repoOf(ctx, repos, ticket.RepoID); err != nil {
+		return TicketDetail{}, err
+	}
+	return detail, loadTrace(ctx, repos, &detail)
+}
+
+// loadTrace adds work links, decisions and related tickets to a detail.
+func loadTrace(ctx context.Context, repos Repos, detail *TicketDetail) error {
+	id := detail.Ticket.ID
+	var err error
+	if detail.WorkLinks, err = repos.WorkLinks().ForTicket(ctx, id); err != nil {
+		return err
+	}
+	if detail.Decisions, err = repos.Decisions().ForTicket(ctx, id); err != nil {
+		return err
+	}
+	relations, err := repos.Relations().ForTicket(ctx, id)
+	if err != nil {
+		return err
+	}
+	for _, relation := range relations {
+		related, err := relatedTicket(ctx, repos, id, relation)
+		if err != nil {
+			return err
+		}
+		detail.Related = append(detail.Related, related)
+	}
+	return nil
+}
+
+func relatedTicket(ctx context.Context, repos Repos, ticketID int64, relation domain.Relation) (RelatedTicket, error) {
+	isOutgoing := relation.FromID == ticketID
+	otherID := relation.FromID
+	if isOutgoing {
+		otherID = relation.ToID
+	}
+	other, err := repos.Tickets().Get(ctx, otherID)
+	if err != nil {
+		return RelatedTicket{}, err
+	}
+	otherRepo, err := repoOf(ctx, repos, other.RepoID)
+	ref := TicketRef{ID: other.ID, Title: other.Title, Lane: other.Lane, Repo: otherRepo}
+	return RelatedTicket{Relation: relation, IsOutgoing: isOutgoing, Other: ref}, err
+}
+
+// repoOf returns the repo with id, or nil for "no repo".
+func repoOf(ctx context.Context, repos Repos, repoID int64) (*domain.Repo, error) {
+	if repoID == 0 {
+		return nil, nil
+	}
+	repo, err := repos.CodeRepos().Get(ctx, repoID)
+	if err != nil {
+		return nil, err
+	}
+	return &repo, nil
 }
 
 // moveEntry records a lane change, or nothing when the lane did not change.

@@ -5,13 +5,23 @@ export interface AnswerDraft {
   choice: number | null;
   text: string;
   deferred: boolean;
+  /**
+   * The current value came from "Accept recommendations" rather than the
+   * person's own tap, so the server records it as delegated, not binding.
+   */
+  isBulk: boolean;
 }
 
 /** Drafts keyed by question id. */
 export type DraftMap = Readonly<Record<number, AnswerDraft>>;
 
 /** A draft with nothing chosen yet. */
-export const EMPTY_DRAFT: AnswerDraft = { choice: null, text: "", deferred: false };
+export const EMPTY_DRAFT: AnswerDraft = { choice: null, text: "", deferred: false, isBulk: false };
+
+/** A draft the person edited by hand: it is theirs, no longer a bulk fill. */
+export function ownDraft(draft: AnswerDraft): AnswerDraft {
+  return { ...draft, isBulk: false };
+}
 
 /** Questions the human has not answered yet, in asking order. */
 export function openQuestions(questions: readonly Question[]): Question[] {
@@ -43,16 +53,22 @@ export function areAllAnswered(open: readonly Question[], drafts: DraftMap): boo
 }
 
 /**
- * Answers every open question with the agent's recommendation, or "your call"
- * where no option was recommended. Typed text is kept.
+ * Answers every open question the person has not answered yet with the agent's
+ * recommendation, or "your call" where no option was recommended. Answers the
+ * person already gave stay exactly as they are, still theirs. Every filled
+ * answer is marked bulk: accepting a recommendation wholesale is delegating,
+ * not choosing.
  */
 export function acceptRecommendations(open: readonly Question[], drafts: DraftMap): DraftMap {
   const next: Record<number, AnswerDraft> = { ...drafts };
   for (const question of open) {
     const current = drafts[question.id] ?? EMPTY_DRAFT;
+    if (isDraftComplete(current)) {
+      continue;
+    }
     next[question.id] = hasRecommendation(question)
-      ? { ...current, choice: question.recommended, deferred: false }
-      : { ...current, choice: null, deferred: true };
+      ? { ...current, choice: question.recommended, deferred: false, isBulk: true }
+      : { ...current, choice: null, deferred: true, isBulk: true };
   }
   return next;
 }
@@ -66,6 +82,7 @@ export function toAnswers(open: readonly Question[], drafts: DraftMap): Answer[]
       choice: draft.choice,
       text: draft.text.trim(),
       deferred: draft.deferred,
+      bulk: draft.isBulk,
     };
   });
 }

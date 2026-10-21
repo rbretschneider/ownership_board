@@ -67,7 +67,18 @@ The MCP server offers these tools:
 | `move_ticket` | Moves a ticket to a lane. |
 | `add_comment` | Adds a comment. |
 | `heartbeat` / `release_ticket` | Keeps or gives up the lease. |
-| `create_ticket` | Files a follow-up story or bug. |
+| `create_ticket` | Files a follow-up story or bug, optionally already linked (`relation` + `related_ticket_id`). |
+| `add_work_link` | Records a PR or commit for a ticket you hold. |
+| `record_decision` | Records a significant choice; agents cannot replace the owner's binding decisions. |
+| `link_tickets` | Relates two tickets (`caused_by`, `follow_up_of`, `duplicate_of`, `relates_to`). |
+| `find_tickets_for_work` | Commit sha or PR URL → the tickets it was recorded on. |
+
+**Traceability rules agents follow** (they are also in every brief): end each
+commit with the trailer `Ownership-Ticket: <id>`, record commits and PRs with
+`add_work_link`, record significant choices with `record_decision`, and on a
+public repo keep all board text (titles, questions, answers, decisions,
+comments) out of commits, branches and PRs. These are instructions, not
+enforcement: review each PR before merging.
 
 ## 3. Pick a loop
 

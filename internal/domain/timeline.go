@@ -18,7 +18,10 @@ const (
 	TimelineReleased  TimelineType = "released"
 	// TimelineDeleted is only ever published as an event; a deleted ticket has
 	// no timeline left to hold it.
-	TimelineDeleted TimelineType = "deleted"
+	TimelineDeleted  TimelineType = "deleted"
+	TimelineWorkLink TimelineType = "work_link"
+	TimelineDecision TimelineType = "decision"
+	TimelineRelation TimelineType = "relation"
 )
 
 // TimelineEntry is one line of a ticket's history.

@@ -16,7 +16,7 @@ type questionRepo struct {
 func (r questionRepo) ForTicket(ctx context.Context, ticketID int64) ([]domain.Question, error) {
 	rows, err := r.q.QueryContext(ctx,
 		`SELECT id, ticket_id, round, position, prompt, options, recommended, asked_by, asked_at,
-			answer_choice, answer_text, answer_deferred, answered_by, answered_at
+			answer_choice, answer_text, answer_deferred, answered_by, answered_at, answer_bulk
 		 FROM questions WHERE ticket_id = ? ORDER BY round, position`, ticketID)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: questions of ticket %d: %w", ticketID, err)
@@ -56,9 +56,9 @@ func (r questionRepo) SaveAnswer(ctx context.Context, question domain.Question) 
 		return fmt.Errorf("sqlite: question %d has no answer to save", question.ID)
 	}
 	_, err := r.q.ExecContext(ctx,
-		`UPDATE questions SET answer_choice = ?, answer_text = ?, answer_deferred = ?, answered_by = ?, answered_at = ?
+		`UPDATE questions SET answer_choice = ?, answer_text = ?, answer_deferred = ?, answered_by = ?, answered_at = ?, answer_bulk = ?
 		 WHERE id = ?`,
-		nullableInt(answer.Choice), answer.Text, boolToInt(answer.IsDeferred), answer.By, formatTime(answer.At), question.ID)
+		nullableInt(answer.Choice), answer.Text, boolToInt(answer.IsDeferred), answer.By, formatTime(answer.At), boolToInt(answer.IsBulk), question.ID)
 	if err != nil {
 		return fmt.Errorf("sqlite: save answer %d: %w", question.ID, err)
 	}
@@ -96,10 +96,10 @@ func scanQuestion(row scanner) (domain.Question, error) {
 	var q domain.Question
 	var options, askedAt, answerText, answeredBy string
 	var recommended, choice sql.NullInt64
-	var isDeferred int
+	var isDeferred, isBulk int
 	var answeredAt sql.NullString
 	err := row.Scan(&q.ID, &q.TicketID, &q.Round, &q.Position, &q.Prompt, &options, &recommended, &q.AskedBy, &askedAt,
-		&choice, &answerText, &isDeferred, &answeredBy, &answeredAt)
+		&choice, &answerText, &isDeferred, &answeredBy, &answeredAt, &isBulk)
 	if err != nil {
 		return domain.Question{}, err
 	}
@@ -114,6 +114,6 @@ func scanQuestion(row scanner) (domain.Question, error) {
 	if err != nil || at == nil {
 		return q, err
 	}
-	q.Answer = &domain.Answer{Choice: intPointer(choice), Text: answerText, IsDeferred: isDeferred == 1, By: answeredBy, At: *at}
+	q.Answer = &domain.Answer{Choice: intPointer(choice), Text: answerText, IsDeferred: isDeferred == 1, IsBulk: isBulk == 1, By: answeredBy, At: *at}
 	return q, nil
 }

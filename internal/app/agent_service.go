@@ -36,7 +36,7 @@ type ClaimInput struct {
 
 // NewAgentService wires the service to its dependencies.
 func NewAgentService(store Store, clock Clock, sink EventSink, doorbell Doorbell) *AgentService {
-	return &AgentService{store: store, clock: clock, doorbell: doorbell, writer: ticketWriter{store: store, sink: sink}}
+	return &AgentService{store: store, clock: clock, doorbell: doorbell, writer: ticketWriter{store: store, sink: sink, clock: clock}}
 }
 
 // Claim leases the most urgent claimable ticket to the agent. With a wait, it
@@ -69,7 +69,7 @@ func (s *AgentService) Heartbeat(ctx context.Context, actor domain.Actor, id int
 	if err != nil {
 		return TicketDetail{}, err
 	}
-	return s.writer.change(ctx, id, func(_ context.Context, _ Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
+	return s.writer.change(ctx, actor, id, func(_ context.Context, _ Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
 		if err := requireHolder(*ticket, actor, s.clock.Now()); err != nil {
 			return nil, err
 		}
@@ -79,7 +79,7 @@ func (s *AgentService) Heartbeat(ctx context.Context, actor domain.Actor, id int
 
 // Release gives up the agent's lease so another session may claim the ticket.
 func (s *AgentService) Release(ctx context.Context, actor domain.Actor, id int64) (TicketDetail, error) {
-	return s.writer.change(ctx, id, func(_ context.Context, _ Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
+	return s.writer.change(ctx, actor, id, func(_ context.Context, _ Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
 		if err := requireHolder(*ticket, actor, s.clock.Now()); err != nil {
 			return nil, err
 		}
@@ -101,7 +101,7 @@ func (s *AgentService) Brief(ctx context.Context, id int64) (string, error) {
 		if err != nil {
 			return err
 		}
-		input, err := briefInput(ctx, repos, detail, "")
+		input, err := briefInput(ctx, repos, detail, "", s.clock.Now())
 		brief = RenderBrief(input)
 		return err
 	})
@@ -174,7 +174,7 @@ func (s *AgentService) tryClaim(ctx context.Context, actor domain.Actor, request
 		if err != nil {
 			return err
 		}
-		input, err := briefInput(ctx, repos, detail, action)
+		input, err := briefInput(ctx, repos, detail, action, s.clock.Now())
 		work = Work{Action: action, Ticket: detail, Repo: input.Repo, Brief: RenderBrief(input)}
 		isClaimed = true
 		return err
@@ -219,8 +219,8 @@ func (s *AgentService) claimChange(actor domain.Actor, lease time.Duration) tick
 
 // briefInput gathers what the brief needs: the ticket's repo, or every active
 // repo when it has none so the agent can work out which one is meant.
-func briefInput(ctx context.Context, repos Repos, detail TicketDetail, action domain.WorkAction) (BriefInput, error) {
-	input := BriefInput{Detail: detail, Action: action}
+func briefInput(ctx context.Context, repos Repos, detail TicketDetail, action domain.WorkAction, now time.Time) (BriefInput, error) {
+	input := BriefInput{Detail: detail, Action: action, Now: now}
 	if detail.Ticket.RepoID == 0 {
 		known, err := repos.CodeRepos().List(ctx)
 		input.KnownRepos = activeRepos(known)

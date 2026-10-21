@@ -23,6 +23,9 @@ type Repos interface {
 	Timeline() TimelineRepository
 	CodeRepos() RepoRepository
 	SourceStatuses() SourceStatusRepository
+	WorkLinks() WorkLinkRepository
+	Decisions() DecisionRepository
+	Relations() RelationRepository
 }
 
 // TicketFilter narrows a ticket listing. The zero value matches every ticket.

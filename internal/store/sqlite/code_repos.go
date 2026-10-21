@@ -12,7 +12,7 @@ type codeRepoRepo struct {
 	q querier
 }
 
-const repoColumns = `id, provider, full_name, url, description, color, default_branch, is_private, is_archived, synced_at, created_at, missing_since`
+const repoColumns = `id, provider, full_name, url, description, color, default_branch, is_private, is_archived, synced_at, created_at, missing_since, treat_as_public`
 
 func (r codeRepoRepo) List(ctx context.Context) ([]domain.Repo, error) {
 	return r.query(ctx, `SELECT `+repoColumns+` FROM repos ORDER BY full_name COLLATE NOCASE, provider`)
@@ -33,10 +33,10 @@ func (r codeRepoRepo) ByProvider(ctx context.Context, provider domain.Provider) 
 
 func (r codeRepoRepo) Insert(ctx context.Context, repo *domain.Repo) error {
 	result, err := r.q.ExecContext(ctx,
-		`INSERT INTO repos (provider, full_name, url, description, color, default_branch, is_private, is_archived, synced_at, created_at, missing_since)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO repos (provider, full_name, url, description, color, default_branch, is_private, is_archived, synced_at, created_at, missing_since, treat_as_public)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		string(repo.Provider), repo.FullName, repo.URL, repo.Description, repo.Color, repo.DefaultBranch,
-		boolToInt(repo.IsPrivate), boolToInt(repo.IsArchived), formatOptionalTime(repo.SyncedAt), formatTime(repo.CreatedAt), formatOptionalTime(repo.MissingSince))
+		boolToInt(repo.IsPrivate), boolToInt(repo.IsArchived), formatOptionalTime(repo.SyncedAt), formatTime(repo.CreatedAt), formatOptionalTime(repo.MissingSince), boolToInt(repo.TreatAsPublic))
 	if err != nil {
 		return conflictOr(err, "repo %s is already on the board", repo.FullName)
 	}
@@ -47,10 +47,10 @@ func (r codeRepoRepo) Insert(ctx context.Context, repo *domain.Repo) error {
 func (r codeRepoRepo) Update(ctx context.Context, repo domain.Repo) error {
 	_, err := r.q.ExecContext(ctx,
 		`UPDATE repos SET full_name = ?, url = ?, description = ?, color = ?, default_branch = ?,
-			is_private = ?, is_archived = ?, synced_at = ?, missing_since = ?
+			is_private = ?, is_archived = ?, synced_at = ?, missing_since = ?, treat_as_public = ?
 		 WHERE id = ?`,
 		repo.FullName, repo.URL, repo.Description, repo.Color, repo.DefaultBranch,
-		boolToInt(repo.IsPrivate), boolToInt(repo.IsArchived), formatOptionalTime(repo.SyncedAt), formatOptionalTime(repo.MissingSince), repo.ID)
+		boolToInt(repo.IsPrivate), boolToInt(repo.IsArchived), formatOptionalTime(repo.SyncedAt), formatOptionalTime(repo.MissingSince), boolToInt(repo.TreatAsPublic), repo.ID)
 	if err != nil {
 		return conflictOr(err, "repo %s is already on the board", repo.FullName)
 	}
@@ -77,14 +77,15 @@ func (r codeRepoRepo) query(ctx context.Context, query string, args ...any) ([]d
 func scanRepo(row scanner) (domain.Repo, error) {
 	var repo domain.Repo
 	var provider, created string
-	var isPrivate, isArchived int
+	var isPrivate, isArchived, treatAsPublic int
 	var synced, missing sql.NullString
 	err := row.Scan(&repo.ID, &provider, &repo.FullName, &repo.URL, &repo.Description, &repo.Color, &repo.DefaultBranch,
-		&isPrivate, &isArchived, &synced, &created, &missing)
+		&isPrivate, &isArchived, &synced, &created, &missing, &treatAsPublic)
 	if err != nil {
 		return domain.Repo{}, err
 	}
 	repo.Provider, repo.IsPrivate, repo.IsArchived = domain.Provider(provider), isPrivate == 1, isArchived == 1
+	repo.TreatAsPublic = treatAsPublic == 1
 	if repo.SyncedAt, err = parseOptionalTime(synced); err != nil {
 		return domain.Repo{}, err
 	}

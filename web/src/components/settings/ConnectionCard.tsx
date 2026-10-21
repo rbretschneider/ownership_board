@@ -2,7 +2,7 @@ import { CircleAlert, CircleCheck, RefreshCw, Unplug } from "lucide-react";
 import { useState } from "react";
 import { useApi } from "../../api/ApiContext";
 import type { Connection } from "../../api/types";
-import { describeAccount, describeSync } from "../../lib/connections";
+import { describeAccount, describeSync, isNotInstalledError } from "../../lib/connections";
 import { Spinner } from "../common/Spinner";
 import { ProviderGlyph } from "../repos/ProviderGlyph";
 import { BITBUCKET_FORM, FORGEJO_FORM } from "./providerForms";
@@ -56,7 +56,13 @@ export function ConnectionCard(props: ConnectionCardProps) {
           The board can no longer use this connection. Reconnect to keep repos in sync.
         </p>
       )}
-      {!needsReconnect && syncError !== "" && (
+      {!needsReconnect && syncError !== "" && isNotInstalledError(syncError) && (
+        <div className="connection__problem connection__problem--prominent" role="alert">
+          <strong>The GitHub App isn't installed yet, so GitHub shows the board no repos.</strong>
+          <p>{syncError}</p>
+        </div>
+      )}
+      {!needsReconnect && syncError !== "" && !isNotInstalledError(syncError) && (
         <p className="connection__problem">Last sync failed: {syncError}</p>
       )}
       {isServerManaged && <p className="field__hint">Configured with environment variables on the server; change it there.</p>}

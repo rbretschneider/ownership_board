@@ -1,7 +1,7 @@
 import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 import { useApi } from "../../api/ApiContext";
-import type { Lane, Repo, TicketDetail } from "../../api/types";
+import type { Lane, Repo, TicketDetail, TicketSummary } from "../../api/types";
 import { useTicket } from "../../hooks/useTicket";
 import { openQuestions } from "../../lib/answers";
 import { BOARD_HASH, navigate } from "../../lib/hashRoute";
@@ -12,18 +12,23 @@ import { Overlay } from "../common/Overlay";
 import { useToast } from "../toast/ToastContext";
 import { AnsweredHistory } from "./AnsweredHistory";
 import { CommentComposer } from "./CommentComposer";
+import { DecisionsSection } from "./DecisionsSection";
 import { EditableMarkdown } from "./EditableMarkdown";
 import { PrRow } from "./PrRow";
 import { QuestionsPanel } from "./QuestionsPanel";
+import { RelatedSection } from "./RelatedSection";
 import { TicketHeader } from "./TicketHeader";
 import { TicketMenu } from "./TicketMenu";
 import { Timeline } from "./Timeline";
+import { WorkSection } from "./WorkSection";
 
 /** Props for {@link TicketSheet}. */
 export interface TicketSheetProps {
   ticketId: number;
   lanes: Lane[];
   repos: Repo[];
+  /** Every ticket on the board, for the related-ticket picker. */
+  tickets: TicketSummary[];
   /** Changes whenever a live event touches this ticket. */
   refreshSignal: number;
   /** Called after any successful change so the board refetches. */
@@ -34,7 +39,7 @@ export interface TicketSheetProps {
 export type RunMutation = (action: () => Promise<TicketDetail>, success?: string) => Promise<boolean>;
 
 /** The ticket detail sheet (#/t/:id). */
-export function TicketSheet({ ticketId, lanes, repos, refreshSignal, onChanged }: TicketSheetProps) {
+export function TicketSheet({ ticketId, lanes, repos, tickets, refreshSignal, onChanged }: TicketSheetProps) {
   const api = useApi();
   const toast = useToast();
   const { ticket, error, isMissing, isLoading, reload, accept } = useTicket(ticketId);
@@ -111,6 +116,9 @@ export function TicketSheet({ ticketId, lanes, repos, refreshSignal, onChanged }
                 <h3 id="spec-title" className="section__title">Spec <span className="section__hint">refined by the AI</span></h3>
                 {ticket.spec.trim() === "" ? <p className="muted">Not refined yet.</p> : <Markdown source={ticket.spec} />}
               </section>
+              <DecisionsSection ticket={ticket} run={run} />
+              <WorkSection ticket={ticket} run={run} />
+              <RelatedSection ticket={ticket} tickets={tickets} lanes={lanes} run={run} />
               <AnsweredHistory questions={ticket.questions} />
               <Timeline entries={ticket.timeline} lanes={lanes} />
             </>

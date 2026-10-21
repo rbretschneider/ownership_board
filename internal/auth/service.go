@@ -160,6 +160,18 @@ func (s *Service) CreateAPIToken(ctx context.Context, creator User, name string)
 	if err != nil {
 		return APIToken{}, "", err
 	}
+	if err := domain.RejectHiddenText("name", tokenName); err != nil {
+		return APIToken{}, "", err
+	}
+	// An agent named like a person would show as that person in decision
+	// logs and briefs.
+	isPerson, err := s.store.IsPersonName(ctx, tokenName)
+	if err != nil {
+		return APIToken{}, "", err
+	}
+	if isPerson {
+		return APIToken{}, "", domain.Conflictf("an agent token cannot share a person's name; pick a name like claude-loop")
+	}
 	random, err := newSecret()
 	if err != nil {
 		return APIToken{}, "", err

@@ -7,6 +7,7 @@ import {
   EMPTY_DRAFT,
   isDraftComplete,
   openQuestions,
+  ownDraft,
   roundSummary,
   toAnswers,
 } from "./answers";
@@ -53,9 +54,16 @@ describe("areAllAnswered", () => {
 describe("acceptRecommendations", () => {
   it("picks the recommendation, or your call when there is none", () => {
     const open = [question(1, { recommended: 1 }), question(2)];
-    const drafts = acceptRecommendations(open, { 2: { ...EMPTY_DRAFT, text: "keep me" } });
-    expect(drafts[1]).toEqual({ choice: 1, text: "", deferred: false });
-    expect(drafts[2]).toEqual({ choice: null, text: "keep me", deferred: true });
+    const drafts = acceptRecommendations(open, {});
+    expect(drafts[1]).toEqual({ choice: 1, text: "", deferred: false, isBulk: true });
+    expect(drafts[2]).toEqual({ choice: null, text: "", deferred: true, isBulk: true });
+  });
+  it("leaves answers the person already gave as their own", () => {
+    const open = [question(1, { recommended: 1 }), question(2, { recommended: 0 })];
+    const mine = { ...EMPTY_DRAFT, choice: 1, text: "keep me" };
+    const drafts = acceptRecommendations(open, { 2: mine });
+    expect(drafts[2]).toEqual(mine);
+    expect(drafts[1]?.isBulk).toBe(true);
   });
   it("treats an out-of-range recommendation as none", () => {
     const drafts = acceptRecommendations([question(1, { recommended: 5 })], {});
@@ -63,10 +71,27 @@ describe("acceptRecommendations", () => {
   });
 });
 
+describe("bulk tracking", () => {
+  const open = [question(1, { recommended: 0 }), question(2, { recommended: 1 })];
+  it("sends bulk for answers filled by Accept recommendations", () => {
+    const answers = toAnswers(open, acceptRecommendations(open, {}));
+    expect(answers.map((a) => a.bulk)).toEqual([true, true]);
+  });
+  it("makes an answer the person's own once they edit it after the bulk fill", () => {
+    const filled = acceptRecommendations(open, {});
+    const edited = { ...filled, 2: ownDraft({ ...EMPTY_DRAFT, ...filled[2], choice: 0 }) };
+    expect(toAnswers(open, edited).map((a) => a.bulk)).toEqual([true, false]);
+  });
+  it("never marks a hand-picked answer as bulk", () => {
+    const answers = toAnswers([question(1)], { 1: ownDraft({ ...EMPTY_DRAFT, choice: 0 }) });
+    expect(answers[0]?.bulk).toBe(false);
+  });
+});
+
 describe("toAnswers", () => {
   it("builds the request body with trimmed text", () => {
-    const answers = toAnswers([question(1)], { 1: { choice: 0, text: " note ", deferred: false } });
-    expect(answers).toEqual([{ question_id: 1, choice: 0, text: "note", deferred: false }]);
+    const answers = toAnswers([question(1)], { 1: { choice: 0, text: " note ", deferred: false, isBulk: false } });
+    expect(answers).toEqual([{ question_id: 1, choice: 0, text: "note", deferred: false, bulk: false }]);
   });
 });
 

@@ -15,11 +15,19 @@ import type {
   ConnectionProvider,
   DeviceFlow,
   DevicePoll,
+  DecisionInput,
   ForgejoConnectionInput,
+  RelationInput,
+  RelationKind,
   TicketDetail,
+  TicketSummary,
   Token,
   User,
+  WorkLinkInput,
 } from "./types";
+
+/** Query for GET /work-links: a commit sha prefix (7–40 hex) or a PR URL. */
+export type WorkLookup = { sha: string } | { url: string };
 
 /**
  * Board filter by repository: all tickets, tickets without a repo, or one
@@ -41,6 +49,14 @@ export interface BoardApi {
   comment(id: number, body: string): Promise<TicketDetail>;
   answer(id: number, answers: Answer[]): Promise<TicketDetail>;
   deleteTicket(id: number): Promise<void>;
+  addWorkLink(id: number, input: WorkLinkInput): Promise<TicketDetail>;
+  removeWorkLink(id: number, linkId: number): Promise<TicketDetail>;
+  /** Tickets a commit or PR belongs to, from recorded work links only. */
+  findWork(lookup: WorkLookup): Promise<TicketSummary[]>;
+  addDecision(id: number, input: DecisionInput): Promise<TicketDetail>;
+  removeDecision(id: number, decisionId: number): Promise<TicketDetail>;
+  addRelation(id: number, input: RelationInput): Promise<TicketDetail>;
+  removeRelation(id: number, kind: RelationKind, otherId: number): Promise<TicketDetail>;
   repos(): Promise<Repo[]>;
   addRepo(input: ManualRepoInput): Promise<Repo>;
   editRepo(id: number, input: RepoEdit): Promise<Repo>;
@@ -74,6 +90,13 @@ export function createBoardApi(http: HttpClient): BoardApi {
     comment: (id, body) => http.request("POST", `${t(id)}/comments`, { body }),
     answer: (id, answers) => http.request("POST", `${t(id)}/answers`, { answers }),
     deleteTicket: (id) => http.request("DELETE", t(id)),
+    addWorkLink: (id, input) => http.request("POST", `${t(id)}/work-links`, input),
+    removeWorkLink: (id, linkId) => http.request("DELETE", `${t(id)}/work-links/${linkId}`),
+    findWork: (lookup) => http.request("GET", `/work-links${workLookupQuery(lookup)}`),
+    addDecision: (id, input) => http.request("POST", `${t(id)}/decisions`, input),
+    removeDecision: (id, decisionId) => http.request("DELETE", `${t(id)}/decisions/${decisionId}`),
+    addRelation: (id, input) => http.request("POST", `${t(id)}/relations`, input),
+    removeRelation: (id, kind, otherId) => http.request("DELETE", `${t(id)}/relations/${kind}/${otherId}`),
     repos: () => http.request("GET", "/repos"),
     addRepo: (input) => http.request("POST", "/repos", input),
     editRepo: (id, input) => http.request("PATCH", `/repos/${id}`, input),
@@ -102,6 +125,11 @@ export function boardQuery(filter: RepoFilter): string {
     case "repo":
       return `?repo=${filter.id}`;
   }
+}
+
+/** Query string for GET /work-links. */
+export function workLookupQuery(lookup: WorkLookup): string {
+  return "sha" in lookup ? `?sha=${encodeURIComponent(lookup.sha)}` : `?url=${encodeURIComponent(lookup.url)}`;
 }
 
 /** Path of one GitHub device flow; the id is opaque, so it is encoded. */

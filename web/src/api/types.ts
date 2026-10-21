@@ -63,7 +63,17 @@ export interface Repo {
   synced_at: string | null;
   /** Set while the provider no longer lists the repo. */
   missing_since: string | null;
+  /** A person ticked "Treat as public" (e.g. a repo that may be open-sourced). */
+  treat_as_public: boolean;
+  /**
+   * How agents must treat the repo. "private" only when a recent provider sync
+   * said private and nobody ticked "Treat as public"; manual repos are public.
+   */
+  visibility: RepoVisibility;
 }
+
+/** Whether board content may appear in a repo's commits and PRs. */
+export type RepoVisibility = "public" | "private";
 
 /** Body of POST /repos (a manually added repository). */
 export interface ManualRepoInput {
@@ -74,7 +84,7 @@ export interface ManualRepoInput {
 }
 
 /** Body of PATCH /repos/{id}. */
-export type RepoEdit = Partial<{ color: string; description: string }>;
+export type RepoEdit = Partial<{ color: string; description: string; treat_as_public: boolean }>;
 
 /** A provider the board can connect to for repo sync. */
 export type ConnectionProvider = Exclude<Provider, "manual">;
@@ -203,7 +213,10 @@ export type TimelineType =
   | "answers"
   | "edited"
   | "claimed"
-  | "released";
+  | "released"
+  | "work_link"
+  | "decision"
+  | "relation";
 
 /** Who performed a timeline event. */
 export type ActorKind = "human" | "agent" | "system";
@@ -218,6 +231,91 @@ export interface TimelineEntry {
   data: Record<string, unknown>;
 }
 
+/** Who recorded something, as the server saw them. */
+export interface ActorRef {
+  kind: ActorKind;
+  name: string;
+}
+
+/** A PR or commit that implements a ticket. */
+export interface WorkLink {
+  id: number;
+  kind: WorkLinkKind;
+  /** Required for PRs; optional for commits ("" when absent). */
+  url: string;
+  /** Commits only ("" for PRs). */
+  sha: string;
+  /** Host of `url`, shown next to every link so look-alikes stand out. */
+  host: string;
+  added_by: ActorRef;
+  added_at: string;
+}
+
+/** The two kinds of work link. */
+export type WorkLinkKind = "pr" | "commit";
+
+/** Body of POST /tickets/{id}/work-links. */
+export interface WorkLinkInput {
+  kind: WorkLinkKind;
+  url?: string;
+  sha?: string;
+}
+
+/** Where a decision came from. */
+export type DecisionSource = "answer" | "agent" | "human";
+
+/**
+ * How much a decision binds: a person chose explicitly (binding), a person let
+ * the AI decide (delegated), or an agent decided (agent).
+ */
+export type DecisionWeight = "binding" | "delegated" | "agent";
+
+/** One entry of a ticket's decision log. Removed entries keep no content. */
+export interface Decision {
+  id: number;
+  summary: string;
+  rationale: string;
+  alternatives: string[];
+  source: DecisionSource;
+  weight: DecisionWeight;
+  decided_by: ActorRef;
+  /** For answer-derived decisions: the agent that asked the question. */
+  asked_by: string;
+  question_id: number | null;
+  supersedes_id: number | null;
+  superseded_by_id: number | null;
+  is_removed: boolean;
+  at: string;
+}
+
+/** Body of POST /tickets/{id}/decisions. */
+export interface DecisionInput {
+  summary: string;
+  rationale?: string;
+  alternatives?: string[];
+  supersedes_id?: number;
+}
+
+/** The stored kinds of ticket relation (always read from the "from" side). */
+export type RelationKind = "caused_by" | "follow_up_of" | "duplicate_of" | "relates_to";
+
+/** A relation as seen from one ticket. */
+export interface Relation {
+  kind: RelationKind;
+  direction: "outgoing" | "incoming";
+  /** Server label for this side, e.g. "caused by" or "caused". */
+  label: string;
+  ticket: { id: number; title: string; lane: LaneId; visibility: RepoVisibility };
+  added_by: ActorRef;
+  added_at: string;
+}
+
+/** Body of POST /tickets/{id}/relations. */
+export interface RelationInput {
+  kind: RelationKind;
+  ticket_id: number;
+}
+
 /** The full ticket shape. */
 export interface TicketDetail extends TicketSummary {
   body: string;
@@ -225,6 +323,9 @@ export interface TicketDetail extends TicketSummary {
   created_by: string;
   questions: Question[];
   timeline: TimelineEntry[];
+  work_links: WorkLink[];
+  decisions: Decision[];
+  relations: Relation[];
 }
 
 /** Result of GET /board. */
@@ -260,6 +361,8 @@ export interface Answer {
   choice?: number | null;
   text?: string;
   deferred?: boolean;
+  /** Filled by "Accept recommendations": the server records it as delegated, not a deliberate choice. */
+  bulk?: boolean;
 }
 
 /** An agent access token (the secret is never listed). */

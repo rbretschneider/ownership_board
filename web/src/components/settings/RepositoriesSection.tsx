@@ -2,7 +2,7 @@ import { GitBranch } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useApi } from "../../api/ApiContext";
 import type { Connection, ConnectionProvider, Repo } from "../../api/types";
-import { canConnectGitHub, hasCard, revokeHint } from "../../lib/connections";
+import { canConnectGitHub, hasCard, needsGitHubSetup, revokeHint } from "../../lib/connections";
 import { ConfirmDialog } from "../common/ConfirmDialog";
 import { ErrorState } from "../common/ErrorState";
 import { LoadingState } from "../common/LoadingState";
@@ -10,6 +10,7 @@ import { useToast } from "../toast/ToastContext";
 import { AddProviderPanel } from "./AddProviderPanel";
 import { ConnectGitHubDialog } from "./ConnectGitHubDialog";
 import { ConnectionCard } from "./ConnectionCard";
+import { GitHubSetupCard } from "./GitHubSetupCard";
 import { ManualRepoForm } from "./ManualRepoForm";
 import { RepoList } from "./RepoList";
 
@@ -77,6 +78,7 @@ export function RepositoriesSection({ onChanged }: { onChanged: () => void }) {
       <h3 id="repos-title" className="settings-section__title">Repositories</h3>
       {error !== null && <ErrorState message={`Couldn't load repositories: ${error}`} onRetry={() => void load()} />}
       {isLoading && <LoadingState label="Loading repositories" />}
+      {connections !== null && needsGitHubSetup(connections) && <GitHubSetupCard />}
       {connections !== null && canConnectGitHub(connections) && (
         <button type="button" className="button button--primary button--block connect-github" onClick={() => setConnectingGitHub(true)}>
           <GitBranch size={18} aria-hidden="true" />

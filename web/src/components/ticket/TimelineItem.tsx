@@ -1,5 +1,6 @@
-import { ArrowRightLeft, Bot, CirclePlus, FileText, Hand, MessageCircleQuestion, MessageSquareReply, Pencil, Settings2, Unlock, User } from "lucide-react";
-import type { ActorKind, Lane, TimelineEntry, TimelineType } from "../../api/types";
+import { ArrowRightLeft, Bot, CircleDot, CirclePlus, FileText, GitPullRequest, Hand, Link2, MessageCircleQuestion, MessageSquareReply, Pencil, Scale, Settings2, Unlock, User } from "lucide-react";
+import type { ActorKind, Lane, RelationKind, TimelineEntry, TimelineType } from "../../api/types";
+import { relationLabel } from "../../lib/relations";
 import { relativeTime } from "../../lib/relativeTime";
 import { Markdown } from "../common/Markdown";
 
@@ -12,6 +13,9 @@ const EVENT_ICONS: Record<Exclude<TimelineType, "comment">, typeof Bot> = {
   edited: Pencil,
   claimed: Hand,
   released: Unlock,
+  work_link: GitPullRequest,
+  decision: Scale,
+  relation: Link2,
 };
 
 const ACTOR_ICONS: Record<ActorKind, typeof Bot> = { agent: Bot, human: User, system: Settings2 };
@@ -35,13 +39,13 @@ export function TimelineItem({ entry, lanes }: { entry: TimelineEntry; lanes: La
     );
   }
 
-  const EventIcon = EVENT_ICONS[entry.type];
+  const EventIcon = EVENT_ICONS[entry.type as keyof typeof EVENT_ICONS] ?? CircleDot;
   return (
     <li className={`event event--${entry.actor.kind}`}>
       <EventIcon size={14} aria-hidden="true" />
       <span className="event__text">
         <strong>{entry.actor.name}</strong> {describe(entry, lanes)} · {when}
-        {entry.type === "questions" && entry.body !== "" && <span className="event__detail">{entry.body}</span>}
+        {(entry.type === "questions" || entry.type === "decision") && entry.body !== "" && <span className="event__detail">{entry.body}</span>}
       </span>
     </li>
   );
@@ -68,7 +72,29 @@ function describe(entry: TimelineEntry, lanes: Lane[]): string {
       return typeof entry.data["action"] === "string" ? `claimed this to ${entry.data["action"]}` : "claimed this";
     case "released":
       return "released this";
+    case "work_link":
+      return `${isRemoval(entry) ? "removed" : "linked"} ${entry.data["kind"] === "commit" ? "a commit" : "a pull request"}`;
+    case "decision":
+      return isRemoval(entry) ? "removed a decision" : entry.data["supersedes_id"] !== undefined ? "replaced a decision" : "recorded a decision";
+    case "relation":
+      return describeRelation(entry);
     default:
-      return entry.type;
+      return String(entry.type).replace(/_/g, " ");
   }
+}
+
+/** Entries for removals carry `removed: true` or `action: "removed"`. */
+function isRemoval(entry: TimelineEntry): boolean {
+  return entry.data["removed"] === true || entry.data["action"] === "removed";
+}
+
+function describeRelation(entry: TimelineEntry): string {
+  const other = typeof entry.data["ticket_id"] === "number" ? ` #${entry.data["ticket_id"]}` : " another ticket";
+  if (entry.data["deleted"] === true) {
+    return `noted that related ticket${other} was deleted`;
+  }
+  const kind = typeof entry.data["kind"] === "string" ? entry.data["kind"] : "";
+  const direction = entry.data["direction"] === "incoming" ? "incoming" : "outgoing";
+  const label = kind === "" ? "" : ` (${relationLabel({ kind: kind as RelationKind, direction }).toLowerCase()})`;
+  return `${isRemoval(entry) ? "unlinked" : "linked"}${other}${label}`;
 }

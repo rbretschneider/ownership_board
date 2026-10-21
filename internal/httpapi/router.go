@@ -42,6 +42,7 @@ type router struct {
 	origin  string
 	logger  *slog.Logger
 	network network
+	writes  *writeLimiter
 }
 
 func (rt *router) public(pattern string, fn handlerFunc)    { rt.handle(pattern, accessPublic, fn) }
@@ -88,6 +89,11 @@ func (rt *router) identify(r *http.Request) (caller, error) {
 }
 
 func (rt *router) authorize(r *http.Request, who caller, level access) error {
+	if who.isBearer && isUnsafe(r.Method) {
+		if err := rt.writes.allow(who.actor.ID); err != nil {
+			return err
+		}
+	}
 	if !who.isBearer && isUnsafe(r.Method) && !rt.isSameOrigin(r) {
 		return domain.Forbiddenf("cross-origin request refused")
 	}

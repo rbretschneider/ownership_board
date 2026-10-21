@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"github.com/rbretschneider/ownership_board/internal/domain"
@@ -29,7 +30,7 @@ type AskInput struct {
 
 // NewBoardService wires the service to its dependencies.
 func NewBoardService(store Store, clock Clock, sink EventSink) *BoardService {
-	return &BoardService{store: store, clock: clock, writer: ticketWriter{store: store, sink: sink}}
+	return &BoardService{store: store, clock: clock, writer: ticketWriter{store: store, sink: sink, clock: clock}}
 }
 
 // Board returns the lanes, repos and every ticket within scope.
@@ -60,6 +61,9 @@ func (s *BoardService) Ticket(ctx context.Context, id int64) (TicketDetail, erro
 // Create adds a ticket at the bottom of its lane, so a lane is first come,
 // first served until someone drags it into a different order.
 func (s *BoardService) Create(ctx context.Context, actor domain.Actor, draft domain.TicketDraft) (TicketDetail, error) {
+	if err := rejectHiddenFromAgent(actor, map[string]string{"title": draft.Title, "body": draft.Body}); err != nil {
+		return TicketDetail{}, err
+	}
 	ticket, err := domain.NewTicket(draft, actor, s.clock.Now())
 	if err != nil {
 		return TicketDetail{}, err
@@ -92,7 +96,10 @@ func (s *BoardService) Create(ctx context.Context, actor domain.Actor, draft dom
 
 // Edit changes a ticket's descriptive fields.
 func (s *BoardService) Edit(ctx context.Context, actor domain.Actor, id int64, edit domain.TicketEdit) (TicketDetail, error) {
-	return s.writer.change(ctx, id, func(ctx context.Context, repos Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
+	if err := rejectHiddenFromAgent(actor, editText(edit)); err != nil {
+		return TicketDetail{}, err
+	}
+	return s.writer.change(ctx, actor, id, func(ctx context.Context, repos Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
 		if edit.RepoID != nil {
 			if err := requireRepo(ctx, repos, *edit.RepoID); err != nil {
 				return nil, err
@@ -102,9 +109,38 @@ func (s *BoardService) Edit(ctx context.Context, actor domain.Actor, id int64, e
 		if err != nil || len(changed) == 0 {
 			return nil, err
 		}
+		if err := s.linkPRField(ctx, repos, *ticket, changed, actor); err != nil {
+			return nil, err
+		}
 		entry := domain.NewEntry(ticket.ID, domain.TimelineEdited, actor, ticket.UpdatedAt).With("fields", changed)
 		return []domain.TimelineEntry{entry}, nil
 	})
+}
+
+// linkPRField also records a newly set pr_url as a work link, so agents that
+// only set the field still leave a traceable link.
+func (s *BoardService) linkPRField(ctx context.Context, repos Repos, ticket domain.Ticket, changed []string, actor domain.Actor) error {
+	if ticket.PRURL == "" || !slices.Contains(changed, "pr_url") {
+		return nil
+	}
+	if err := requireLeaseForAgent(ticket, actor, s.clock.Now()); err != nil {
+		return err
+	}
+	link, isNew, err := s.newWorkLink(ctx, repos, ticket, domain.WorkLinkDraft{Kind: string(domain.WorkLinkPR), URL: ticket.PRURL}, actor)
+	if err != nil || !isNew {
+		return err
+	}
+	return repos.WorkLinks().Insert(ctx, &link)
+}
+
+func editText(edit domain.TicketEdit) map[string]string {
+	fields := map[string]string{}
+	for name, value := range map[string]*string{"title": edit.Title, "body": edit.Body, "branch": edit.Branch, "pr_url": edit.PRURL} {
+		if value != nil {
+			fields[name] = *value
+		}
+	}
+	return fields
 }
 
 // Move puts a ticket in a lane at a position.
@@ -113,7 +149,7 @@ func (s *BoardService) Move(ctx context.Context, actor domain.Actor, id int64, i
 	if err != nil {
 		return TicketDetail{}, err
 	}
-	return s.writer.change(ctx, id, func(ctx context.Context, repos Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
+	return s.writer.change(ctx, actor, id, func(ctx context.Context, repos Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
 		if isUnrefinedHandoff(*ticket, lane, actor) {
 			return nil, domain.Invalidf("ticket %d has no repo; set repo_id or ask which repo before moving it to %s", ticket.ID, lane)
 		}
@@ -127,7 +163,10 @@ func (s *BoardService) Comment(ctx context.Context, actor domain.Actor, id int64
 	if err != nil {
 		return TicketDetail{}, err
 	}
-	return s.writer.change(ctx, id, func(_ context.Context, _ Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
+	if err := rejectHiddenFromAgent(actor, map[string]string{"body": text}); err != nil {
+		return TicketDetail{}, err
+	}
+	return s.writer.change(ctx, actor, id, func(_ context.Context, _ Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
 		ticket.UpdatedAt = s.clock.Now()
 		entry := domain.NewEntry(ticket.ID, domain.TimelineComment, actor, ticket.UpdatedAt).WithBody(text)
 		return []domain.TimelineEntry{entry}, nil
@@ -136,7 +175,10 @@ func (s *BoardService) Comment(ctx context.Context, actor domain.Actor, id int64
 
 // SetSpec stores the refined specification an agent wrote.
 func (s *BoardService) SetSpec(ctx context.Context, actor domain.Actor, id int64, spec string) (TicketDetail, error) {
-	return s.writer.change(ctx, id, func(_ context.Context, _ Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
+	if err := rejectHiddenFromAgent(actor, map[string]string{"spec": spec}); err != nil {
+		return TicketDetail{}, err
+	}
+	return s.writer.change(ctx, actor, id, func(_ context.Context, _ Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
 		if err := ticket.SetSpec(spec, s.clock.Now()); err != nil {
 			return nil, err
 		}
@@ -155,7 +197,10 @@ func (s *BoardService) Ask(ctx context.Context, actor domain.Actor, id int64, in
 	if len(input.Questions) == 0 || len(input.Questions) > domain.MaxQuestionsPerAsk {
 		return TicketDetail{}, domain.Invalidf("ask between 1 and %d questions", domain.MaxQuestionsPerAsk)
 	}
-	return s.writer.change(ctx, id, func(ctx context.Context, repos Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
+	if err := rejectHiddenFromAgent(actor, askText(input)); err != nil {
+		return TicketDetail{}, err
+	}
+	return s.writer.change(ctx, actor, id, func(ctx context.Context, repos Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
 		round, err := s.insertRound(ctx, repos, ticket.ID, input.Questions, actor)
 		if err != nil {
 			return nil, err
@@ -179,12 +224,15 @@ func (s *BoardService) Answer(ctx context.Context, actor domain.Actor, id int64,
 	if len(answers) == 0 {
 		return TicketDetail{}, domain.Invalidf("answers are required")
 	}
-	return s.writer.change(ctx, id, func(ctx context.Context, repos Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
-		round, remaining, err := s.applyAnswers(ctx, repos, ticket.ID, answers, actor)
+	return s.writer.change(ctx, actor, id, func(ctx context.Context, repos Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
+		round, remaining, answeredQuestions, err := s.applyAnswers(ctx, repos, ticket.ID, answers, actor)
 		if err != nil {
 			return nil, err
 		}
 		ticket.UpdatedAt = s.clock.Now()
+		if err := recordAnswerDecisions(ctx, repos, answeredQuestions, actor, ticket.UpdatedAt); err != nil {
+			return nil, err
+		}
 		answered := domain.NewEntry(ticket.ID, domain.TimelineAnswers, actor, ticket.UpdatedAt).
 			With("round", round).With("count", len(answers))
 		entries := []domain.TimelineEntry{answered}
@@ -202,18 +250,52 @@ func (s *BoardService) Delete(ctx context.Context, actor domain.Actor, id int64)
 		return domain.Forbiddenf("only a person can delete tickets")
 	}
 	var ticket domain.Ticket
+	var events []Event
 	err := s.store.Write(ctx, func(repos Repos) error {
 		var err error
 		if ticket, err = repos.Tickets().Get(ctx, id); err != nil {
 			return err
 		}
-		return repos.Tickets().Delete(ctx, id)
+		relations, err := repos.Relations().ForTicket(ctx, id)
+		if err != nil {
+			return err
+		}
+		if err := repos.Tickets().Delete(ctx, id); err != nil {
+			return err
+		}
+		events, err = s.noteDeletedRelations(ctx, repos, ticket, relations, actor)
+		return err
 	})
 	if err != nil {
 		return err
 	}
-	s.writer.sink.Publish(ctx, []Event{{Type: domain.TimelineDeleted, TicketID: id, Title: ticket.Title, Lane: ticket.Lane, Actor: actor}})
+	deleted := Event{Type: domain.TimelineDeleted, TicketID: id, Title: ticket.Title, Lane: ticket.Lane, Actor: actor}
+	s.writer.sink.Publish(ctx, append(events, deleted))
 	return nil
+}
+
+// noteDeletedRelations leaves a line on every ticket that was linked to a
+// deleted one, so the surviving side still knows the link existed.
+func (s *BoardService) noteDeletedRelations(ctx context.Context, repos Repos, deleted domain.Ticket, relations []domain.Relation, actor domain.Actor) ([]Event, error) {
+	var events []Event
+	for _, relation := range relations {
+		otherID := relation.FromID
+		if otherID == deleted.ID {
+			otherID = relation.ToID
+		}
+		other, err := repos.Tickets().Get(ctx, otherID)
+		if err != nil {
+			return nil, err
+		}
+		entry := domain.NewEntry(other.ID, domain.TimelineRelation, actor, s.clock.Now()).
+			With("kind", string(relation.Kind)).With("ticket_id", deleted.ID).With("deleted", true)
+		recorded, err := record(ctx, repos, other, []domain.TimelineEntry{entry})
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, recorded...)
+	}
+	return events, nil
 }
 
 func (s *BoardService) insertRound(ctx context.Context, repos Repos, ticketID int64, drafts []domain.QuestionDraft, actor domain.Actor) (int, error) {
@@ -236,32 +318,43 @@ func (s *BoardService) insertRound(ctx context.Context, repos Repos, ticketID in
 	return round, nil
 }
 
-// applyAnswers saves each answer and returns the latest round answered and how
-// many questions remain open.
-func (s *BoardService) applyAnswers(ctx context.Context, repos Repos, ticketID int64, answers []domain.AnswerDraft, actor domain.Actor) (int, int, error) {
+// applyAnswers saves each answer and returns the latest round answered, how
+// many questions remain open, and the questions just answered.
+func (s *BoardService) applyAnswers(ctx context.Context, repos Repos, ticketID int64, answers []domain.AnswerDraft, actor domain.Actor) (int, int, []domain.Question, error) {
 	questions, err := repos.Questions().ForTicket(ctx, ticketID)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, nil, err
 	}
 	byID := make(map[int64]*domain.Question, len(questions))
 	for i := range questions {
 		byID[questions[i].ID] = &questions[i]
 	}
 	round := 0
+	answered := make([]domain.Question, 0, len(answers))
 	for _, answer := range answers {
 		question, isKnown := byID[answer.QuestionID]
 		if !isKnown {
-			return 0, 0, domain.Invalidf("question %d does not belong to ticket %d", answer.QuestionID, ticketID)
+			return 0, 0, nil, domain.Invalidf("question %d does not belong to ticket %d", answer.QuestionID, ticketID)
 		}
 		if err := question.ApplyAnswer(answer, actor, s.clock.Now()); err != nil {
-			return 0, 0, err
+			return 0, 0, nil, err
 		}
 		if err := repos.Questions().SaveAnswer(ctx, *question); err != nil {
-			return 0, 0, err
+			return 0, 0, nil, err
 		}
 		round = max(round, question.Round)
+		answered = append(answered, *question)
 	}
-	return round, countOpen(questions), nil
+	return round, countOpen(questions), answered, nil
+}
+
+func askText(input AskInput) map[string]string {
+	fields := map[string]string{"summary": input.Summary}
+	for _, question := range input.Questions {
+		fields["question prompt"] += question.Prompt
+		fields["option"] += strings.Join(question.Options, "")
+	}
+	return fields
 }
 
 // moveTicket places a ticket and returns the history entry for the move.
@@ -279,7 +372,7 @@ func moveTicket(ctx context.Context, repos Repos, ticket *domain.Ticket, lane do
 // leaves refinement for the build lanes without a repo. People may still drag
 // anything anywhere.
 func isUnrefinedHandoff(ticket domain.Ticket, lane domain.Lane, actor domain.Actor) bool {
-	isBuildLane := lane == domain.LaneReady || lane == domain.LaneInProgress
+	isBuildLane := lane == domain.LaneReady || lane == domain.LaneInProgress || lane == domain.LaneReview
 	return actor.IsAgent() && isBuildLane && ticket.RepoID == 0
 }
 

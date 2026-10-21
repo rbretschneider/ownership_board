@@ -27,6 +27,7 @@ func BoardTools(services Services) []Tool {
 		claimWork{services}, getTicket{services}, listRepos{services}, askQuestions{services},
 		saveSpec{services}, moveTicket{services}, addComment{services}, updateTicket{services},
 		heartbeat{services}, releaseTicket{services}, createTicket{services},
+		addWorkLink{services}, recordDecision{services}, linkTickets{services}, findTicketsForWork{services},
 	}
 }
 
@@ -314,21 +315,34 @@ func (createTicket) Definition() Definition {
 			"title":   prop("string", "Short title."),
 			"body":    prop("string", "Markdown details."),
 			"repo_id": prop("integer", "The repo, if known."),
+			"relation": map[string]any{"type": "string", "enum": relationKinds,
+				"description": "How the new ticket relates to related_ticket_id, e.g. follow_up_of. Needs the lease on that ticket."},
+			"related_ticket_id": prop("integer", "The ticket the new one relates to."),
 		}, "kind", "title"),
 	}
 }
 
 func (t createTicket) Call(ctx context.Context, actor domain.Actor, raw json.RawMessage) (string, error) {
 	var args struct {
-		Kind   string `json:"kind"`
-		Title  string `json:"title"`
-		Body   string `json:"body"`
-		RepoID int64  `json:"repo_id"`
+		Kind            string `json:"kind"`
+		Title           string `json:"title"`
+		Body            string `json:"body"`
+		RepoID          int64  `json:"repo_id"`
+		Relation        string `json:"relation"`
+		RelatedTicketID int64  `json:"related_ticket_id"`
 	}
 	if err := decodeArguments(raw, &args); err != nil {
 		return "", err
 	}
-	detail, err := t.s.Board.Create(ctx, actor, domain.TicketDraft{RepoID: args.RepoID, Kind: args.Kind, Title: args.Title, Body: args.Body})
+	draft := domain.TicketDraft{RepoID: args.RepoID, Kind: args.Kind, Title: args.Title, Body: args.Body}
+	if (args.Relation == "") != (args.RelatedTicketID == 0) {
+		return "", &ArgumentError{Message: "give relation and related_ticket_id together"}
+	}
+	if args.Relation != "" {
+		detail, err := t.s.Board.CreateRelated(ctx, actor, draft, args.Relation, args.RelatedTicketID)
+		return outcome(detail, "created and linked.", err)
+	}
+	detail, err := t.s.Board.Create(ctx, actor, draft)
 	return outcome(detail, "created.", err)
 }
 

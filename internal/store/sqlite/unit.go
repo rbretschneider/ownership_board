@@ -12,3 +12,6 @@ func (r repos) Questions() app.QuestionRepository          { return questionRepo
 func (r repos) Timeline() app.TimelineRepository           { return timelineRepo{q: r.q} }
 func (r repos) CodeRepos() app.RepoRepository              { return codeRepoRepo{q: r.q} }
 func (r repos) SourceStatuses() app.SourceStatusRepository { return sourceStatusRepo{q: r.q} }
+func (r repos) WorkLinks() app.WorkLinkRepository          { return workLinkRepo{q: r.q} }
+func (r repos) Decisions() app.DecisionRepository          { return decisionRepo{q: r.q} }
+func (r repos) Relations() app.RelationRepository          { return relationRepo{q: r.q} }

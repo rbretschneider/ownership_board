@@ -13,6 +13,8 @@ type Store interface {
 	CountUsers(ctx context.Context) (int, error)
 	UserByID(ctx context.Context, id int64) (User, error)
 	UserByEmail(ctx context.Context, email string) (User, error)
+	// IsPersonName reports whether any user has this name, ignoring case.
+	IsPersonName(ctx context.Context, name string) (bool, error)
 	UserByIdentity(ctx context.Context, issuer, subject string) (User, error)
 	LinkIdentity(ctx context.Context, identity Identity, userID int64, now time.Time) error
 

@@ -168,6 +168,7 @@ export function BoardScreen({ route, status, onSignedOut, onStatusChanged }: Boa
           ticketId={route.ticketId}
           lanes={lanes}
           repos={repos}
+          tickets={board?.tickets ?? []}
           refreshSignal={ticketSignal}
           onChanged={refetch}
         />

@@ -12,6 +12,23 @@ export function canConnectGitHub(connections: readonly Connection[]): boolean {
   return github !== undefined && github.is_available && !hasCard(github);
 }
 
+/**
+ * Whether to show the "Set up GitHub" card: the server has no client ID and
+ * GitHub is not configured another way (env token).
+ */
+export function needsGitHubSetup(connections: readonly Connection[]): boolean {
+  const github = connections.find((c) => c.provider === "github");
+  return github !== undefined && !github.is_available && !hasCard(github);
+}
+
+/** Matches the server's sync error for a GitHub App with no installations. */
+const NOT_INSTALLED_PATTERN = /not installed|isn't installed|no installation/i;
+
+/** True when the last sync failed because the GitHub App is not installed anywhere. */
+export function isNotInstalledError(error: string): boolean {
+  return NOT_INSTALLED_PATTERN.test(error);
+}
+
 /** The connection for a provider, if the server listed it. */
 export function findConnection(connections: readonly Connection[], provider: ConnectionProvider): Connection | undefined {
   return connections.find((c) => c.provider === provider);

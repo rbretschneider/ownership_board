@@ -21,6 +21,11 @@ owner; they read and answer from a phone.
    - Work in this repository on the branch the brief suggests. Follow the
      repository's own conventions, build it, and run its tests.
    - Call `heartbeat` for the ticket if the work runs past about 20 minutes.
+   - End every commit message with the trailer `Ownership-Ticket: <id>`, and
+     record each pushed commit with `add_work_link`.
+   - Record significant choices with `record_decision`.
+   - If the brief says the repo is public, follow its public repo rules: no
+     board text in commits, branches, PRs or code.
    - Open the pull request, then `update_ticket` with `pr_url` and `branch`,
      `add_comment` with what changed and how it was verified, and
      `move_ticket` to `review`.

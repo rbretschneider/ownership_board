@@ -22,7 +22,33 @@ type Repo struct {
 	SyncedAt      *time.Time
 	// MissingSince is set while the provider no longer lists the repo.
 	MissingSince *time.Time
-	CreatedAt    time.Time
+	// TreatAsPublic is a person's override: handle the repo as public even if
+	// the provider says it is private, for example before open-sourcing it.
+	TreatAsPublic bool
+	CreatedAt     time.Time
+}
+
+// Visibility is how agents must treat a repo's contents and history.
+type Visibility string
+
+// The visibilities.
+const (
+	VisibilityPublic  Visibility = "public"
+	VisibilityPrivate Visibility = "private"
+)
+
+// privateEvidenceAge is how fresh a provider's "private" must be to count.
+const privateEvidenceAge = 7 * 24 * time.Hour
+
+// Visibility fails closed: a repo is private only when its provider said so in
+// a sync within the last week, it is still listed, and nobody marked it public.
+// Hand-added repos have no provider to ask, so they always count as public.
+func (r Repo) Visibility(now time.Time) Visibility {
+	isFreshlyPrivate := r.IsPrivate && r.SyncedAt != nil && now.Sub(*r.SyncedAt) <= privateEvidenceAge
+	if r.Provider == ProviderManual || r.TreatAsPublic || r.IsMissing() || !isFreshlyPrivate {
+		return VisibilityPublic
+	}
+	return VisibilityPrivate
 }
 
 // RepoListing is a repository as a provider reports it during a sync.
@@ -46,8 +72,9 @@ type ManualRepoDraft struct {
 
 // RepoStyle is what a person may change on any repo, synced or not.
 type RepoStyle struct {
-	Color       *string
-	Description *string
+	Color         *string
+	Description   *string
+	TreatAsPublic *bool
 }
 
 // Repo field limits.
@@ -100,7 +127,7 @@ func (r *Repo) Refresh(listing RepoListing, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	description, err := LimitText("description", strings.TrimSpace(listing.Description), MaxRepoDescriptionLength)
+	description, err := LimitText("description", StripHiddenText(strings.TrimSpace(listing.Description)), MaxRepoDescriptionLength)
 	if err != nil {
 		return err
 	}
@@ -139,6 +166,9 @@ func (r *Repo) Restyle(style RepoStyle) error {
 			return err
 		}
 		r.Description = description
+	}
+	if style.TreatAsPublic != nil {
+		r.TreatAsPublic = *style.TreatAsPublic
 	}
 	return nil
 }

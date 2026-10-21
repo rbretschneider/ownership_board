@@ -17,6 +17,28 @@ type TicketDetail struct {
 	TicketSummary
 	Questions []domain.Question
 	Timeline  []domain.TimelineEntry
+	WorkLinks []domain.WorkLink
+	Decisions []domain.Decision
+	Related   []RelatedTicket
+	// Repo is the ticket's repo, or nil when it has none.
+	Repo *domain.Repo
+}
+
+// RelatedTicket is a relation seen from one ticket, with the other end.
+type RelatedTicket struct {
+	Relation   domain.Relation
+	IsOutgoing bool
+	Other      TicketRef
+}
+
+// TicketRef is enough about another ticket to show and judge a link to it.
+type TicketRef struct {
+	ID    int64
+	Title string
+	Lane  domain.Lane
+	// Repo is the other ticket's repo, or nil; it decides that ticket's
+	// visibility.
+	Repo *domain.Repo
 }
 
 // Board is everything the board screen shows.

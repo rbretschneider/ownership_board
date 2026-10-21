@@ -112,7 +112,7 @@ func TestHeartbeatRequiresTheLeaseHolder(t *testing.T) {
 	id := f.ticket("idea", 0)
 	f.mustClaim(agent, app.ClaimInput{})
 	_, err := f.agents.Heartbeat(f.ctx, other, id, 0)
-	requireErrorKind(t, err, domain.KindConflict)
+	requireErrorKind(t, err, domain.KindForbidden)
 	before := f.detail(id).Ticket.Lease.ExpiresAt
 	f.clock.Advance(time.Minute)
 	detail, err := f.agents.Heartbeat(f.ctx, agent, id, 0)
@@ -148,7 +148,7 @@ func TestBriefForUnassignedTicketListsRepos(t *testing.T) {
 func TestBriefCarriesAnswers(t *testing.T) {
 	f := newFixture(t)
 	id := f.ticket("idea", 0)
-	asked, _ := f.board.Ask(f.ctx, agent, id, ask("Mobile too?"))
+	asked, _ := f.agentAsk(id, ask("Mobile too?"))
 	choice := 0
 	if _, err := f.board.Answer(f.ctx, owner, id, []domain.AnswerDraft{{QuestionID: asked.Questions[0].ID, Choice: &choice, Text: "phones first"}}); err != nil {
 		t.Fatalf("Answer: %v", err)

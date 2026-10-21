@@ -6,6 +6,7 @@ import {
   acceptRecommendations,
   areAllAnswered,
   EMPTY_DRAFT,
+  ownDraft,
   roundSummary,
   toAnswers,
   type AnswerDraft,
@@ -33,7 +34,7 @@ export function QuestionsPanel({ ticket, open, run }: QuestionsPanelProps) {
   const remaining = open.length - open.filter((q) => areAllAnswered([q], drafts)).length;
 
   const update = (questionId: number, draft: AnswerDraft) => {
-    setDrafts((current) => ({ ...current, [questionId]: draft }));
+    setDrafts((current) => ({ ...current, [questionId]: ownDraft(draft) }));
   };
 
   const send = async (next: DraftMap) => {

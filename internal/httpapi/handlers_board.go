@@ -186,6 +186,7 @@ func (s *server) answer(w http.ResponseWriter, r *http.Request, who caller) erro
 			Choice     *int   `json:"choice"`
 			Text       string `json:"text"`
 			IsDeferred bool   `json:"deferred"`
+			IsBulk     bool   `json:"bulk"`
 		} `json:"answers"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
@@ -193,7 +194,7 @@ func (s *server) answer(w http.ResponseWriter, r *http.Request, who caller) erro
 	}
 	drafts := make([]domain.AnswerDraft, 0, len(body.Answers))
 	for _, answer := range body.Answers {
-		drafts = append(drafts, domain.AnswerDraft{QuestionID: answer.QuestionID, Choice: answer.Choice, Text: answer.Text, IsDeferred: answer.IsDeferred})
+		drafts = append(drafts, domain.AnswerDraft{QuestionID: answer.QuestionID, Choice: answer.Choice, Text: answer.Text, IsDeferred: answer.IsDeferred, IsBulk: answer.IsBulk})
 	}
 	detail, err := s.deps.Board.Answer(r.Context(), who.actor, id, drafts)
 	return respondDetail(w, http.StatusOK, detail, err)

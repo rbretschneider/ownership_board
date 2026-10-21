@@ -52,6 +52,11 @@ const (
 // ask for a reconnect; network trouble is just retried.
 var ErrRefreshRefused error = &ProviderError{Message: "GitHub refused the stored sign-in; connect GitHub again"}
 
+// ErrAppNotInstalled means the sign-in works but the GitHub App is not
+// installed on any account, so GitHub shows it no repos at all.
+var ErrAppNotInstalled error = &ProviderError{Message: "Connected, but the GitHub App isn't installed on any account yet, so GitHub shows it no repos. " +
+	"On GitHub open Settings → Developer settings → GitHub Apps → your app → Install App, choose your account and All repositories, then press Sync now."}
+
 // DeviceCode is GitHub's answer to starting the device flow. DeviceCode is a
 // secret and must stay on the server.
 type DeviceCode struct {
@@ -197,6 +202,9 @@ func (g *GitHubApp) ListRepos(ctx context.Context, accessToken secretbox.Secret)
 	installations, err := g.installations(ctx, getter)
 	if err != nil {
 		return nil, err
+	}
+	if len(installations) == 0 {
+		return nil, ErrAppNotInstalled
 	}
 	var listings []domain.RepoListing
 	for _, id := range installations {

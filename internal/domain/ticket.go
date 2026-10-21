@@ -2,6 +2,7 @@ package domain
 
 import (
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -225,6 +226,9 @@ func applyBranch(t *Ticket, edit TicketEdit) (string, error) {
 	return "branch", nil
 }
 
+// urlCharacters is the RFC 3986 unreserved, reserved and percent characters.
+var urlCharacters = regexp.MustCompile(`^[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+$`)
+
 // parseOptionalURL accepts empty or an absolute http(s) URL, so a link stored
 // on a ticket can never become a javascript: href in the UI.
 func parseOptionalURL(field, raw string) (string, error) {
@@ -234,6 +238,11 @@ func parseOptionalURL(field, raw string) (string, error) {
 	}
 	if _, err := LimitText(field, value, MaxURLLength); err != nil {
 		return "", err
+	}
+	// Only characters RFC 3986 allows: no spaces, angle brackets, quotes or
+	// backticks, which could break out of where a URL is shown.
+	if !urlCharacters.MatchString(value) {
+		return "", Invalidf("%s contains characters a URL may not contain; percent-encode them", field)
 	}
 	parsed, err := url.Parse(value)
 	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" || parsed.User != nil {

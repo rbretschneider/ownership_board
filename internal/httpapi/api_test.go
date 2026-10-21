@@ -187,7 +187,7 @@ func TestMCPToolCallThroughTheEndpoint(t *testing.T) {
 		`{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"claim_work","arguments":{}}}`)
 	result := reply["result"].(map[string]any)
 	text := result["content"].([]any)[0].(map[string]any)["text"].(string)
-	if result["isError"].(bool) || !strings.Contains(text, "# #1 Refine me") {
+	if result["isError"].(bool) || !strings.Contains(text, "# Ticket #1") || !strings.Contains(text, "Refine me") {
 		t.Fatalf("claim_work result: %v", result)
 	}
 }
@@ -254,4 +254,14 @@ func TestGitHubSignInWithoutClientIDExplainsItself(t *testing.T) {
 	if !strings.Contains(body["error"].(map[string]any)["message"].(string), "GITHUB_APP_CLIENT_ID") {
 		t.Fatalf("error %v", body)
 	}
+}
+
+func TestAgentsCannotDeleteTraceRecords(t *testing.T) {
+	browser, token := signedIn(t)
+	browser.expect(http.StatusCreated, "POST", "/api/v1/tickets", `{"kind":"story","title":"x"}`)
+	agent := browser.asAgent(token)
+	for _, path := range []string{"/api/v1/tickets/1/work-links/1", "/api/v1/tickets/1/decisions/1", "/api/v1/tickets/1/relations/caused_by/2"} {
+		agent.expect(http.StatusForbidden, "DELETE", path, "")
+	}
+	agent.expect(http.StatusForbidden, "POST", "/api/v1/tickets/1/decisions", `{"summary":"agent without lease"}`)
 }

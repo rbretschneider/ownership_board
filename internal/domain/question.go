@@ -32,6 +32,9 @@ type AnswerDraft struct {
 	Choice     *int
 	Text       string
 	IsDeferred bool
+	// IsBulk is set when the answer came from "Accept recommendations": the
+	// person delegated rather than chose.
+	IsBulk bool
 }
 
 // NewQuestion validates a draft for a ticket's round.
@@ -74,7 +77,7 @@ func (q *Question) ApplyAnswer(draft AnswerDraft, actor Actor, now time.Time) er
 	if draft.Choice == nil && text == "" && !draft.IsDeferred {
 		return Invalidf("question %d needs a choice, text, or your call", q.ID)
 	}
-	q.Answer = &Answer{Choice: draft.Choice, Text: text, IsDeferred: draft.IsDeferred, By: actor.Name, At: now}
+	q.Answer = &Answer{Choice: draft.Choice, Text: text, IsDeferred: draft.IsDeferred, IsBulk: draft.IsBulk, By: actor.Name, At: now}
 	return nil
 }
 

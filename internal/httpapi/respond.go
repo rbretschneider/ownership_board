@@ -70,8 +70,9 @@ func writeError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err
 
 func classify(err error) (int, errorCode, bool) {
 	var throttled *auth.ThrottledError
+	var limited *rateLimitedError
 	switch {
-	case errors.As(err, &throttled):
+	case errors.As(err, &throttled), errors.As(err, &limited):
 		return http.StatusTooManyRequests, codeRateLimited, true
 	case errors.Is(err, auth.ErrUnauthorized):
 		return http.StatusUnauthorized, codeUnauthorized, true
@@ -93,8 +94,12 @@ func classify(err error) (int, errorCode, bool) {
 
 func writeRetryAfter(w http.ResponseWriter, err error) {
 	var throttled *auth.ThrottledError
+	var limited *rateLimitedError
 	if errors.As(err, &throttled) {
 		w.Header().Set("Retry-After", strconv.Itoa(int(throttled.RetryAfter.Seconds())+1))
+	}
+	if errors.As(err, &limited) {
+		w.Header().Set("Retry-After", strconv.Itoa(int(limited.retryAfter.Seconds())+1))
 	}
 }
 
