@@ -10,7 +10,9 @@ import (
 
 type links struct{}
 
-func (links) Ticket(id int64) string { return "https://board.example.com/#/t/" + strconv.FormatInt(id, 10) }
+func (links) Ticket(id int64) string {
+	return "https://board.example.com/#/t/" + strconv.FormatInt(id, 10)
+}
 
 func policy() app.NotificationPolicy {
 	return app.NewNotificationPolicy(links{}, app.DefaultNotificationRules()...)
