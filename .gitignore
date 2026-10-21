@@ -1,0 +1,23 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Local data
+/data/
+
+# Build output
+/bin/
+/ownership
+*.exe
+internal/webui/dist/
+web/dist/
+web/node_modules/
+coverage/
+
+# Editors
+.idea/
+.vscode/
+*.swp
+.DS_Store
+*.tsbuildinfo

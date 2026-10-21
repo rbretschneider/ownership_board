@@ -1,0 +1,9 @@
+DROP TABLE timeline;
+DROP TABLE questions;
+DROP TABLE tickets;
+DROP TABLE repo_source_status;
+DROP TABLE repos;
+DROP TABLE api_tokens;
+DROP TABLE refresh_tokens;
+DROP TABLE identity_links;
+DROP TABLE users;

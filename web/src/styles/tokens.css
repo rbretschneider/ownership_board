@@ -1,0 +1,83 @@
+/* Design tokens. Dark is the default theme; light overrides below.
+   Text colors are chosen for >= 4.5:1 contrast on every surface they sit on. */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0e0f13;
+  --surface: #15171c;
+  --surface-2: #1b1e24;
+  --surface-3: #232730;
+  --border: #262a32;
+  --border-strong: #353a46;
+
+  --text: #e7e9ee;
+  --text-muted: #a3aab7;
+  --text-faint: #8d95a3;
+
+  --accent: #8b97ff;
+  --accent-strong: #a3adff;
+  --accent-soft: rgba(139, 151, 255, 0.14);
+  --on-accent: #0b0c10;
+
+  --human: #e8b24f;
+  --human-soft: rgba(232, 178, 79, 0.13);
+  --agent: #8b97ff;
+  --agent-soft: rgba(139, 151, 255, 0.13);
+  --done: #3cc7a8;
+
+  --danger: #f2877a;
+  --danger-soft: rgba(242, 135, 122, 0.12);
+  --success: #3cc7a8;
+
+  --focus: #b4bcff;
+  --backdrop: rgba(4, 5, 8, 0.62);
+  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.35);
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "Cascadia Code", Menlo, Consolas, monospace;
+
+  --topbar-h: 56px;
+  --touch: 44px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f0f1f4;
+  --surface-3: #e6e8ed;
+  --border: #e1e4ea;
+  --border-strong: #ccd1da;
+
+  --text: #16181d;
+  --text-muted: #4f5664;
+  --text-faint: #636a78;
+
+  --accent: #4b57d6;
+  --accent-strong: #3a45c2;
+  --accent-soft: rgba(75, 87, 214, 0.1);
+  --on-accent: #ffffff;
+
+  --human: #9a6400;
+  --human-soft: rgba(196, 128, 0, 0.11);
+  --agent: #4b57d6;
+  --agent-soft: rgba(75, 87, 214, 0.1);
+  --done: #127a63;
+
+  --danger: #c23a2b;
+  --danger-soft: rgba(194, 58, 43, 0.08);
+  --success: #127a63;
+
+  --focus: #4b57d6;
+  --backdrop: rgba(20, 22, 28, 0.38);
+  --shadow-lg: 0 18px 48px rgba(16, 20, 30, 0.18), 0 2px 8px rgba(16, 20, 30, 0.08);
+  --shadow-md: 0 6px 20px rgba(16, 20, 30, 0.12);
+}

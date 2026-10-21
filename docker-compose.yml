@@ -1,0 +1,25 @@
+# ownership_board: copy .env.example to .env, fill it in, then
+#   docker compose up -d
+# The board serves plain HTTP; put a TLS-terminating reverse proxy in front.
+services:
+  board:
+    image: ghcr.io/rbretschneider/ownership_board:latest
+    # To build from this checkout instead: docker compose up -d --build
+    build: .
+    container_name: ownership_board
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Fail fast rather than start without a signing secret.
+      AUTH_TOKEN_SECRET: ${AUTH_TOKEN_SECRET:?set AUTH_TOKEN_SECRET in .env}
+      TZ: ${TZ:-UTC}
+    ports:
+      # Loopback only by default; the reverse proxy reaches it here. Set
+      # BIND_ADDRESS to a LAN address to expose it directly.
+      - "${BIND_ADDRESS:-127.0.0.1}:${HOST_PORT:-8080}:8080"
+    volumes:
+      # A named volume, never a network share: SQLite needs real fsync.
+      - board-data:/data
+
+volumes:
+  board-data:
