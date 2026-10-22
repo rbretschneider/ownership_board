@@ -1084,3 +1084,11 @@
 .markdown input[type="checkbox"] {
   margin-right: 6px;
 }
+
+.lane-list__quick-add {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 8px 12px;
+}
