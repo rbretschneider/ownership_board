@@ -751,7 +751,9 @@
   position: absolute;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /* clip, not hidden: a hidden overflow can still be scrolled by focus, which
+     slid the whole panel off screen. Only the sheet body scrolls. */
+  overflow: clip;
   background: var(--surface);
   box-shadow: var(--shadow-lg);
   outline: none;
