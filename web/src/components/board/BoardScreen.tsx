@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RepoFilter } from "../../api/boardApi";
-import type { AuthStatus, BoardEvent, Lane, LaneId, TicketSummary } from "../../api/types";
+import type { AuthStatus, BoardEvent, Kind, Lane, LaneId, TicketSummary } from "../../api/types";
 import { useBoard } from "../../hooks/useBoard";
 import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 import { useDragDrop } from "../../hooks/useDragDrop";
@@ -39,7 +39,8 @@ export function BoardScreen({ route, status, onSignedOut, onStatusChanged }: Boa
   const isDesktop = useMediaQuery(DESKTOP_MEDIA_QUERY);
   const [repoFilter, setRepoFilter] = useState<RepoFilter>(() => decodeRepoFilter(preferences.read(STORAGE_KEYS.repoFilter, "")));
   const [isYourMoveOnly, setYourMoveOnly] = useState(false);
-  const [isCreateOpen, setCreateOpen] = useState(false);
+  // The open create dialog; kind is set when a quick-add button picked it.
+  const [createRequest, setCreateRequest] = useState<{ kind?: Kind } | null>(null);
   const [chosenLane, setChosenLane] = useState<LaneId | null>(null);
   const [ticketSignal, setTicketSignal] = useState(0);
   const { board, error, isLoading, refetch, move } = useBoard(repoFilter);
@@ -111,6 +112,7 @@ export function BoardScreen({ route, status, onSignedOut, onStatusChanged }: Boa
     target: drag.session?.target ?? null,
     onPointerDown: drag.startPress,
     shouldIgnoreClick: drag.consumeClick,
+    onQuickAdd: (kind: Kind) => setCreateRequest({ kind }),
   };
 
   return (
@@ -124,7 +126,7 @@ export function BoardScreen({ route, status, onSignedOut, onStatusChanged }: Boa
         onToggleYourMove={() => setYourMoveOnly((v) => !v)}
         isConnected={isConnected}
         showNewButton={isDesktop}
-        onNew={() => setCreateOpen(true)}
+        onNew={() => setCreateRequest({})}
       />
       <main className="board" aria-busy={isLoading}>
         {board === null && isLoading && <LoadingState label="Loading board" />}
@@ -143,7 +145,7 @@ export function BoardScreen({ route, status, onSignedOut, onStatusChanged }: Boa
         )}
       </main>
       {!isDesktop && (
-        <button type="button" className="fab" aria-label="New story or bug" onClick={() => setCreateOpen(true)}>
+        <button type="button" className="fab" aria-label="New story or bug" onClick={() => setCreateRequest({})}>
           <Plus size={26} aria-hidden="true" />
         </button>
       )}
@@ -154,12 +156,13 @@ export function BoardScreen({ route, status, onSignedOut, onStatusChanged }: Boa
           </div>
         </div>
       )}
-      {isCreateOpen && (
+      {createRequest !== null && (
         <CreateTicketDialog
           repos={repos}
-          onClose={() => setCreateOpen(false)}
+          initialKind={createRequest.kind}
+          onClose={() => setCreateRequest(null)}
           onCreated={(ticket) => {
-            setCreateOpen(false);
+            setCreateRequest(null);
             toast.success(`Created #${ticket.id}`);
             refetch();
           }}

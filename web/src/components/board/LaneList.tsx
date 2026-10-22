@@ -1,5 +1,6 @@
+import { BookOpen, Bug } from "lucide-react";
 import { Fragment, type PointerEvent } from "react";
-import type { LaneId, Repo, Stage, TicketSummary } from "../../api/types";
+import type { Kind, LaneId, Repo, Stage, TicketSummary } from "../../api/types";
 import { LANE_EMPTY_HINTS } from "../../lib/constants";
 import { DROP_LIST_ATTR, type DropTarget } from "../../lib/dropTargets";
 import { TicketCard } from "./TicketCard";
@@ -14,10 +15,22 @@ export interface LaneListProps {
   target: DropTarget | null;
   onPointerDown: (event: PointerEvent<HTMLElement>, ticketId: number) => void;
   shouldIgnoreClick: () => boolean;
+  /** Opens the create dialog for that kind; offered in an empty Todo lane. */
+  onQuickAdd?: (kind: Kind) => void;
 }
 
 /** The cards of one lane, plus the drop indicator while dragging. */
-export function LaneList({ lane, tickets, stages, reposById, draggedId, target, onPointerDown, shouldIgnoreClick }: LaneListProps) {
+export function LaneList({
+  lane,
+  tickets,
+  stages,
+  reposById,
+  draggedId,
+  target,
+  onPointerDown,
+  shouldIgnoreClick,
+  onQuickAdd,
+}: LaneListProps) {
   const dropIndex = target !== null && target.kind === "list" && target.lane === lane ? target.index : null;
   const isEmpty = tickets.filter((t) => t.id !== draggedId).length === 0;
   let position = 0;
@@ -46,6 +59,18 @@ export function LaneList({ lane, tickets, stages, reposById, draggedId, target, 
       })}
       {dropIndex !== null && dropIndex >= position && <div className="drop-line" aria-hidden="true" />}
       {isEmpty && <p className="lane-list__empty">{LANE_EMPTY_HINTS[lane]}</p>}
+      {isEmpty && lane === "todo" && onQuickAdd !== undefined && (
+        <div className="lane-list__quick-add">
+          <button type="button" className="button button--secondary" onClick={() => onQuickAdd("story")}>
+            <BookOpen size={16} aria-hidden="true" />
+            New story
+          </button>
+          <button type="button" className="button button--secondary" onClick={() => onQuickAdd("bug")}>
+            <Bug size={16} aria-hidden="true" />
+            New bug
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import type { PointerEvent } from "react";
-import type { Lane, LaneId, Repo, Stage, TicketSummary } from "../../api/types";
+import type { Kind, Lane, LaneId, Repo, Stage, TicketSummary } from "../../api/types";
 import type { DropTarget } from "../../lib/dropTargets";
 
 /** What both board layouts (desktop columns, mobile single lane) receive. */
@@ -12,4 +12,5 @@ export interface BoardViewProps {
   target: DropTarget | null;
   onPointerDown: (event: PointerEvent<HTMLElement>, ticketId: number) => void;
   shouldIgnoreClick: () => boolean;
+  onQuickAdd?: (kind: Kind) => void;
 }

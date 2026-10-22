@@ -17,12 +17,16 @@ export interface CreateTicketDialogProps {
   repos: Repo[];
   onClose: () => void;
   onCreated: (ticket: TicketDetail) => void;
+  /** Preselects the kind (a lane quick-add button); otherwise the last one used. */
+  initialKind?: Kind;
 }
 
 /** The single create dialog for stories and bugs. */
-export function CreateTicketDialog({ repos, onClose, onCreated }: CreateTicketDialogProps) {
+export function CreateTicketDialog({ repos, onClose, onCreated, initialKind }: CreateTicketDialogProps) {
   const api = useApi();
-  const [kind, setKind] = useState<Kind>(() => (preferences.read(STORAGE_KEYS.lastKind, "story") === "bug" ? "bug" : "story"));
+  const [kind, setKind] = useState<Kind>(
+    () => initialKind ?? (preferences.read(STORAGE_KEYS.lastKind, "story") === "bug" ? "bug" : "story"),
+  );
   const [repo, setRepo] = useState<RepoFilter>(() => initialRepo(repos));
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
