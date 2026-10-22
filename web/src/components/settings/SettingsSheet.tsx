@@ -5,6 +5,7 @@ import { BOARD_HASH, navigate, SETTINGS_HASH, type Route } from "../../lib/hashR
 import { Overlay } from "../common/Overlay";
 import { useToast } from "../toast/ToastContext";
 import { AccountSection } from "./AccountSection";
+import { AlertsSection } from "./AlertsSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { RepositoriesSection } from "./RepositoriesSection";
 import { TokensSection } from "./TokensSection";
@@ -49,6 +50,7 @@ export function SettingsSheet({ route, status, onSignedOut, onChanged }: Setting
           <RepositoriesSection onChanged={onChanged} />
           <TokensSection />
           <AppearanceSection />
+          <AlertsSection />
           <AccountSection status={status} onSignedOut={onSignedOut} />
         </div>
       </div>

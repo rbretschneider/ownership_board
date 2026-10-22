@@ -7,6 +7,7 @@ import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 import { useDragDrop } from "../../hooks/useDragDrop";
 import { useEventStream } from "../../hooks/useEventStream";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { useOwnerAlerts } from "../../hooks/useOwnerAlerts";
 import { DEFAULT_LANE, DESKTOP_MEDIA_QUERY, REFETCH_DEBOUNCE_MS } from "../../lib/constants";
 import { laneCardIds, type DropTarget } from "../../lib/dropTargets";
 import type { Route } from "../../lib/hashRoute";
@@ -81,6 +82,7 @@ export function BoardScreen({ route, status, onSignedOut, onStatusChanged }: Boa
   const allTickets = board?.tickets ?? [];
   const stages = board?.stages ?? [];
   const yourMoveCount = needsOwner(allTickets).length;
+  useOwnerAlerts(board?.tickets ?? null, stages);
   const visible = useMemo(
     () => (isYourMoveOnly ? needsOwner(allTickets) : allTickets),
     [allTickets, isYourMoveOnly],
