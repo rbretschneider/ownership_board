@@ -279,6 +279,8 @@
 }
 
 .option {
+  /* Contains its visually hidden radio, so focusing it never scrolls the panel. */
+  position: relative;
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
