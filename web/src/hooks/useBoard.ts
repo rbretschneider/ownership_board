@@ -60,10 +60,8 @@ export function useBoard(filter: RepoFilter): BoardState {
     }
     // Bump the sequence so a refetch already in flight cannot overwrite the optimistic state.
     requestSeq.current++;
-    const ownerOf = new Map(snapshot.lanes.map((l) => [l.id, l.owner]));
-    const moved = applyMove(snapshot.tickets, ticketId, lane, afterId).map((t) =>
-      t.id === ticketId ? { ...t, owner: ownerOf.get(lane) ?? t.owner, lease: null } : t,
-    );
+    // Only the position is optimistic: the server picks the stage, and the refetch below shows it.
+    const moved = applyMove(snapshot.tickets, ticketId, lane, afterId);
     setBoard({ ...snapshot, tickets: moved });
     try {
       await api.moveTicket(ticketId, lane, afterId);

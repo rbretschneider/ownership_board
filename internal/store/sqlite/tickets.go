@@ -15,7 +15,8 @@ type ticketRepo struct {
 	q querier
 }
 
-const ticketColumns = `id, repo_id, kind, title, body, spec, lane, rank, pr_url, branch,
+const ticketColumns = `id, repo_id, kind, title, body, spec, design, lane, stage, rank, pr_url, branch, blocked_reason,
+	spec_revision, design_revision, approved_spec_revision, approved_design_revision,
 	lease_holder, lease_expires_at, created_by, created_at, updated_at, lane_changed_at`
 
 func (r ticketRepo) Get(ctx context.Context, id int64) (domain.Ticket, error) {
@@ -44,9 +45,10 @@ func (r ticketRepo) List(ctx context.Context, filter app.TicketFilter) ([]domain
 
 func (r ticketRepo) Insert(ctx context.Context, ticket *domain.Ticket) error {
 	result, err := r.q.ExecContext(ctx,
-		`INSERT INTO tickets (repo_id, kind, title, body, spec, lane, rank, pr_url, branch,
+		`INSERT INTO tickets (repo_id, kind, title, body, spec, design, lane, stage, rank, pr_url, branch, blocked_reason,
+			spec_revision, design_revision, approved_spec_revision, approved_design_revision,
 			lease_holder, lease_expires_at, created_by, created_at, updated_at, lane_changed_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ticketValues(*ticket)...)
 	if err != nil {
 		return fmt.Errorf("sqlite: insert ticket: %w", err)
@@ -58,8 +60,9 @@ func (r ticketRepo) Insert(ctx context.Context, ticket *domain.Ticket) error {
 func (r ticketRepo) Update(ctx context.Context, ticket domain.Ticket) error {
 	args := append(ticketValues(ticket), ticket.ID)
 	_, err := r.q.ExecContext(ctx,
-		`UPDATE tickets SET repo_id = ?, kind = ?, title = ?, body = ?, spec = ?, lane = ?, rank = ?,
-			pr_url = ?, branch = ?, lease_holder = ?, lease_expires_at = ?, created_by = ?,
+		`UPDATE tickets SET repo_id = ?, kind = ?, title = ?, body = ?, spec = ?, design = ?, lane = ?, stage = ?, rank = ?,
+			pr_url = ?, branch = ?, blocked_reason = ?, spec_revision = ?, design_revision = ?,
+			approved_spec_revision = ?, approved_design_revision = ?, lease_holder = ?, lease_expires_at = ?, created_by = ?,
 			created_at = ?, updated_at = ?, lane_changed_at = ?
 		 WHERE id = ?`, args...)
 	if err != nil {
@@ -99,12 +102,14 @@ func (r ticketRepo) SetRank(ctx context.Context, id int64, rank float64) error {
 	return nil
 }
 
-func (r ticketRepo) NextClaimable(ctx context.Context, lane domain.Lane, filter app.TicketFilter, now time.Time) (domain.Ticket, bool, error) {
+func (r ticketRepo) NextClaimable(ctx context.Context, stage domain.Stage, filter app.TicketFilter, now time.Time) (domain.Ticket, bool, error) {
 	clause, filterArgs := filterClause(filter)
-	args := append([]any{string(lane), formatTime(now)}, filterArgs...)
+	args := append([]any{string(stage), formatTime(now)}, filterArgs...)
 	row := r.q.QueryRowContext(ctx,
 		`SELECT `+ticketColumns+` FROM tickets
-		 WHERE lane = ? AND (lease_holder = '' OR lease_expires_at <= ?) AND `+clause+`
+		 WHERE stage = ? AND blocked_reason = '' AND (lease_holder = '' OR lease_expires_at <= ?)
+		   AND NOT EXISTS (SELECT 1 FROM questions q WHERE q.ticket_id = tickets.id AND q.answered_at IS NULL)
+		   AND `+clause+`
 		 ORDER BY rank, id LIMIT 1`, args...)
 	ticket, err := scanTicket(row)
 	if err == sql.ErrNoRows {
@@ -119,7 +124,8 @@ func ticketValues(t domain.Ticket) []any {
 		holder, expires = t.Lease.Holder, formatTime(t.Lease.ExpiresAt)
 	}
 	return []any{
-		nullableID(t.RepoID), string(t.Kind), t.Title, t.Body, t.Spec, string(t.Lane), t.Rank, t.PRURL, t.Branch,
+		nullableID(t.RepoID), string(t.Kind), t.Title, t.Body, t.Spec, t.Design, string(t.Lane), string(t.Stage), t.Rank,
+		t.PRURL, t.Branch, t.BlockedReason, t.SpecRevision, t.DesignRevision, t.ApprovedSpecRevision, t.ApprovedDesignRevision,
 		holder, expires, t.CreatedBy, formatTime(t.CreatedAt), formatTime(t.UpdatedAt), formatTime(t.LaneChangedAt),
 	}
 }
@@ -161,15 +167,19 @@ type scanner interface {
 
 func scanTicket(row scanner) (domain.Ticket, error) {
 	var t domain.Ticket
-	var kind, lane, holder, expires, created, updated, laneChanged string
+	var kind, lane, stage, holder, expires, created, updated, laneChanged string
 	var repoID sql.NullInt64
-	err := row.Scan(&t.ID, &repoID, &kind, &t.Title, &t.Body, &t.Spec, &lane, &t.Rank, &t.PRURL, &t.Branch,
+	err := row.Scan(&t.ID, &repoID, &kind, &t.Title, &t.Body, &t.Spec, &t.Design, &lane, &stage, &t.Rank, &t.PRURL, &t.Branch,
+		&t.BlockedReason, &t.SpecRevision, &t.DesignRevision, &t.ApprovedSpecRevision, &t.ApprovedDesignRevision,
 		&holder, &expires, &t.CreatedBy, &created, &updated, &laneChanged)
 	if err != nil {
 		return domain.Ticket{}, err
 	}
 	t.RepoID = repoID.Int64
-	t.Kind, t.Lane = domain.Kind(kind), domain.Lane(lane)
+	t.Kind, t.Lane, t.Stage = domain.Kind(kind), domain.Lane(lane), domain.Stage(stage)
+	if t.Stage.Lane() != t.Lane {
+		return domain.Ticket{}, fmt.Errorf("sqlite: ticket %d has stage %q in lane %q", t.ID, stage, lane)
+	}
 	if t.Lease, err = scanLease(holder, expires); err != nil {
 		return domain.Ticket{}, err
 	}

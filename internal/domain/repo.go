@@ -25,7 +25,11 @@ type Repo struct {
 	// TreatAsPublic is a person's override: handle the repo as public even if
 	// the provider says it is private, for example before open-sourcing it.
 	TreatAsPublic bool
-	CreatedAt     time.Time
+	// RequireSpecApproval and RequireDesignApproval are the owner's
+	// checkpoints for tickets in this repo.
+	RequireSpecApproval   bool
+	RequireDesignApproval bool
+	CreatedAt             time.Time
 }
 
 // Visibility is how agents must treat a repo's contents and history.
@@ -75,6 +79,9 @@ type RepoStyle struct {
 	Color         *string
 	Description   *string
 	TreatAsPublic *bool
+	// RequireSpecApproval and RequireDesignApproval change the checkpoints.
+	RequireSpecApproval   *bool
+	RequireDesignApproval *bool
 }
 
 // Repo field limits.
@@ -104,7 +111,7 @@ func NewManualRepo(draft ManualRepoDraft, now time.Time) (Repo, error) {
 
 // NewSyncedRepo validates a provider listing as a new repo.
 func NewSyncedRepo(listing RepoListing, now time.Time) (Repo, error) {
-	repo := Repo{Provider: listing.Provider, CreatedAt: now}
+	repo := Repo{Provider: listing.Provider, CreatedAt: now, RequireSpecApproval: true}
 	if err := repo.Refresh(listing, now); err != nil {
 		return Repo{}, err
 	}
@@ -170,7 +177,18 @@ func (r *Repo) Restyle(style RepoStyle) error {
 	if style.TreatAsPublic != nil {
 		r.TreatAsPublic = *style.TreatAsPublic
 	}
+	if style.RequireSpecApproval != nil {
+		r.RequireSpecApproval = *style.RequireSpecApproval
+	}
+	if style.RequireDesignApproval != nil {
+		r.RequireDesignApproval = *style.RequireDesignApproval
+	}
 	return nil
+}
+
+// ChangesGates reports whether style changes a checkpoint setting.
+func (style RepoStyle) ChangesGates() bool {
+	return style.RequireSpecApproval != nil || style.RequireDesignApproval != nil
 }
 
 func parseRepoName(raw string) (string, error) {

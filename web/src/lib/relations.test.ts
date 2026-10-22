@@ -7,7 +7,7 @@ function relation(kind: Relation["kind"], direction: Relation["direction"], id: 
     kind,
     direction,
     label: "",
-    ticket: { id, title: `ticket ${id}`, lane: "new", visibility: "private" },
+    ticket: { id, title: `ticket ${id}`, lane: "todo", visibility: "private" },
     added_by: { kind: "human", name: "Owner" },
     added_at: "2026-01-01T00:00:00Z",
   };

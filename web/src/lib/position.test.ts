@@ -5,6 +5,7 @@ import { afterIdFor, applyMove, groupByLane, insertIndexFromMidpoints } from "./
 function ticket(id: number, lane: LaneId): TicketSummary {
   return {
     id, lane, repo_id: 1, kind: "story", title: `t${id}`, owner: "agent",
+    stage: "refine", needs_owner: false, blocked_reason: "", spec_revision: 0, design_revision: 0,
     pr_url: "", branch: "", open_questions: 0, lease: null,
     created_at: "", updated_at: "", lane_changed_at: "",
   };
@@ -47,33 +48,33 @@ describe("afterIdFor", () => {
 });
 
 describe("applyMove", () => {
-  const board = [ticket(1, "new"), ticket(2, "new"), ticket(3, "ready"), ticket(4, "ready")];
+  const board = [ticket(1, "todo"), ticket(2, "todo"), ticket(3, "review"), ticket(4, "review")];
 
   it("moves a card to the top of another lane", () => {
-    expect(order(applyMove(board, 1, "ready", null))).toEqual(["new:2", "ready:1", "ready:3", "ready:4"]);
+    expect(order(applyMove(board, 1, "review", null))).toEqual(["todo:2", "review:1", "review:3", "review:4"]);
   });
   it("places a card after the given card", () => {
-    expect(order(applyMove(board, 1, "ready", 3))).toEqual(["new:2", "ready:3", "ready:1", "ready:4"]);
+    expect(order(applyMove(board, 1, "review", 3))).toEqual(["todo:2", "review:3", "review:1", "review:4"]);
   });
   it("reorders within a lane", () => {
-    expect(order(applyMove(board, 1, "new", 2))).toEqual(["new:2", "new:1", "ready:3", "ready:4"]);
+    expect(order(applyMove(board, 1, "todo", 2))).toEqual(["todo:2", "todo:1", "review:3", "review:4"]);
   });
   it("appends into an empty lane", () => {
-    expect(order(applyMove(board, 3, "done", null))).toEqual(["new:1", "new:2", "ready:4", "done:3"]);
+    expect(order(applyMove(board, 3, "merged", null))).toEqual(["todo:1", "todo:2", "review:4", "merged:3"]);
   });
   it("does not modify its input", () => {
-    applyMove(board, 1, "done", null);
-    expect(order(board)).toEqual(["new:1", "new:2", "ready:3", "ready:4"]);
+    applyMove(board, 1, "merged", null);
+    expect(order(board)).toEqual(["todo:1", "todo:2", "review:3", "review:4"]);
   });
   it("returns a copy unchanged for an unknown card", () => {
-    expect(order(applyMove(board, 99, "done", null))).toEqual(order(board));
+    expect(order(applyMove(board, 99, "merged", null))).toEqual(order(board));
   });
 });
 
 describe("groupByLane", () => {
   it("keeps order and includes empty lanes", () => {
-    const groups = groupByLane([ticket(2, "ready"), ticket(1, "ready")], ["new", "ready"]);
-    expect(groups.get("new")).toEqual([]);
-    expect(groups.get("ready")?.map((t) => t.id)).toEqual([2, 1]);
+    const groups = groupByLane([ticket(2, "review"), ticket(1, "review")], ["todo", "review"]);
+    expect(groups.get("todo")).toEqual([]);
+    expect(groups.get("review")?.map((t) => t.id)).toEqual([2, 1]);
   });
 });

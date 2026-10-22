@@ -73,6 +73,9 @@ func (s *AgentService) Heartbeat(ctx context.Context, actor domain.Actor, id int
 		if err := requireHolder(*ticket, actor, s.clock.Now()); err != nil {
 			return nil, err
 		}
+		if !ticket.Stage.IsAgentStage() || ticket.IsBlocked() {
+			return nil, domain.Conflictf("ticket %d is no longer with an agent", ticket.ID)
+		}
 		return nil, ticket.Claim(actor.Name, duration, s.clock.Now())
 	})
 }
@@ -114,10 +117,10 @@ type claimRequest struct {
 	lease  time.Duration
 }
 
-// filterFor widens a repo-scoped claim to unassigned tickets in New.
-func (r claimRequest) filterFor(lane domain.Lane) TicketFilter {
+// filterFor widens a repo-scoped claim to unassigned tickets being refined.
+func (r claimRequest) filterFor(stage domain.Stage) TicketFilter {
 	filter := r.filter
-	filter.IncludeUnassigned = filter.IsScoped && lane == domain.LaneNew
+	filter.IncludeUnassigned = filter.IsScoped && stage == domain.StageRefine
 	return filter
 }
 
@@ -168,7 +171,7 @@ func (s *AgentService) tryClaim(ctx context.Context, actor domain.Actor, request
 		if err != nil || !isFound {
 			return err
 		}
-		action, _, _ := domain.ActionFor(ticket.Lane)
+		action, _, _ := domain.ActionFor(ticket.Stage)
 		var detail TicketDetail
 		detail, events, err = s.writer.apply(ctx, repos, &ticket, s.claimChange(actor, request.lease))
 		if err != nil {
@@ -187,8 +190,8 @@ func (s *AgentService) tryClaim(ctx context.Context, actor domain.Actor, request
 }
 
 func (s *AgentService) nextClaimable(ctx context.Context, repos Repos, request claimRequest) (domain.Ticket, bool, error) {
-	for _, lane := range domain.ClaimOrder {
-		ticket, isFound, err := repos.Tickets().NextClaimable(ctx, lane, request.filterFor(lane), s.clock.Now())
+	for _, stage := range domain.ClaimOrder {
+		ticket, isFound, err := repos.Tickets().NextClaimable(ctx, stage, request.filterFor(stage), s.clock.Now())
 		if err != nil || isFound {
 			return ticket, isFound, err
 		}
@@ -196,14 +199,14 @@ func (s *AgentService) nextClaimable(ctx context.Context, repos Repos, request c
 	return domain.Ticket{}, false, nil
 }
 
-// claimChange moves the ticket to the lane its action works in, then leases it.
-// The move comes first because moving drops any lease.
+// claimChange moves the ticket to the stage its action works in, then leases
+// it. The move comes first because a stage change drops any lease.
 func (s *AgentService) claimChange(actor domain.Actor, lease time.Duration) ticketChange {
 	return func(ctx context.Context, repos Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
-		action, workLane, _ := domain.ActionFor(ticket.Lane)
+		action, workStage, _ := domain.ActionFor(ticket.Stage)
 		var entries []domain.TimelineEntry
-		if workLane != ticket.Lane {
-			moved, err := moveTicket(ctx, repos, ticket, workLane, atTop, actor, s.clock)
+		if workStage != ticket.Stage {
+			moved, err := changeStage(ctx, repos, ticket, workStage, actor, s.clock)
 			if err != nil {
 				return nil, err
 			}

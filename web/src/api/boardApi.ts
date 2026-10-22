@@ -1,6 +1,7 @@
 import type { HttpClient } from "./httpClient";
 import type {
   Answer,
+  ApproveInput,
   AuthStatus,
   Board,
   CreatedToken,
@@ -19,6 +20,7 @@ import type {
   ForgejoConnectionInput,
   RelationInput,
   RelationKind,
+  RequestChangesInput,
   TicketDetail,
   TicketSummary,
   Token,
@@ -48,6 +50,12 @@ export interface BoardApi {
   moveTicket(id: number, lane: LaneId, afterId: number | null): Promise<TicketDetail>;
   comment(id: number, body: string): Promise<TicketDetail>;
   answer(id: number, answers: Answer[]): Promise<TicketDetail>;
+  /** Resolves a checkpoint; 409 when the stage or revision changed. */
+  approve(id: number, input: ApproveInput): Promise<TicketDetail>;
+  /** Sends a checkpoint back with a required comment; 409 as for approve. */
+  requestChanges(id: number, input: RequestChangesInput): Promise<TicketDetail>;
+  /** Clears Blocked; an empty comment sends none. */
+  unblock(id: number, comment: string): Promise<TicketDetail>;
   deleteTicket(id: number): Promise<void>;
   addWorkLink(id: number, input: WorkLinkInput): Promise<TicketDetail>;
   removeWorkLink(id: number, linkId: number): Promise<TicketDetail>;
@@ -89,6 +97,9 @@ export function createBoardApi(http: HttpClient): BoardApi {
     moveTicket: (id, lane, afterId) => http.request("POST", `${t(id)}/move`, { lane, after_id: afterId }),
     comment: (id, body) => http.request("POST", `${t(id)}/comments`, { body }),
     answer: (id, answers) => http.request("POST", `${t(id)}/answers`, { answers }),
+    approve: (id, input) => http.request("POST", `${t(id)}/approve`, input),
+    requestChanges: (id, input) => http.request("POST", `${t(id)}/request-changes`, input),
+    unblock: (id, comment) => http.request("POST", `${t(id)}/unblock`, comment === "" ? {} : { comment }),
     deleteTicket: (id) => http.request("DELETE", t(id)),
     addWorkLink: (id, input) => http.request("POST", `${t(id)}/work-links`, input),
     removeWorkLink: (id, linkId) => http.request("DELETE", `${t(id)}/work-links/${linkId}`),

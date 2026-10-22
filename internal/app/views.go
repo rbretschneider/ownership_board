@@ -44,6 +44,7 @@ type TicketRef struct {
 // Board is everything the board screen shows.
 type Board struct {
 	Lanes   []domain.LaneInfo
+	Stages  []domain.StageInfo
 	Repos   []domain.Repo
 	Tickets []TicketSummary
 }

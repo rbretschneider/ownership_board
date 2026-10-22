@@ -44,35 +44,46 @@ type repoDTO struct {
 	SyncedAt      *time.Time        `json:"synced_at"`
 	MissingSince  *time.Time        `json:"missing_since"`
 	TreatAsPublic bool              `json:"treat_as_public"`
+	RequireSpec   bool              `json:"require_spec_approval"`
+	RequireDesign bool              `json:"require_design_approval"`
 	Visibility    domain.Visibility `json:"visibility"`
 }
 
 type ticketSummaryDTO struct {
-	ID            int64         `json:"id"`
-	RepoID        *int64        `json:"repo_id"`
-	Kind          domain.Kind   `json:"kind"`
-	Title         string        `json:"title"`
-	Lane          domain.Lane   `json:"lane"`
-	Owner         domain.Owner  `json:"owner"`
-	PRURL         string        `json:"pr_url"`
-	Branch        string        `json:"branch"`
-	OpenQuestions int           `json:"open_questions"`
-	Lease         *domain.Lease `json:"lease"`
-	CreatedAt     time.Time     `json:"created_at"`
-	UpdatedAt     time.Time     `json:"updated_at"`
-	LaneChangedAt time.Time     `json:"lane_changed_at"`
+	ID             int64         `json:"id"`
+	RepoID         *int64        `json:"repo_id"`
+	Kind           domain.Kind   `json:"kind"`
+	Title          string        `json:"title"`
+	Lane           domain.Lane   `json:"lane"`
+	Stage          domain.Stage  `json:"stage"`
+	NeedsOwner     bool          `json:"needs_owner"`
+	BlockedReason  string        `json:"blocked_reason"`
+	SpecRevision   int           `json:"spec_revision"`
+	DesignRevision int           `json:"design_revision"`
+	Owner          domain.Owner  `json:"owner"`
+	PRURL          string        `json:"pr_url"`
+	Branch         string        `json:"branch"`
+	OpenQuestions  int           `json:"open_questions"`
+	Lease          *domain.Lease `json:"lease"`
+	CreatedAt      time.Time     `json:"created_at"`
+	UpdatedAt      time.Time     `json:"updated_at"`
+	LaneChangedAt  time.Time     `json:"lane_changed_at"`
 }
 
 type ticketDetailDTO struct {
 	ticketSummaryDTO
-	Body      string        `json:"body"`
-	Spec      string        `json:"spec"`
-	CreatedBy string        `json:"created_by"`
-	Questions []questionDTO `json:"questions"`
-	Timeline  []timelineDTO `json:"timeline"`
-	WorkLinks []workLinkDTO `json:"work_links"`
-	Decisions []decisionDTO `json:"decisions"`
-	Relations []relationDTO `json:"relations"`
+	Body                   string        `json:"body"`
+	Spec                   string        `json:"spec"`
+	Design                 string        `json:"design"`
+	ApprovedSpecRevision   int           `json:"approved_spec_revision"`
+	ApprovedDesignRevision int           `json:"approved_design_revision"`
+	Gates                  gatesDTO      `json:"gates"`
+	CreatedBy              string        `json:"created_by"`
+	Questions              []questionDTO `json:"questions"`
+	Timeline               []timelineDTO `json:"timeline"`
+	WorkLinks              []workLinkDTO `json:"work_links"`
+	Decisions              []decisionDTO `json:"decisions"`
+	Relations              []relationDTO `json:"relations"`
 }
 
 type questionDTO struct {
@@ -110,6 +121,7 @@ type actorRefDTO struct {
 
 type boardDTO struct {
 	Lanes   []domain.LaneInfo  `json:"lanes"`
+	Stages  []domain.StageInfo `json:"stages"`
 	Repos   []repoDTO          `json:"repos"`
 	Tickets []ticketSummaryDTO `json:"tickets"`
 }
@@ -145,6 +157,7 @@ func toRepo(repo domain.Repo) repoDTO {
 		Description: repo.Description, Color: repo.Color, DefaultBranch: repo.DefaultBranch,
 		IsPrivate: repo.IsPrivate, IsArchived: repo.IsArchived, SyncedAt: repo.SyncedAt, MissingSince: repo.MissingSince,
 		TreatAsPublic: repo.TreatAsPublic, Visibility: repo.Visibility(time.Now()),
+		RequireSpec: repo.RequireSpecApproval, RequireDesign: repo.RequireDesignApproval,
 	}
 }
 
@@ -164,7 +177,9 @@ func toSummary(summary app.TicketSummary) ticketSummaryDTO {
 		repoID = &id
 	}
 	return ticketSummaryDTO{
-		ID: t.ID, RepoID: repoID, Kind: t.Kind, Title: t.Title, Lane: t.Lane, Owner: t.Owner(),
+		ID: t.ID, RepoID: repoID, Kind: t.Kind, Title: t.Title, Lane: t.Lane, Stage: t.Stage,
+		Owner: t.Owner(summary.OpenQuestions), NeedsOwner: t.NeedsOwner(summary.OpenQuestions), BlockedReason: t.BlockedReason,
+		SpecRevision: t.SpecRevision, DesignRevision: t.DesignRevision,
 		PRURL: t.PRURL, Branch: t.Branch, OpenQuestions: summary.OpenQuestions, Lease: activeLease(t),
 		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, LaneChangedAt: t.LaneChangedAt,
 	}
@@ -192,7 +207,9 @@ func toDetail(detail app.TicketDetail) ticketDetailDTO {
 	}
 	t := detail.Ticket
 	return ticketDetailDTO{
-		ticketSummaryDTO: toSummary(detail.TicketSummary), Body: t.Body, Spec: t.Spec, CreatedBy: t.CreatedBy,
+		ticketSummaryDTO: toSummary(detail.TicketSummary), Body: t.Body, Spec: t.Spec, Design: t.Design,
+		ApprovedSpecRevision: t.ApprovedSpecRevision, ApprovedDesignRevision: t.ApprovedDesignRevision, Gates: toGates(domain.GatesFor(detail.Repo)),
+		CreatedBy: t.CreatedBy,
 		Questions: questions, Timeline: timeline,
 		WorkLinks: toWorkLinks(detail.WorkLinks), Decisions: toDecisions(detail.Decisions), Relations: toRelations(detail.Related),
 	}
@@ -217,7 +234,7 @@ func toBoard(board app.Board) boardDTO {
 	for _, summary := range board.Tickets {
 		tickets = append(tickets, toSummary(summary))
 	}
-	return boardDTO{Lanes: board.Lanes, Repos: toRepos(board.Repos), Tickets: tickets}
+	return boardDTO{Lanes: board.Lanes, Stages: board.Stages, Repos: toRepos(board.Repos), Tickets: tickets}
 }
 
 func toToken(token auth.APIToken) tokenDTO {
@@ -231,4 +248,13 @@ func toWork(work app.Work) workDTO {
 		dto.Repo = &repo
 	}
 	return dto
+}
+
+type gatesDTO struct {
+	Spec   bool `json:"spec"`
+	Design bool `json:"design"`
+}
+
+func toGates(gates domain.Gates) gatesDTO {
+	return gatesDTO{Spec: gates.Spec, Design: gates.Design}
 }

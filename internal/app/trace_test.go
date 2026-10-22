@@ -295,7 +295,7 @@ func TestPublicRepoBriefKeepsTitleOutOfTheBranch(t *testing.T) {
 	f := newFixture(t)
 	repo := f.repo("acme/api")
 	id := f.ticket("Secret pricing idea", repo.ID)
-	f.move(owner, id, domain.LaneReady, nil)
+	f.toBuild(id)
 	brief := f.mustClaim(agent, app.ClaimInput{}).Brief
 	for _, want := range []string{"Public repo rules", "`ob/" + itoa(id) + "`", "Ownership-Ticket"} {
 		if !strings.Contains(brief, want) {
@@ -386,7 +386,7 @@ func (f *fixture) inReview(title string) int64 {
 	f.t.Helper()
 	repo := f.syncedRepo("acme/api", "https://git.example.com/acme/api", true)
 	id := f.ticket(title, repo.ID)
-	f.move(owner, id, domain.LaneReady, nil)
+	f.toBuild(id)
 	f.mustClaim(agent, app.ClaimInput{})
 	pr := "https://git.example.com/acme/api/pulls/9"
 	if _, err := f.board.Edit(f.ctx, agent, id, domain.TicketEdit{PRURL: &pr}); err != nil {
@@ -396,7 +396,7 @@ func (f *fixture) inReview(title string) int64 {
 	return id
 }
 
-func TestMergedPullRequestMovesReviewToDone(t *testing.T) {
+func TestMergedPullRequestMovesReviewToMerged(t *testing.T) {
 	f := newFixture(t)
 	id := f.inReview("ship it")
 	if _, err := f.board.ReportPullRequest(f.ctx, agent, id, app.PullRequestOpen, ""); err != nil {
@@ -406,7 +406,7 @@ func TestMergedPullRequestMovesReviewToDone(t *testing.T) {
 	if _, err := f.board.ReportPullRequest(f.ctx, agent, id, app.PullRequestMerged, "merged as abc1234"); err != nil {
 		t.Fatalf("merged: %v", err)
 	}
-	f.requireLane(id, domain.LaneDone)
+	f.requireLane(id, domain.LaneMerged)
 }
 
 func TestClosedPullRequestSendsTicketBack(t *testing.T) {
@@ -415,7 +415,13 @@ func TestClosedPullRequestSendsTicketBack(t *testing.T) {
 	if _, err := f.board.ReportPullRequest(f.ctx, agent, id, app.PullRequestClosed, "closed by the owner"); err != nil {
 		t.Fatalf("closed: %v", err)
 	}
-	f.requireLane(id, domain.LaneInProgress)
+	f.requireStage(id, domain.StageBuild)
+	if detail := f.detail(id); !detail.Ticket.IsBlocked() {
+		t.Fatal("a closed pull request did not block the ticket for the owner")
+	}
+	if _, isClaimed := f.claim(agent, app.ClaimInput{}); isClaimed {
+		t.Fatal("an agent claimed a ticket whose PR was closed before the owner decided")
+	}
 }
 
 func TestPullRequestReportsOnlyApplyToReviewTickets(t *testing.T) {

@@ -5,30 +5,46 @@ own the decisions. It answers one question at a glance: **whose move is it?**
 
 You drop an idea or a bug in from your phone. An agent picks it up, acts as a
 business analyst, and either writes a spec or asks you a few multiple-choice
-questions. Your phone buzzes; you tap the answers; the agent carries on,
-builds it, opens a pull request, and the card lands in review.
+questions. Your phone buzzes; you tap the answers and approve the spec; the
+agent designs and builds it, opens a pull request, and the card lands in
+review.
 
 It exists because public issue trackers are the wrong place for half-formed
 ideas about open-source projects.
 
 ## Lanes
 
-Fixed on purpose, so agents and integrations can rely on them.
+Four lanes, fixed on purpose, so agents and integrations can rely on them.
+Each lane has stages; see [docs/lanes.md](docs/lanes.md).
 
 | Lane | Whose move |
 |------|------------|
-| New | agent: refine it |
-| Pending Answers | you: answer the questions |
-| Ready | agent: build it |
-| In Progress | agent, holding a lease |
-| PR / Review | you: review and merge |
-| Done | nobody |
+| Todo | agent: refine the request, then build it once the spec is approved. You: approve the spec. |
+| In Progress | agent: design, then build, holding a lease. You: approve the design. |
+| Review | you: review and merge the pull request |
+| Merged | nobody |
+
+A card shows **Needs you** when the move is yours: open questions, a blocked
+ticket, a spec or design waiting for approval, or a pull request to review.
+The "Your move" filter shows exactly those cards.
+
+Two checkpoints are per-repo settings that only people change:
+
+- **Approve spec** (on by default). The ticket waits for you after refinement.
+- **Approve design** (off by default). The agent writes a design when building
+  starts, and the ticket waits for you before the build.
+
+At a checkpoint you tap **Approve** or **Request changes** (a comment is
+required). Agents never move a ticket between lanes on their own. The only
+move they make is a finished build into Review. Deploying is the repo's own
+CI/CD, never the agent.
 
 ## What makes it agent-friendly
 
 - **Structured question rounds.** Agents ask multiple-choice questions with a
   recommended option. You answer with a tap, add a note, or say "your call".
-  Answering the last one sends the ticket straight back to the agent.
+  Asking does not move the ticket. Answering the last question makes it
+  claimable again, with the answers in the brief.
 - **One brief per ticket.** A claim returns a single markdown document with
   the request, the spec, every answer, recent comments and explicit
   instructions for the next step.

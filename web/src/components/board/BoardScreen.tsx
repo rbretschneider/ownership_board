@@ -12,6 +12,7 @@ import { laneCardIds, type DropTarget } from "../../lib/dropTargets";
 import type { Route } from "../../lib/hashRoute";
 import { afterIdFor, groupByLane } from "../../lib/position";
 import { decodeRepoFilter, encodeRepoFilter } from "../../lib/repos";
+import { needsOwner } from "../../lib/stages";
 import { preferences, STORAGE_KEYS } from "../../lib/storage";
 import { ErrorState } from "../common/ErrorState";
 import { LoadingState } from "../common/LoadingState";
@@ -77,9 +78,10 @@ export function BoardScreen({ route, status, onSignedOut, onStatusChanged }: Boa
   const lanes = board?.lanes ?? [];
   const repos = board?.repos ?? [];
   const allTickets = board?.tickets ?? [];
-  const yourMoveCount = allTickets.filter((t) => t.owner === "human").length;
+  const stages = board?.stages ?? [];
+  const yourMoveCount = needsOwner(allTickets).length;
   const visible = useMemo(
-    () => (isYourMoveOnly ? allTickets.filter((t) => t.owner === "human") : allTickets),
+    () => (isYourMoveOnly ? needsOwner(allTickets) : allTickets),
     [allTickets, isYourMoveOnly],
   );
   const ticketsByLane = useMemo(() => groupByLane(visible, lanes.map((l) => l.id)), [visible, lanes]);
@@ -89,7 +91,7 @@ export function BoardScreen({ route, status, onSignedOut, onStatusChanged }: Boa
   // Pick the starting lane once, on first load, so refetches never yank the view.
   useEffect(() => {
     if (board !== null && chosenLane === null) {
-      setChosenLane(defaultLane(board.lanes, groupByLane(board.tickets, board.lanes.map((l) => l.id))));
+      setChosenLane(defaultLane(board.lanes, board.tickets));
     }
   }, [board, chosenLane]);
 
@@ -102,6 +104,7 @@ export function BoardScreen({ route, status, onSignedOut, onStatusChanged }: Boa
 
   const viewProps = {
     lanes,
+    stages,
     ticketsByLane,
     reposById,
     draggedId: drag.session?.ticketId ?? null,
@@ -147,7 +150,7 @@ export function BoardScreen({ route, status, onSignedOut, onStatusChanged }: Boa
       {drag.session !== null && draggedTicket !== undefined && (
         <div ref={drag.ghostRef} className="drag-ghost" style={{ width: drag.session.width }} aria-hidden="true">
           <div className="card card--ghost">
-            <TicketCardContent ticket={draggedTicket} repo={draggedTicket.repo_id === null ? undefined : reposById.get(draggedTicket.repo_id)} />
+            <TicketCardContent ticket={draggedTicket} stages={stages} repo={draggedTicket.repo_id === null ? undefined : reposById.get(draggedTicket.repo_id)} />
           </div>
         </div>
       )}
@@ -167,6 +170,7 @@ export function BoardScreen({ route, status, onSignedOut, onStatusChanged }: Boa
           key={route.ticketId}
           ticketId={route.ticketId}
           lanes={lanes}
+          stages={stages}
           repos={repos}
           tickets={board?.tickets ?? []}
           refreshSignal={ticketSignal}
@@ -199,7 +203,8 @@ function isNoOpMove(tickets: TicketSummary[], ticketId: number, lane: LaneId, af
   return currentAfter === afterId;
 }
 
-function defaultLane(lanes: Lane[], byLane: Map<LaneId, TicketSummary[]>): LaneId {
-  const waiting = lanes.find((l) => l.owner === "human" && (byLane.get(l.id)?.length ?? 0) > 0);
-  return waiting?.id ?? DEFAULT_LANE;
+/** The first lane holding a ticket that needs the owner, else Todo. */
+function defaultLane(lanes: Lane[], tickets: TicketSummary[]): LaneId {
+  const waiting = needsOwner(tickets);
+  return lanes.find((l) => waiting.some((t) => t.lane === l.id))?.id ?? DEFAULT_LANE;
 }

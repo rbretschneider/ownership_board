@@ -109,6 +109,11 @@ func (s *BoardService) Edit(ctx context.Context, actor domain.Actor, id int64, e
 		if err != nil || len(changed) == 0 {
 			return nil, err
 		}
+		if actor.IsAgent() {
+			if err := ticket.AgentMayEdit(changed); err != nil {
+				return nil, err
+			}
+		}
 		if err := s.linkPRField(ctx, repos, *ticket, changed, actor); err != nil {
 			return nil, err
 		}
@@ -143,18 +148,48 @@ func editText(edit domain.TicketEdit) map[string]string {
 	return fields
 }
 
-// Move puts a ticket in a lane at a position.
+// Move puts a ticket in a lane at a position. The server picks the stage. An
+// agent's only move is a finished build into Review; a person may drag
+// anywhere, landing on the first stage whose checkpoints are met, and dragging
+// to another lane clears a block because the person has decided.
 func (s *BoardService) Move(ctx context.Context, actor domain.Actor, id int64, input MoveInput) (TicketDetail, error) {
 	lane, err := domain.ParseLane(input.Lane)
 	if err != nil {
 		return TicketDetail{}, err
 	}
+	place := placement{AfterID: input.AfterID}
 	return s.writer.change(ctx, actor, id, func(ctx context.Context, repos Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
-		if isUnrefinedHandoff(*ticket, lane, actor) {
-			return nil, domain.Invalidf("ticket %d has no repo; set repo_id or ask which repo before moving it to %s", ticket.ID, lane)
+		gates, open, err := gatesAndOpen(ctx, repos, *ticket)
+		if err != nil {
+			return nil, err
 		}
-		return moveTicket(ctx, repos, ticket, lane, placement{AfterID: input.AfterID}, actor, s.clock)
+		if actor.IsAgent() {
+			return s.submitForReview(ctx, repos, ticket, lane, open, actor)
+		}
+		rank, err := rankFor(ctx, repos.Tickets(), lane, ticket.ID, place)
+		if err != nil {
+			return nil, err
+		}
+		if lane == ticket.Lane {
+			ticket.Reorder(rank, s.clock.Now())
+			return nil, nil
+		}
+		ticket.ClearBlockForDrop()
+		from, fromLane := ticket.Stage, ticket.Lane
+		isLaneChange := ticket.MoveToStage(ticket.DropStage(lane, gates), rank, s.clock.Now())
+		return stageEntries(*ticket, from, fromLane, actor, isLaneChange), nil
 	})
+}
+
+func (s *BoardService) submitForReview(ctx context.Context, repos Repos, ticket *domain.Ticket, lane domain.Lane, open int, actor domain.Actor) ([]domain.TimelineEntry, error) {
+	if lane != domain.LaneReview {
+		return nil, domain.Forbiddenf("agents only move a finished build to review; use save_spec, save_design, ask_questions or mark_blocked")
+	}
+	next, err := ticket.SubmitForReview(open)
+	if err != nil {
+		return nil, err
+	}
+	return changeStage(ctx, repos, ticket, next, actor, s.clock)
 }
 
 // Comment adds a note to a ticket's timeline.
@@ -173,22 +208,9 @@ func (s *BoardService) Comment(ctx context.Context, actor domain.Actor, id int64
 	})
 }
 
-// SetSpec stores the refined specification an agent wrote.
-func (s *BoardService) SetSpec(ctx context.Context, actor domain.Actor, id int64, spec string) (TicketDetail, error) {
-	if err := rejectHiddenFromAgent(actor, map[string]string{"spec": spec}); err != nil {
-		return TicketDetail{}, err
-	}
-	return s.writer.change(ctx, actor, id, func(_ context.Context, _ Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
-		if err := ticket.SetSpec(spec, s.clock.Now()); err != nil {
-			return nil, err
-		}
-		entry := domain.NewEntry(ticket.ID, domain.TimelineSpec, actor, ticket.UpdatedAt)
-		return []domain.TimelineEntry{entry}, nil
-	})
-}
-
-// Ask posts a round of questions and moves the ticket to Pending Answers, which
-// hands the ball to the human.
+// Ask posts a round of questions. The ticket stays where it is but the agent
+// gives up its lease: the ball is with the owner until every question is
+// answered.
 func (s *BoardService) Ask(ctx context.Context, actor domain.Actor, id int64, input AskInput) (TicketDetail, error) {
 	summary, err := domain.LimitText("summary", strings.TrimSpace(input.Summary), domain.MaxCommentLength)
 	if err != nil {
@@ -201,22 +223,21 @@ func (s *BoardService) Ask(ctx context.Context, actor domain.Actor, id int64, in
 		return TicketDetail{}, err
 	}
 	return s.writer.change(ctx, actor, id, func(ctx context.Context, repos Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
-		round, err := s.insertRound(ctx, repos, ticket.ID, input.Questions, actor)
-		if err != nil {
+		if err := ticket.HandOffForQuestions(s.clock.Now()); err != nil {
 			return nil, err
 		}
-		moved, err := moveTicket(ctx, repos, ticket, domain.LaneAnswers, atTop, actor, s.clock)
+		round, err := s.insertRound(ctx, repos, ticket.ID, input.Questions, actor)
 		if err != nil {
 			return nil, err
 		}
 		asked := domain.NewEntry(ticket.ID, domain.TimelineQuestions, actor, ticket.UpdatedAt).
 			WithBody(summary).With("round", round).With("count", len(input.Questions))
-		return append([]domain.TimelineEntry{asked}, moved...), nil
+		return []domain.TimelineEntry{asked}, nil
 	})
 }
 
-// Answer records a person's answers. When nothing is left open the ticket goes
-// back to New, so the agent refines again with the answers in hand.
+// Answer records a person's answers. Once nothing is left open the ticket is
+// claimable again in the stage it was asked from.
 func (s *BoardService) Answer(ctx context.Context, actor domain.Actor, id int64, answers []domain.AnswerDraft) (TicketDetail, error) {
 	if !actor.IsHuman() {
 		return TicketDetail{}, domain.Forbiddenf("only a person can answer questions")
@@ -225,7 +246,7 @@ func (s *BoardService) Answer(ctx context.Context, actor domain.Actor, id int64,
 		return TicketDetail{}, domain.Invalidf("answers are required")
 	}
 	return s.writer.change(ctx, actor, id, func(ctx context.Context, repos Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
-		round, remaining, answeredQuestions, err := s.applyAnswers(ctx, repos, ticket.ID, answers, actor)
+		round, _, answeredQuestions, err := s.applyAnswers(ctx, repos, ticket.ID, answers, actor)
 		if err != nil {
 			return nil, err
 		}
@@ -235,12 +256,7 @@ func (s *BoardService) Answer(ctx context.Context, actor domain.Actor, id int64,
 		}
 		answered := domain.NewEntry(ticket.ID, domain.TimelineAnswers, actor, ticket.UpdatedAt).
 			With("round", round).With("count", len(answers))
-		entries := []domain.TimelineEntry{answered}
-		if remaining > 0 || ticket.Lane != domain.LaneAnswers {
-			return entries, nil
-		}
-		moved, err := moveTicket(ctx, repos, ticket, domain.LaneNew, atTop, domain.SystemActor, s.clock)
-		return append(entries, moved...), err
+		return []domain.TimelineEntry{answered}, nil
 	})
 }
 
@@ -357,25 +373,6 @@ func askText(input AskInput) map[string]string {
 	return fields
 }
 
-// moveTicket places a ticket and returns the history entry for the move.
-func moveTicket(ctx context.Context, repos Repos, ticket *domain.Ticket, lane domain.Lane, place placement, actor domain.Actor, clock Clock) ([]domain.TimelineEntry, error) {
-	rank, err := rankFor(ctx, repos.Tickets(), lane, ticket.ID, place)
-	if err != nil {
-		return nil, err
-	}
-	from := ticket.Lane
-	isLaneChange := ticket.MoveTo(lane, rank, clock.Now())
-	return moveEntry(*ticket, from, actor, isLaneChange), nil
-}
-
-// isUnrefinedHandoff catches an agent queuing work it cannot build: nothing
-// leaves refinement for the build lanes without a repo. People may still drag
-// anything anywhere.
-func isUnrefinedHandoff(ticket domain.Ticket, lane domain.Lane, actor domain.Actor) bool {
-	isBuildLane := lane == domain.LaneReady || lane == domain.LaneInProgress || lane == domain.LaneReview
-	return actor.IsAgent() && isBuildLane && ticket.RepoID == 0
-}
-
 // requireRepo checks a repo exists; zero means "no repo" and always passes.
 func requireRepo(ctx context.Context, repos Repos, repoID int64) error {
 	if repoID == 0 {
@@ -402,5 +399,5 @@ func loadBoard(ctx context.Context, repos Repos, filter TicketFilter) (Board, er
 	for _, ticket := range tickets {
 		summaries = append(summaries, TicketSummary{Ticket: ticket, OpenQuestions: openCounts[ticket.ID]})
 	}
-	return Board{Lanes: domain.Lanes(), Repos: codeRepos, Tickets: summaries}, nil
+	return Board{Lanes: domain.Lanes(), Stages: domain.Stages(), Repos: codeRepos, Tickets: summaries}, nil
 }

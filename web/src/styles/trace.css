@@ -255,6 +255,19 @@
   border-radius: var(--radius);
 }
 
+/* ---------- Repo checkpoint switches ---------- */
+.repo-gates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 16px;
+  padding-left: 4px;
+}
+
+.repo-gates .muted {
+  flex-basis: 100%;
+}
+
 /* ---------- Repo visibility switch ---------- */
 .repo-visibility {
   display: flex;

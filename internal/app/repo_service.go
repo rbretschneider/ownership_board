@@ -65,7 +65,8 @@ func (s *RepoService) CreateManual(ctx context.Context, actor domain.Actor, draf
 	return repo, err
 }
 
-// Restyle changes a repo's color or description.
+// Restyle changes a repo's color, description, visibility override or
+// checkpoints.
 func (s *RepoService) Restyle(ctx context.Context, actor domain.Actor, id int64, style domain.RepoStyle) (domain.Repo, error) {
 	if !actor.IsHuman() {
 		return domain.Repo{}, domain.Forbiddenf("only a person can edit repos")
@@ -79,8 +80,15 @@ func (s *RepoService) Restyle(ctx context.Context, actor domain.Actor, id int64,
 		if err := repo.Restyle(style); err != nil {
 			return err
 		}
-		return repos.CodeRepos().Update(ctx, repo)
+		if err := repos.CodeRepos().Update(ctx, repo); err != nil || !style.ChangesGates() {
+			return err
+		}
+		return repos.CodeRepos().SetGates(ctx, repo.ID, domain.GatesFor(&repo))
 	})
+	if err == nil && style.ChangesGates() {
+		s.logger.Info("repo checkpoints changed", "repo", repo.FullName, "by", actor.Name,
+			"require_spec_approval", repo.RequireSpecApproval, "require_design_approval", repo.RequireDesignApproval)
+	}
 	return repo, err
 }
 

@@ -1,5 +1,5 @@
 import { Fragment, type PointerEvent } from "react";
-import type { LaneId, Repo, TicketSummary } from "../../api/types";
+import type { LaneId, Repo, Stage, TicketSummary } from "../../api/types";
 import { LANE_EMPTY_HINTS } from "../../lib/constants";
 import { DROP_LIST_ATTR, type DropTarget } from "../../lib/dropTargets";
 import { TicketCard } from "./TicketCard";
@@ -8,6 +8,7 @@ import { TicketCard } from "./TicketCard";
 export interface LaneListProps {
   lane: LaneId;
   tickets: TicketSummary[];
+  stages: Stage[];
   reposById: Map<number, Repo>;
   draggedId: number | null;
   target: DropTarget | null;
@@ -16,7 +17,7 @@ export interface LaneListProps {
 }
 
 /** The cards of one lane, plus the drop indicator while dragging. */
-export function LaneList({ lane, tickets, reposById, draggedId, target, onPointerDown, shouldIgnoreClick }: LaneListProps) {
+export function LaneList({ lane, tickets, stages, reposById, draggedId, target, onPointerDown, shouldIgnoreClick }: LaneListProps) {
   const dropIndex = target !== null && target.kind === "list" && target.lane === lane ? target.index : null;
   const isEmpty = tickets.filter((t) => t.id !== draggedId).length === 0;
   let position = 0;
@@ -34,6 +35,7 @@ export function LaneList({ lane, tickets, reposById, draggedId, target, onPointe
             {showLine && <div className="drop-line" aria-hidden="true" />}
             <TicketCard
               ticket={ticket}
+              stages={stages}
               repo={ticket.repo_id === null ? undefined : reposById.get(ticket.repo_id)}
               isDragSource={isSource}
               onPointerDown={onPointerDown}

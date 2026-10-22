@@ -13,5 +13,5 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
 /** Renders untrusted markdown to sanitized HTML. */
 export function renderMarkdown(source: string): string {
   const html = marked.parse(source, { async: false });
-  return DOMPurify.sanitize(html);
+  return DOMPurify.sanitize(html, { FORBID_ATTR: ["style"] });
 }

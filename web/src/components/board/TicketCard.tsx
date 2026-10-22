@@ -1,5 +1,5 @@
 import type { MouseEvent, PointerEvent } from "react";
-import type { Repo, TicketSummary } from "../../api/types";
+import type { Repo, Stage, TicketSummary } from "../../api/types";
 import { CARD_ATTR } from "../../lib/dropTargets";
 import { ticketHash } from "../../lib/hashRoute";
 import { TicketCardContent } from "./TicketCardContent";
@@ -7,6 +7,7 @@ import { TicketCardContent } from "./TicketCardContent";
 /** Props for {@link TicketCard}. */
 export interface TicketCardProps {
   ticket: TicketSummary;
+  stages: Stage[];
   repo: Repo | undefined;
   /** This card is the one being dragged (rendered as a faded source). */
   isDragSource: boolean;
@@ -16,7 +17,7 @@ export interface TicketCardProps {
 }
 
 /** A board card. It is a link to the ticket so it works with keyboard and middle-click. */
-export function TicketCard({ ticket, repo, isDragSource, onPointerDown, shouldIgnoreClick }: TicketCardProps) {
+export function TicketCard({ ticket, stages, repo, isDragSource, onPointerDown, shouldIgnoreClick }: TicketCardProps) {
   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
     if (shouldIgnoreClick()) {
       event.preventDefault();
@@ -25,13 +26,13 @@ export function TicketCard({ ticket, repo, isDragSource, onPointerDown, shouldIg
   return (
     <a
       href={ticketHash(ticket.id)}
-      className={`card${isDragSource ? " card--source" : ""}${ticket.owner === "human" ? " card--yours" : ""}`}
+      className={`card${isDragSource ? " card--source" : ""}${ticket.needs_owner ? " card--yours" : ""}`}
       {...{ [CARD_ATTR]: ticket.id }}
       draggable={false}
       onPointerDown={(event) => onPointerDown(event, ticket.id)}
       onClick={onClick}
     >
-      <TicketCardContent ticket={ticket} repo={repo} />
+      <TicketCardContent ticket={ticket} stages={stages} repo={repo} />
     </a>
   );
 }

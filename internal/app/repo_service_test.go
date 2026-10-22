@@ -69,3 +69,22 @@ func TestOneInvalidListingDoesNotBlockTheRest(t *testing.T) {
 	}
 	f.repoNamed("me/fine")
 }
+
+func TestRepoSyncLeavesCheckpointsAlone(t *testing.T) {
+	source := &scriptedSource{names: []string{"me/app"}}
+	f := newFixture(t, source)
+	if err := f.repos.Sync(f.ctx); err != nil {
+		t.Fatalf("first sync: %v", err)
+	}
+	on, off := true, false
+	repo := f.repoNamed("me/app")
+	if _, err := f.repos.Restyle(f.ctx, owner, repo.ID, domain.RepoStyle{RequireSpecApproval: &off, RequireDesignApproval: &on}); err != nil {
+		t.Fatalf("Restyle: %v", err)
+	}
+	if err := f.repos.Sync(f.ctx); err != nil {
+		t.Fatalf("second sync: %v", err)
+	}
+	if got := f.repoNamed("me/app"); got.RequireSpecApproval || !got.RequireDesignApproval {
+		t.Fatalf("sync changed the checkpoints: spec %v design %v", got.RequireSpecApproval, got.RequireDesignApproval)
+	}
+}

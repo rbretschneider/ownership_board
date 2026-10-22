@@ -8,10 +8,10 @@ import (
 	"github.com/rbretschneider/ownership_board/internal/domain"
 )
 
-func TestNewTicketsQueueAtTheBottomOfNew(t *testing.T) {
+func TestNewTicketsQueueAtTheBottomOfTodo(t *testing.T) {
 	f := newFixture(t)
 	first, second := f.ticket("first", 0), f.ticket("second", 0)
-	if got := f.laneOrder(domain.LaneNew); !slices.Equal(got, []int64{first, second}) {
+	if got := f.laneOrder(domain.LaneTodo); !slices.Equal(got, []int64{first, second}) {
 		t.Fatalf("order = %v", got)
 	}
 }
@@ -19,12 +19,12 @@ func TestNewTicketsQueueAtTheBottomOfNew(t *testing.T) {
 func TestMoveAfterPlacesTicketBelowItsNeighbour(t *testing.T) {
 	f := newFixture(t)
 	a, b, c := f.ticket("a", 0), f.ticket("b", 0), f.ticket("c", 0)
-	f.move(owner, c, domain.LaneNew, int64Ptr(a))
-	if got := f.laneOrder(domain.LaneNew); !slices.Equal(got, []int64{a, c, b}) {
+	f.move(owner, c, domain.LaneTodo, int64Ptr(a))
+	if got := f.laneOrder(domain.LaneTodo); !slices.Equal(got, []int64{a, c, b}) {
 		t.Fatalf("after placing c below a: %v", got)
 	}
-	f.move(owner, b, domain.LaneNew, nil)
-	if got := f.laneOrder(domain.LaneNew); !slices.Equal(got, []int64{b, a, c}) {
+	f.move(owner, b, domain.LaneTodo, nil)
+	if got := f.laneOrder(domain.LaneTodo); !slices.Equal(got, []int64{b, a, c}) {
 		t.Fatalf("after moving b to the top: %v", got)
 	}
 }
@@ -35,11 +35,11 @@ func TestManyMovesBetweenTheSameNeighboursStayOrdered(t *testing.T) {
 	inserted := []int64{}
 	for i := 0; i < 60; i++ {
 		id := f.ticket("squeezed", 0)
-		f.move(owner, id, domain.LaneNew, int64Ptr(top))
+		f.move(owner, id, domain.LaneTodo, int64Ptr(top))
 		inserted = append([]int64{id}, inserted...)
 	}
 	want := append(append([]int64{top}, inserted...), bottom)
-	if got := f.laneOrder(domain.LaneNew); !slices.Equal(got, want) {
+	if got := f.laneOrder(domain.LaneTodo); !slices.Equal(got, want) {
 		t.Fatalf("order after repeated squeezing is wrong:\n got %v\nwant %v", got, want)
 	}
 }
@@ -47,23 +47,24 @@ func TestManyMovesBetweenTheSameNeighboursStayOrdered(t *testing.T) {
 func TestMoveAfterTicketInAnotherLaneIsRejected(t *testing.T) {
 	f := newFixture(t)
 	a, b := f.ticket("a", 0), f.ticket("b", 0)
-	_, err := f.board.Move(f.ctx, owner, a, app.MoveInput{Lane: string(domain.LaneReady), AfterID: int64Ptr(b)})
+	_, err := f.board.Move(f.ctx, owner, a, app.MoveInput{Lane: string(domain.LaneInProgress), AfterID: int64Ptr(b)})
 	requireErrorKind(t, err, domain.KindInvalid)
 }
 
-func TestAskingMovesTicketToPendingAnswers(t *testing.T) {
+func TestAskingKeepsTheStageAndHandsTheBallToTheOwner(t *testing.T) {
 	f := newFixture(t)
 	id := f.ticket("vague idea", 0)
 	detail, err := f.agentAsk(id, ask("Mobile too?", "Dark by default?"))
 	if err != nil {
 		t.Fatalf("Ask: %v", err)
 	}
-	if detail.Ticket.Lane != domain.LaneAnswers || detail.OpenQuestions != 2 || detail.Ticket.Lease != nil {
-		t.Fatalf("lane %s open %d lease %v", detail.Ticket.Lane, detail.OpenQuestions, detail.Ticket.Lease)
+	ticket := detail.Ticket
+	if ticket.Stage != domain.StageRefine || detail.OpenQuestions != 2 || ticket.Lease != nil || !ticket.NeedsOwner(detail.OpenQuestions) {
+		t.Fatalf("stage %s open %d lease %v", ticket.Stage, detail.OpenQuestions, ticket.Lease)
 	}
 }
 
-func TestAnsweringEverythingSendsTicketBackToRefinement(t *testing.T) {
+func TestAnsweringEverythingMakesTheTicketClaimableAgain(t *testing.T) {
 	f := newFixture(t)
 	id := f.ticket("vague idea", 0)
 	asked, err := f.agentAsk(id, ask("One?", "Two?"))
@@ -74,11 +75,16 @@ func TestAnsweringEverythingSendsTicketBackToRefinement(t *testing.T) {
 	if _, err := f.board.Answer(f.ctx, owner, id, []domain.AnswerDraft{{QuestionID: first, Text: "yes"}}); err != nil {
 		t.Fatalf("first answer: %v", err)
 	}
-	f.requireLane(id, domain.LaneAnswers)
+	if _, isClaimed := f.claim(other, app.ClaimInput{}); isClaimed {
+		t.Fatal("claimed a ticket with an open question")
+	}
 	if _, err := f.board.Answer(f.ctx, owner, id, []domain.AnswerDraft{{QuestionID: second, IsDeferred: true}}); err != nil {
 		t.Fatalf("second answer: %v", err)
 	}
-	f.requireLane(id, domain.LaneNew)
+	f.requireStage(id, domain.StageRefine)
+	if work := f.mustClaim(other, app.ClaimInput{}); work.Ticket.Ticket.ID != id {
+		t.Fatalf("claimed #%d after answering", work.Ticket.Ticket.ID)
+	}
 }
 
 func TestSecondRoundIsNumberedAfterTheFirst(t *testing.T) {
@@ -116,13 +122,44 @@ func TestAnswerForAnotherTicketsQuestionIsRejected(t *testing.T) {
 	requireErrorKind(t, err, domain.KindInvalid)
 }
 
-func TestAgentCannotQueueATicketWithoutARepo(t *testing.T) {
+func TestAgentCannotSubmitASpecWithoutARepo(t *testing.T) {
 	f := newFixture(t)
 	id := f.ticket("no repo", 0)
 	f.mustClaim(agent, app.ClaimInput{})
-	_, err := f.board.Move(f.ctx, agent, id, app.MoveInput{Lane: string(domain.LaneReady)})
+	_, err := f.board.SaveSpec(f.ctx, agent, id, app.SaveTextInput{Text: "Spec.", IsSubmit: true})
 	requireErrorKind(t, err, domain.KindInvalid)
-	f.move(owner, id, domain.LaneReady, nil)
+}
+
+func TestAgentsOnlyMoveAFinishedBuildToReview(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	id := f.ticket("skip ahead", api.ID)
+	f.mustClaim(agent, app.ClaimInput{})
+	_, err := f.board.Move(f.ctx, agent, id, app.MoveInput{Lane: string(domain.LaneInProgress)})
+	requireErrorKind(t, err, domain.KindForbidden)
+	_, err = f.board.Move(f.ctx, agent, id, app.MoveInput{Lane: string(domain.LaneReview)})
+	requireErrorKind(t, err, domain.KindConflict)
+}
+
+func TestPersonDropLandsOnTheFirstUnmetCheckpoint(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	id := f.ticket("spec it", api.ID)
+	if _, err := f.board.SaveSpec(f.ctx, owner, id, app.SaveTextInput{Text: "Owner's spec."}); err != nil {
+		t.Fatalf("spec: %v", err)
+	}
+	f.move(owner, id, domain.LaneInProgress, nil)
+	f.move(owner, id, domain.LaneTodo, nil)
+	f.requireStage(id, domain.StageRefine)
+}
+
+func TestAgentEditsAreLimitedToTheirStage(t *testing.T) {
+	f := newFixture(t)
+	id := f.ticket("refining", 0)
+	f.mustClaim(agent, app.ClaimInput{})
+	pr := "https://example.com/pr/1"
+	_, err := f.board.Edit(f.ctx, agent, id, domain.TicketEdit{PRURL: &pr})
+	requireErrorKind(t, err, domain.KindForbidden)
 }
 
 func TestCreateWithUnknownRepoIsRejected(t *testing.T) {
@@ -163,11 +200,11 @@ func TestBoardScopes(t *testing.T) {
 func TestEventsArePublishedAfterChanges(t *testing.T) {
 	f := newFixture(t)
 	id := f.ticket("idea", 0)
-	f.move(owner, id, domain.LaneReady, nil)
+	f.move(owner, id, domain.LaneInProgress, nil)
 	if err := f.board.Delete(f.ctx, owner, id); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	want := []domain.TimelineType{domain.TimelineCreated, domain.TimelineMoved, domain.TimelineDeleted}
+	want := []domain.TimelineType{domain.TimelineCreated, domain.TimelineStage, domain.TimelineMoved, domain.TimelineDeleted}
 	if got := f.events.types(); !slices.Equal(got, want) {
 		t.Fatalf("events = %v, want %v", got, want)
 	}
@@ -178,9 +215,9 @@ func TestAgentCannotChangeATicketItDoesNotHold(t *testing.T) {
 	id := f.ticket("someone else's", 0)
 	title := "rewritten"
 	_, editErr := f.board.Edit(f.ctx, agent, id, domain.TicketEdit{Title: &title})
-	_, specErr := f.board.SetSpec(f.ctx, agent, id, "new spec")
+	_, specErr := f.board.SaveSpec(f.ctx, agent, id, app.SaveTextInput{Text: "new spec"})
 	_, commentErr := f.board.Comment(f.ctx, agent, id, "hello")
-	_, moveErr := f.board.Move(f.ctx, agent, id, app.MoveInput{Lane: string(domain.LaneDone)})
+	_, moveErr := f.board.Move(f.ctx, agent, id, app.MoveInput{Lane: string(domain.LaneReview)})
 	for _, err := range []error{editErr, specErr, commentErr, moveErr} {
 		requireErrorKind(t, err, domain.KindForbidden)
 	}

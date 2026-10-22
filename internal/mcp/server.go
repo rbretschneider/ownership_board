@@ -36,7 +36,8 @@ const (
 const serverInstructions = `This is a task board where you are the worker and a human is the product owner. ` +
 	`Call claim_work to get the next ticket; it returns a brief with the request, the history and exact instructions for the action to take. ` +
 	`Follow the brief's "What to do now" section. Ask questions with ask_questions instead of guessing; the human answers from a phone. ` +
-	`Lanes: new (refine) -> answers (waiting on the human) -> ready -> in_progress -> review (PR open) -> done.`
+	`Lanes: todo (refine, spec review, ready) -> in_progress (design, design review, build) -> review (PR open) -> merged. ` +
+	`Agents never choose lanes: save_spec and save_design with submit, ask_questions and mark_blocked hand tickets on, and the only lane move an agent makes is a finished build to review.`
 
 // Server answers MCP requests by dispatching to its tools.
 type Server struct {

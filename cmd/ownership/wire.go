@@ -54,7 +54,7 @@ func build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*applic
 		return nil, err
 	}
 	hub := broker.New()
-	sink := app.FanoutSink{hub, app.NewNotifyingSink(notificationPolicy(cfg), boardNotifier(cfg), logger)}
+	sink := app.FanoutSink{hub, app.NewNotifyingSink(notificationPolicy(cfg), boardNotifier(cfg), logger, systemClock)}
 	catalog, err := newCatalog(cfg, db, logger)
 	if err != nil {
 		db.Close()

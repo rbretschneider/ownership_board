@@ -111,9 +111,13 @@
   overflow-y: hidden;
 }
 
+/*
+ * Four columns that fit a vertical 1080p monitor: 4 × 230px + 3 × 12px gaps +
+ * 2 × 16px padding = 988px, below the 1000px desktop breakpoint. These numbers
+ * mirror COLUMN_MIN_WIDTH_PX, COLUMN_GAP_PX and COLUMNS_PADDING_PX.
+ */
 .columns {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(250px, 1fr));
+  display: flex;
   gap: 12px;
   height: 100%;
   padding: 16px;
@@ -122,7 +126,9 @@
 
 .column {
   display: flex;
+  flex: 1 1 0;
   flex-direction: column;
+  min-width: 230px;
   min-height: 0;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -131,10 +137,28 @@
 
 .column__header {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
   padding: 12px 14px 10px;
   border-bottom: 1px solid var(--border);
+}
+
+.column__heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stage-summary {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-lane .stage-summary {
+  margin-top: 4px;
+  font-size: 0.8125rem;
 }
 
 .column__title {
@@ -151,10 +175,6 @@
   font-size: 0.8125rem;
   text-align: center;
   font-variant-numeric: tabular-nums;
-}
-
-.column__header .owner {
-  margin-left: auto;
 }
 
 .column .lane-list {

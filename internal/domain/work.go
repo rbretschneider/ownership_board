@@ -6,26 +6,26 @@ type WorkAction string
 // The agent actions.
 const (
 	ActionRefine    WorkAction = "refine"
+	ActionDesign    WorkAction = "design"
 	ActionImplement WorkAction = "implement"
-	ActionResume    WorkAction = "resume"
 )
 
-// ClaimOrder lists the lanes an agent claims from, most urgent first: finish
-// started work, then refine (cheap, and it unblocks the human soonest), then
-// build.
-var ClaimOrder = []Lane{LaneInProgress, LaneNew, LaneReady}
+// ClaimOrder lists the stages an agent claims from, most urgent first: finish
+// started work, then refine (cheap, and it unblocks the owner soonest), then
+// start designing what is ready.
+var ClaimOrder = []Stage{StageBuild, StageDesign, StageRefine, StageReady}
 
-// ActionFor returns the action for a ticket claimed from lane, and the lane it
-// should sit in while the agent works on it.
-func ActionFor(lane Lane) (WorkAction, Lane, bool) {
-	switch lane {
-	case LaneNew:
-		return ActionRefine, LaneNew, true
-	case LaneReady:
-		return ActionImplement, LaneInProgress, true
-	case LaneInProgress:
-		return ActionResume, LaneInProgress, true
+// ActionFor returns the action for a ticket claimed in stage, and the stage it
+// should be in while the agent works on it.
+func ActionFor(stage Stage) (WorkAction, Stage, bool) {
+	switch stage {
+	case StageRefine:
+		return ActionRefine, StageRefine, true
+	case StageReady, StageDesign:
+		return ActionDesign, StageDesign, true
+	case StageBuild:
+		return ActionImplement, StageBuild, true
 	default:
-		return "", lane, false
+		return "", stage, false
 	}
 }

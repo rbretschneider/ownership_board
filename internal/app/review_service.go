@@ -18,13 +18,14 @@ const (
 )
 
 // ReportPullRequest lets an agent close the loop on a ticket in review: a
-// merged PR moves it to Done, a PR closed without merging sends it back to In
-// Progress. It is the one agent write that needs no lease, because review
-// tickets are the owner's and cannot be claimed; it is narrow on purpose: it
-// only ever acts on a ticket in review that has a PR, and only moves it along
-// those two edges. An open PR changes nothing.
+// merged PR moves it to Merged, a PR closed without merging sends it back to
+// building, blocked, so a person decides what happens next. It is the one
+// agent write that needs no lease, because review tickets are the owner's and
+// cannot be claimed; it is narrow on purpose: it only ever acts on a ticket in
+// review that has a PR, and only moves it along those two edges. An open PR
+// changes nothing.
 func (s *BoardService) ReportPullRequest(ctx context.Context, actor domain.Actor, id int64, state PullRequestState, note string) (TicketDetail, error) {
-	target, err := reviewTarget(actor, state)
+	isChange, err := checkReportedState(actor, state)
 	if err != nil {
 		return TicketDetail{}, err
 	}
@@ -42,14 +43,14 @@ func (s *BoardService) ReportPullRequest(ctx context.Context, actor domain.Actor
 		if err != nil {
 			return err
 		}
-		if ticket.Lane != domain.LaneReview || ticket.PRURL == "" {
+		if ticket.Stage != domain.StagePR || ticket.PRURL == "" {
 			return domain.Conflictf("ticket %d is not in review with a pull request", id)
 		}
-		if target == "" {
+		if !isChange {
 			detail, err = loadDetail(ctx, repos, ticket)
 			return err
 		}
-		detail, events, err = s.writer.apply(ctx, repos, &ticket, s.reviewOutcome(actor, state, target, text))
+		detail, events, err = s.writer.apply(ctx, repos, &ticket, s.reviewOutcome(actor, state, text))
 		return err
 	})
 	if err != nil {
@@ -59,34 +60,41 @@ func (s *BoardService) ReportPullRequest(ctx context.Context, actor domain.Actor
 	return detail, nil
 }
 
-func (s *BoardService) reviewOutcome(actor domain.Actor, state PullRequestState, target domain.Lane, note string) ticketChange {
+func (s *BoardService) reviewOutcome(actor domain.Actor, state PullRequestState, note string) ticketChange {
 	return func(ctx context.Context, repos Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
-		moved, err := moveTicket(ctx, repos, ticket, target, atTop, actor, s.clock)
-		if err != nil {
-			return nil, err
-		}
 		body := "Pull request " + string(state) + "."
 		if note != "" {
 			body += "\n\n" + note
 		}
-		comment := domain.NewEntry(ticket.ID, domain.TimelineComment, actor, ticket.UpdatedAt).WithBody(body)
-		return append([]domain.TimelineEntry{comment}, moved...), nil
+		comment := domain.NewEntry(ticket.ID, domain.TimelineComment, actor, s.clock.Now()).WithBody(body)
+		if state == PullRequestMerged {
+			moved, err := changeStage(ctx, repos, ticket, domain.StageDone, actor, s.clock)
+			return append([]domain.TimelineEntry{comment}, moved...), err
+		}
+		rank, err := rankFor(ctx, repos.Tickets(), domain.LaneInProgress, ticket.ID, atTop)
+		if err != nil {
+			return nil, err
+		}
+		from, fromLane := ticket.Stage, ticket.Lane
+		ticket.PullRequestClosed(rank, s.clock.Now())
+		entries := append([]domain.TimelineEntry{comment}, stageEntries(*ticket, from, fromLane, actor, true)...)
+		blocked := domain.NewEntry(ticket.ID, domain.TimelineBlocked, domain.SystemActor, ticket.UpdatedAt).WithBody(ticket.BlockedReason)
+		return append(entries, blocked), nil
 	}
 }
 
-// reviewTarget maps a reported state to the lane it leads to; "" means stay.
-func reviewTarget(actor domain.Actor, state PullRequestState) (domain.Lane, error) {
+// checkReportedState validates what the agent found; false means nothing
+// changes.
+func checkReportedState(actor domain.Actor, state PullRequestState) (bool, error) {
 	if !actor.IsAgent() {
-		return "", domain.Forbiddenf("people move review tickets by dragging them")
+		return false, domain.Forbiddenf("people move review tickets by dragging them")
 	}
 	switch state {
-	case PullRequestMerged:
-		return domain.LaneDone, nil
-	case PullRequestClosed:
-		return domain.LaneInProgress, nil
+	case PullRequestMerged, PullRequestClosed:
+		return true, nil
 	case PullRequestOpen:
-		return "", nil
+		return false, nil
 	default:
-		return "", domain.Invalidf("state must be merged, closed or open")
+		return false, domain.Invalidf("state must be merged, closed or open")
 	}
 }
