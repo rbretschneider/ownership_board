@@ -4,6 +4,8 @@ export const STORAGE_KEYS = {
   lastRepo: "ob.lastRepo",
   lastKind: "ob.lastKind",
   repoFilter: "ob.repoFilter",
+  alertSound: "ob.alertSound",
+  alertNotify: "ob.alertNotify",
 } as const;
 
 /**
