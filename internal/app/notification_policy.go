@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/rbretschneider/ownership_board/internal/domain"
 )
@@ -30,9 +29,18 @@ func NewNotificationPolicy(links Links, rules ...NotificationRule) NotificationP
 	return NotificationPolicy{rules: rules, links: links}
 }
 
-// DefaultNotificationRules notify when the ball lands with the human.
+// DefaultNotificationRules notify when the ball lands with the human. Every
+// message is fixed board text: nothing an agent wrote reaches a phone's lock
+// screen, and no notification offers an action beyond opening the ticket.
 func DefaultNotificationRules() []NotificationRule {
-	return []NotificationRule{questionsAsked{}, readyForReview{}, reachedDone{}}
+	return []NotificationRule{
+		ownerRule{matches: isType(domain.TimelineQuestions), what: "needs answers", message: "The agent has questions before it can continue.", priority: PriorityHigh, tag: "question"},
+		ownerRule{matches: isStageEntry(domain.StageSpecReview), what: "spec to approve", message: "A spec is ready for your approval.", priority: PriorityHigh, tag: "memo"},
+		ownerRule{matches: isStageEntry(domain.StageDesignReview), what: "design to approve", message: "A design is ready for your approval.", priority: PriorityHigh, tag: "triangular_ruler"},
+		ownerRule{matches: isType(domain.TimelineBlocked), what: "blocked", message: "Work stopped and needs your decision.", priority: PriorityHigh, tag: "warning"},
+		ownerRule{matches: isStageEntry(domain.StagePR), what: "ready for review", message: "A pull request is ready for your review.", priority: PriorityDefault, tag: "eyes"},
+		ownerRule{matches: isStageEntry(domain.StageDone), what: "merged", message: "The pull request was merged.", priority: PriorityLow, tag: "white_check_mark"},
+	}
 }
 
 // Evaluate returns the notification for event, if any. A person's own actions
@@ -49,60 +57,29 @@ func (p NotificationPolicy) Evaluate(event Event) (Notification, bool) {
 	return Notification{}, false
 }
 
-type questionsAsked struct{}
-
-func (questionsAsked) Notification(event Event, links Links) (Notification, bool) {
-	if event.Type != domain.TimelineQuestions {
-		return Notification{}, false
-	}
-	message := firstNonEmpty(event.Detail, "The agent has questions before it can continue.")
-	return Notification{
-		Title: ticketTitle(event, "needs answers"), Message: message, Priority: PriorityHigh,
-		ClickURL: links.Ticket(event.TicketID), Tags: []string{"question"},
-	}, true
+// ownerRule sends one fixed message when its event matches.
+type ownerRule struct {
+	matches  func(Event) bool
+	what     string
+	message  string
+	priority Priority
+	tag      string
 }
 
-type readyForReview struct{}
-
-func (readyForReview) Notification(event Event, links Links) (Notification, bool) {
-	if !isMoveInto(event, domain.LaneReview) {
-		return Notification{}, false
-	}
-	notification := Notification{
-		Title: ticketTitle(event, "ready for review"), Message: event.Title, Priority: PriorityDefault,
-		ClickURL: links.Ticket(event.TicketID), Tags: []string{"eyes"},
-	}
-	if event.PRURL != "" {
-		notification.Actions = []NotificationAction{{Label: "Open PR", URL: event.PRURL}}
-	}
-	return notification, true
-}
-
-type reachedDone struct{}
-
-func (reachedDone) Notification(event Event, links Links) (Notification, bool) {
-	if !isMoveInto(event, domain.LaneDone) {
+func (r ownerRule) Notification(event Event, links Links) (Notification, bool) {
+	if !r.matches(event) {
 		return Notification{}, false
 	}
 	return Notification{
-		Title: ticketTitle(event, "done"), Message: event.Title, Priority: PriorityLow,
-		ClickURL: links.Ticket(event.TicketID), Tags: []string{"white_check_mark"},
+		Title: fmt.Sprintf("#%d %s", event.TicketID, r.what), Message: r.message, Priority: r.priority,
+		ClickURL: links.Ticket(event.TicketID), Tags: []string{r.tag},
 	}, true
 }
 
-func isMoveInto(event Event, lane domain.Lane) bool {
-	return event.Type == domain.TimelineMoved && event.Lane == lane
+func isType(kind domain.TimelineType) func(Event) bool {
+	return func(event Event) bool { return event.Type == kind }
 }
 
-func ticketTitle(event Event, what string) string {
-	return fmt.Sprintf("#%d %s", event.TicketID, what)
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
+func isStageEntry(stage domain.Stage) func(Event) bool {
+	return func(event Event) bool { return event.Type == domain.TimelineStage && event.Stage == stage }
 }

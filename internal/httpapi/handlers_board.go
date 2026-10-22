@@ -19,7 +19,12 @@ func (s *server) boardRoutes(rt *router) {
 	rt.anyone("PATCH /api/v1/tickets/{id}", s.editTicket)
 	rt.anyone("POST /api/v1/tickets/{id}/move", s.moveTicket)
 	rt.anyone("POST /api/v1/tickets/{id}/comments", s.comment)
-	rt.anyone("PUT /api/v1/tickets/{id}/spec", s.setSpec)
+	rt.anyone("PUT /api/v1/tickets/{id}/spec", s.saveSpec)
+	rt.anyone("PUT /api/v1/tickets/{id}/design", s.saveDesign)
+	rt.anyone("POST /api/v1/tickets/{id}/block", s.block)
+	rt.human("POST /api/v1/tickets/{id}/approve", s.approve)
+	rt.human("POST /api/v1/tickets/{id}/request-changes", s.requestChanges)
+	rt.human("POST /api/v1/tickets/{id}/unblock", s.unblock)
 	rt.anyone("POST /api/v1/tickets/{id}/questions", s.ask)
 	rt.human("POST /api/v1/tickets/{id}/answers", s.answer)
 	rt.human("DELETE /api/v1/tickets/{id}", s.deleteTicket)
@@ -49,12 +54,11 @@ func (s *server) createTicket(w http.ResponseWriter, r *http.Request, who caller
 		Kind   string `json:"kind"`
 		Title  string `json:"title"`
 		Body   string `json:"body"`
-		Lane   string `json:"lane"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
 	}
-	draft := domain.TicketDraft{RepoID: valueOrZero(body.RepoID), Kind: body.Kind, Title: body.Title, Body: body.Body, Lane: body.Lane}
+	draft := domain.TicketDraft{RepoID: valueOrZero(body.RepoID), Kind: body.Kind, Title: body.Title, Body: body.Body}
 	detail, err := s.deps.Board.Create(r.Context(), who.actor, draft)
 	return respondDetail(w, http.StatusCreated, detail, err)
 }
@@ -128,18 +132,102 @@ func (s *server) comment(w http.ResponseWriter, r *http.Request, who caller) err
 	return respondDetail(w, http.StatusOK, detail, err)
 }
 
-func (s *server) setSpec(w http.ResponseWriter, r *http.Request, who caller) error {
+func (s *server) saveSpec(w http.ResponseWriter, r *http.Request, who caller) error {
 	id, err := pathID(r, "id")
 	if err != nil {
 		return err
 	}
 	var body struct {
-		Spec string `json:"spec"`
+		Spec     string `json:"spec"`
+		IsSubmit bool   `json:"submit"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
 	}
-	detail, err := s.deps.Board.SetSpec(r.Context(), who.actor, id, body.Spec)
+	detail, err := s.deps.Board.SaveSpec(r.Context(), who.actor, id, app.SaveTextInput{Text: body.Spec, IsSubmit: body.IsSubmit})
+	return respondDetail(w, http.StatusOK, detail, err)
+}
+
+func (s *server) saveDesign(w http.ResponseWriter, r *http.Request, who caller) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	var body struct {
+		Design   string `json:"design"`
+		IsSubmit bool   `json:"submit"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		return err
+	}
+	detail, err := s.deps.Board.SaveDesign(r.Context(), who.actor, id, app.SaveTextInput{Text: body.Design, IsSubmit: body.IsSubmit})
+	return respondDetail(w, http.StatusOK, detail, err)
+}
+
+func (s *server) block(w http.ResponseWriter, r *http.Request, who caller) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		return err
+	}
+	detail, err := s.deps.Board.Block(r.Context(), who.actor, id, body.Reason)
+	return respondDetail(w, http.StatusOK, detail, err)
+}
+
+// reviewBody is the body of approve and request-changes.
+type reviewBody struct {
+	Checkpoint string `json:"checkpoint"`
+	Revision   int    `json:"revision"`
+	Comment    string `json:"comment"`
+}
+
+func (b reviewBody) input() app.ReviewInput {
+	return app.ReviewInput{Checkpoint: b.Checkpoint, Revision: b.Revision, Comment: b.Comment}
+}
+
+func (s *server) approve(w http.ResponseWriter, r *http.Request, who caller) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	var body reviewBody
+	if err := decodeJSON(w, r, &body); err != nil {
+		return err
+	}
+	detail, err := s.deps.Board.Approve(r.Context(), who.actor, id, body.input())
+	return respondDetail(w, http.StatusOK, detail, err)
+}
+
+func (s *server) requestChanges(w http.ResponseWriter, r *http.Request, who caller) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	var body reviewBody
+	if err := decodeJSON(w, r, &body); err != nil {
+		return err
+	}
+	detail, err := s.deps.Board.RequestChanges(r.Context(), who.actor, id, body.input())
+	return respondDetail(w, http.StatusOK, detail, err)
+}
+
+func (s *server) unblock(w http.ResponseWriter, r *http.Request, who caller) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	var body struct {
+		Comment string `json:"comment"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		return err
+	}
+	detail, err := s.deps.Board.Unblock(r.Context(), who.actor, id, body.Comment)
 	return respondDetail(w, http.StatusOK, detail, err)
 }
 

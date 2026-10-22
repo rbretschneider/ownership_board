@@ -183,3 +183,39 @@ func (f *fixture) agentAsk(id int64, input app.AskInput) (app.TicketDetail, erro
 	}
 	return f.board.Ask(f.ctx, agent, id, input)
 }
+
+func (f *fixture) requireStage(id int64, want domain.Stage) {
+	f.t.Helper()
+	if got := f.detail(id).Ticket.Stage; got != want {
+		f.t.Fatalf("ticket %d is in stage %s, want %s", id, got, want)
+	}
+}
+
+// toReady takes ticket id, which must be the next claimable one, through
+// refinement and the owner's spec approval.
+func (f *fixture) toReady(id int64) {
+	f.t.Helper()
+	if work := f.mustClaim(agent, app.ClaimInput{}); work.Ticket.Ticket.ID != id {
+		f.t.Fatalf("claimed #%d, want #%d", work.Ticket.Ticket.ID, id)
+	}
+	detail, err := f.board.SaveSpec(f.ctx, agent, id, app.SaveTextInput{Text: "Do the thing.", IsSubmit: true})
+	if err != nil {
+		f.t.Fatalf("submit spec: %v", err)
+	}
+	review := app.ReviewInput{Checkpoint: "spec", Revision: detail.Ticket.SpecRevision}
+	if _, err := f.board.Approve(f.ctx, owner, id, review); err != nil {
+		f.t.Fatalf("approve spec: %v", err)
+	}
+	f.requireStage(id, domain.StageReady)
+}
+
+// toBuild gives ticket id a design and drags it into In Progress, where it
+// lands in build because the design checkpoint is off by default.
+func (f *fixture) toBuild(id int64) {
+	f.t.Helper()
+	if _, err := f.board.SaveDesign(f.ctx, owner, id, app.SaveTextInput{Text: "The plan."}); err != nil {
+		f.t.Fatalf("save design: %v", err)
+	}
+	f.move(owner, id, domain.LaneInProgress, nil)
+	f.requireStage(id, domain.StageBuild)
+}

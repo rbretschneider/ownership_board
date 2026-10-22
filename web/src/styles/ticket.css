@@ -99,6 +99,104 @@
   letter-spacing: 0;
 }
 
+.lane-move {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.lane-move .select {
+  flex: 1 1 140px;
+}
+
+.approved-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  color: var(--success);
+  font-size: 0.875rem;
+  font-weight: 560;
+}
+
+/* ---------- Checkpoint and blocked panels ---------- */
+.checkpoint,
+.blocked {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: var(--radius-lg);
+}
+
+.checkpoint {
+  border: 1px solid color-mix(in srgb, var(--human) 45%, var(--border));
+  background: var(--human-soft);
+}
+
+.blocked {
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
+  background: var(--danger-soft);
+}
+
+.checkpoint__header,
+.blocked__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.checkpoint__header {
+  color: var(--human);
+}
+
+.blocked__header {
+  color: var(--danger);
+}
+
+.checkpoint__title,
+.blocked__title {
+  color: var(--text);
+  font-size: 1.0625rem;
+  font-weight: 650;
+}
+
+.checkpoint__revision {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.checkpoint__document {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.checkpoint__stale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* The agent wrote this: plain text, line breaks kept, never markdown. */
+.blocked__reason {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 70ch;
+}
+
 /* ---------- Questions ---------- */
 .questions {
   display: flex;
@@ -775,4 +873,17 @@
   .disclosure__toggle svg {
     transition: none;
   }
+}
+
+.checkpoint__source {
+  margin-left: auto;
+}
+
+/* The exact text the agent builds from, so nothing can hide in formatting. */
+.checkpoint__raw {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.85rem;
 }

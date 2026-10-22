@@ -22,6 +22,13 @@ const (
 	TimelineWorkLink TimelineType = "work_link"
 	TimelineDecision TimelineType = "decision"
 	TimelineRelation TimelineType = "relation"
+	// TimelineStage records a stage change, data {from, to}.
+	TimelineStage            TimelineType = "stage"
+	TimelineApproved         TimelineType = "approved"
+	TimelineChangesRequested TimelineType = "changes_requested"
+	TimelineBlocked          TimelineType = "blocked"
+	TimelineUnblocked        TimelineType = "unblocked"
+	TimelineDesign           TimelineType = "design"
 )
 
 // TimelineEntry is one line of a ticket's history.

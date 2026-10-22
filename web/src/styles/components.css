@@ -169,6 +169,30 @@
   color: var(--human);
 }
 
+/* Solid, so "Needs you" is the first thing the eye finds on a card. */
+.badge--needs {
+  background: var(--human);
+  color: var(--on-accent);
+  font-weight: 650;
+}
+
+.badge--blocked {
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 650;
+}
+
+.stage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 560;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
 .kind-tag {
   display: inline-flex;
   align-items: center;
@@ -401,6 +425,13 @@
   font-weight: 500;
   line-height: 1.4;
   overflow-wrap: anywhere;
+}
+
+.card__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
 }
 
 .card__meta {

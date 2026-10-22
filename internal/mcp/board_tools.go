@@ -25,7 +25,7 @@ const maxToolWaitSeconds = 300
 func BoardTools(services Services) []Tool {
 	return []Tool{
 		claimWork{services}, getTicket{services}, listRepos{services}, askQuestions{services},
-		saveSpec{services}, moveTicket{services}, addComment{services}, updateTicket{services},
+		saveSpec{services}, saveDesign{services}, markBlocked{services}, moveTicket{services}, addComment{services}, updateTicket{services},
 		heartbeat{services}, releaseTicket{services}, createTicket{services},
 		addWorkLink{services}, recordDecision{services}, linkTickets{services}, findTicketsForWork{services},
 		listTickets{services}, reportPRState{services},
@@ -37,7 +37,7 @@ type claimWork struct{ s Services }
 func (claimWork) Definition() Definition {
 	return Definition{
 		Name: "claim_work",
-		Description: "Claim the next ticket that needs an agent and get its brief. Order: unfinished In Progress work, then New tickets to refine, then Ready tickets to build. " +
+		Description: "Claim the next ticket that needs an agent and get its brief. Order: tickets being built, then being designed, then Todo tickets to refine, then Ready tickets to design. " +
 			"Set wait_seconds to block until work appears instead of polling. Returns 'No work' when there is nothing to do.",
 		InputSchema: object(map[string]any{
 			"repo":          prop("string", "Full name of the repo you are working in, such as acme/api. Omit to take work for any repo."),
@@ -126,8 +126,8 @@ func (askQuestions) Definition() Definition {
 	}, "prompt")
 	return Definition{
 		Name: "ask_questions",
-		Description: "Post one round of clarifying questions. The ticket moves to Pending Answers, the human is notified, and your lease ends. " +
-			"Once every question is answered the ticket returns to New for you to refine again.",
+		Description: "Post one round of clarifying questions. The ticket stays where it is, the human is notified, and your lease ends. " +
+			"Once every question is answered the ticket can be claimed again, with the answers in its brief.",
 		InputSchema: object(map[string]any{
 			"id":        ticketIDProp(),
 			"summary":   prop("string", "One paragraph: what you understood and why you are asking."),
@@ -161,37 +161,101 @@ type saveSpec struct{ s Services }
 
 func (saveSpec) Definition() Definition {
 	return Definition{
-		Name:        "save_spec",
-		Description: "Save the refined specification (markdown) for a ticket. Replaces any earlier spec.",
-		InputSchema: object(map[string]any{"id": ticketIDProp(), "spec": prop("string", "Problem, scope, out of scope, numbered acceptance criteria, approach and risks.")}, "id", "spec"),
+		Name: "save_spec",
+		Description: "Save the refined specification (markdown) while refining. Replaces any earlier spec. " +
+			"With submit: true the ticket goes to the owner for approval (or straight to ready when the repo needs none) and your lease ends.",
+		InputSchema: object(map[string]any{
+			"id":     ticketIDProp(),
+			"spec":   prop("string", "Problem, scope, out of scope, numbered acceptance criteria, approach and risks."),
+			"submit": prop("boolean", "True when the spec is complete and should be handed on."),
+		}, "id", "spec"),
 	}
 }
 
 func (t saveSpec) Call(ctx context.Context, actor domain.Actor, raw json.RawMessage) (string, error) {
 	var args struct {
-		ID   int64  `json:"id"`
-		Spec string `json:"spec"`
+		ID       int64  `json:"id"`
+		Spec     string `json:"spec"`
+		IsSubmit bool   `json:"submit"`
 	}
 	if err := decodeArguments(raw, &args); err != nil {
 		return "", err
 	}
-	detail, err := t.s.Board.SetSpec(ctx, actor, args.ID, args.Spec)
-	return outcome(detail, "spec saved.", err)
+	detail, err := t.s.Board.SaveSpec(ctx, actor, args.ID, app.SaveTextInput{Text: args.Spec, IsSubmit: args.IsSubmit})
+	return outcome(detail, savedMessage("spec", args.IsSubmit), err)
+}
+
+type saveDesign struct{ s Services }
+
+func (saveDesign) Definition() Definition {
+	return Definition{
+		Name: "save_design",
+		Description: "Save the technical design (markdown) while designing. Replaces any earlier design. " +
+			"With submit: true the ticket goes to the owner for approval (or straight to build when the repo needs none) and your lease ends.",
+		InputSchema: object(map[string]any{
+			"id":     ticketIDProp(),
+			"design": prop("string", "Approach, components and files, data and API changes, tests, risks, order of work."),
+			"submit": prop("boolean", "True when the design is complete and should be handed on."),
+		}, "id", "design"),
+	}
+}
+
+func (t saveDesign) Call(ctx context.Context, actor domain.Actor, raw json.RawMessage) (string, error) {
+	var args struct {
+		ID       int64  `json:"id"`
+		Design   string `json:"design"`
+		IsSubmit bool   `json:"submit"`
+	}
+	if err := decodeArguments(raw, &args); err != nil {
+		return "", err
+	}
+	detail, err := t.s.Board.SaveDesign(ctx, actor, args.ID, app.SaveTextInput{Text: args.Design, IsSubmit: args.IsSubmit})
+	return outcome(detail, savedMessage("design", args.IsSubmit), err)
+}
+
+func savedMessage(what string, isSubmit bool) string {
+	if isSubmit {
+		return what + " submitted; your lease has ended. Stop work on this ticket."
+	}
+	return what + " saved."
+}
+
+type markBlocked struct{ s Services }
+
+func (markBlocked) Definition() Definition {
+	return Definition{
+		Name: "mark_blocked",
+		Description: "Stop work on a ticket you hold because you cannot go on and no question would help. " +
+			"The owner is notified, your lease ends, and nobody claims the ticket until a person unblocks it.",
+		InputSchema: object(map[string]any{
+			"id":     ticketIDProp(),
+			"reason": prop("string", "One or two plain sentences: what stopped you and what the owner must decide."),
+		}, "id", "reason"),
+	}
+}
+
+func (t markBlocked) Call(ctx context.Context, actor domain.Actor, raw json.RawMessage) (string, error) {
+	var args struct {
+		ID     int64  `json:"id"`
+		Reason string `json:"reason"`
+	}
+	if err := decodeArguments(raw, &args); err != nil {
+		return "", err
+	}
+	detail, err := t.s.Board.Block(ctx, actor, args.ID, args.Reason)
+	return outcome(detail, "blocked; the owner has been notified. Stop work on this ticket.", err)
 }
 
 type moveTicket struct{ s Services }
 
 func (moveTicket) Definition() Definition {
-	lanes := make([]string, 0, len(domain.Lanes()))
-	for _, lane := range domain.Lanes() {
-		lanes = append(lanes, string(lane.ID))
-	}
 	return Definition{
-		Name:        "move_ticket",
-		Description: "Move a ticket to another lane. Moving ends your lease. Use 'ready' after refining and 'review' once the PR is open.",
+		Name: "move_ticket",
+		Description: "Move a finished build to review once its pull request is open and pr_url is set. " +
+			"This is the only lane move an agent makes; it ends your lease.",
 		InputSchema: object(map[string]any{
 			"id":   ticketIDProp(),
-			"lane": map[string]any{"type": "string", "enum": lanes},
+			"lane": map[string]any{"type": "string", "enum": []string{string(domain.LaneReview)}},
 		}, "id", "lane"),
 	}
 }
@@ -205,7 +269,7 @@ func (t moveTicket) Call(ctx context.Context, actor domain.Actor, raw json.RawMe
 		return "", err
 	}
 	detail, err := t.s.Board.Move(ctx, actor, args.ID, app.MoveInput{Lane: args.Lane})
-	return outcome(detail, "moved.", err)
+	return outcome(detail, "moved to review.", err)
 }
 
 type addComment struct{ s Services }
@@ -310,7 +374,7 @@ type createTicket struct{ s Services }
 func (createTicket) Definition() Definition {
 	return Definition{
 		Name:        "create_ticket",
-		Description: "File a new story or bug, such as a follow-up you found while working. It starts in New.",
+		Description: "File a new story or bug, such as a follow-up you found while working. It starts in Todo, to be refined.",
 		InputSchema: object(map[string]any{
 			"kind":    map[string]any{"type": "string", "enum": []string{string(domain.KindStory), string(domain.KindBug)}},
 			"title":   prop("string", "Short title."),

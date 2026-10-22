@@ -1,6 +1,29 @@
-import { ArrowRightLeft, Bot, CircleDot, CirclePlus, FileText, GitPullRequest, Hand, Link2, MessageCircleQuestion, MessageSquareReply, Pencil, Scale, Settings2, Unlock, User } from "lucide-react";
-import type { ActorKind, Lane, RelationKind, TimelineEntry, TimelineType } from "../../api/types";
+import {
+  ArrowRightLeft,
+  Bot,
+  CircleAlert,
+  CircleCheck,
+  CircleDot,
+  CirclePlus,
+  DraftingCompass,
+  FileText,
+  GitPullRequest,
+  Hand,
+  Link2,
+  MessageCircleQuestion,
+  MessageSquareReply,
+  Pencil,
+  Play,
+  Scale,
+  Settings2,
+  StepForward,
+  Undo2,
+  Unlock,
+  User,
+} from "lucide-react";
+import type { ActorKind, Lane, RelationKind, Stage, StageId, TimelineEntry, TimelineType } from "../../api/types";
 import { relationLabel } from "../../lib/relations";
+import { stageLabel } from "../../lib/stages";
 import { relativeTime } from "../../lib/relativeTime";
 import { Markdown } from "../common/Markdown";
 
@@ -16,12 +39,21 @@ const EVENT_ICONS: Record<Exclude<TimelineType, "comment">, typeof Bot> = {
   work_link: GitPullRequest,
   decision: Scale,
   relation: Link2,
+  stage: StepForward,
+  approved: CircleCheck,
+  changes_requested: Undo2,
+  blocked: CircleAlert,
+  unblocked: Play,
+  design: DraftingCompass,
 };
+
+/** Event types whose body is shown under the line, as plain text. */
+const DETAIL_TYPES: ReadonlySet<TimelineType> = new Set(["questions", "decision", "approved", "changes_requested", "blocked", "unblocked"]);
 
 const ACTOR_ICONS: Record<ActorKind, typeof Bot> = { agent: Bot, human: User, system: Settings2 };
 
 /** One timeline entry: a comment bubble or a compact event line. */
-export function TimelineItem({ entry, lanes }: { entry: TimelineEntry; lanes: Lane[] }) {
+export function TimelineItem({ entry, lanes, stages }: { entry: TimelineEntry; lanes: Lane[]; stages: Stage[] }) {
   const ActorIcon = ACTOR_ICONS[entry.actor.kind];
   const when = <time dateTime={entry.at} title={new Date(entry.at).toLocaleString()}>{relativeTime(entry.at)}</time>;
 
@@ -44,15 +76,18 @@ export function TimelineItem({ entry, lanes }: { entry: TimelineEntry; lanes: La
     <li className={`event event--${entry.actor.kind}`}>
       <EventIcon size={14} aria-hidden="true" />
       <span className="event__text">
-        <strong>{entry.actor.name}</strong> {describe(entry, lanes)} · {when}
-        {(entry.type === "questions" || entry.type === "decision") && entry.body !== "" && <span className="event__detail">{entry.body}</span>}
+        <strong>{entry.actor.name}</strong> {describe(entry, lanes, stages)} · {when}
+        {DETAIL_TYPES.has(entry.type) && entry.body !== "" && <span className="event__detail">{entry.body}</span>}
       </span>
     </li>
   );
 }
 
-function describe(entry: TimelineEntry, lanes: Lane[]): string {
+function describe(entry: TimelineEntry, lanes: Lane[], stages: Stage[]): string {
   const label = (id: unknown) => lanes.find((l) => l.id === id)?.label ?? String(id);
+  const stage = (id: unknown) => stageLabel(stages, String(id) as StageId);
+  const checkpoint = entry.data["checkpoint"] === "design" ? "the design" : "the spec";
+  const revision = typeof entry.data["revision"] === "number" ? ` (revision ${entry.data["revision"]})` : "";
   const count = typeof entry.data["count"] === "number" ? entry.data["count"] : 0;
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
   switch (entry.type) {
@@ -78,6 +113,18 @@ function describe(entry: TimelineEntry, lanes: Lane[]): string {
       return isRemoval(entry) ? "removed a decision" : entry.data["supersedes_id"] !== undefined ? "replaced a decision" : "recorded a decision";
     case "relation":
       return describeRelation(entry);
+    case "stage":
+      return `moved this from ${stage(entry.data["from"])} to ${stage(entry.data["to"])}`;
+    case "approved":
+      return `approved ${checkpoint}${revision}`;
+    case "changes_requested":
+      return `requested changes to ${checkpoint}${revision}`;
+    case "blocked":
+      return "marked this blocked";
+    case "unblocked":
+      return "unblocked this";
+    case "design":
+      return "updated the design";
     default:
       return String(entry.type).replace(/_/g, " ");
   }

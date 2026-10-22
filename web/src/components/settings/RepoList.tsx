@@ -3,11 +3,12 @@ import type { Repo } from "../../api/types";
 import { PROVIDER_LABELS, repoColor } from "../../lib/repos";
 import { ProviderGlyph } from "../repos/ProviderGlyph";
 import { RepoColorPicker } from "./RepoColorPicker";
+import { RepoGateToggles } from "./RepoGateToggles";
 import { RepoVisibilityToggle } from "./RepoVisibilityToggle";
 
 const SEARCH_ID = "repo-list-search";
 
-/** Searchable list of every repo, with per-repo color editing. */
+/** Searchable list of every repo, with per-repo color, visibility and checkpoint settings. */
 export function RepoList({ repos, onUpdated }: { repos: Repo[]; onUpdated: (repo: Repo) => void }) {
   const [query, setQuery] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -47,6 +48,7 @@ export function RepoList({ repos, onUpdated }: { repos: Repo[]; onUpdated: (repo
               {repo.missing_since !== null && <span className="muted small">No longer on {PROVIDER_LABELS[repo.provider]}</span>}
             </div>
             <RepoVisibilityToggle repo={repo} onUpdated={onUpdated} />
+            <RepoGateToggles repo={repo} onUpdated={onUpdated} />
             {editingId === repo.id && (
               <RepoColorPicker
                 repo={repo}

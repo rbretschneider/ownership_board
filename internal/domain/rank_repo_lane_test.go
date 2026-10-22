@@ -35,18 +35,17 @@ func TestRankBetweenAsksForRenumberWhenNeighboursTouch(t *testing.T) {
 	}
 }
 
-func TestLaneOwners(t *testing.T) {
-	want := map[domain.Lane]domain.Owner{
-		domain.LaneNew: domain.OwnerAgent, domain.LaneAnswers: domain.OwnerHuman, domain.LaneReady: domain.OwnerAgent,
-		domain.LaneInProgress: domain.OwnerAgent, domain.LaneReview: domain.OwnerHuman, domain.LaneDone: domain.OwnerNobody,
+func TestEveryStageBelongsToALane(t *testing.T) {
+	lanes := map[domain.Lane]bool{}
+	for _, lane := range domain.Lanes() {
+		lanes[lane.ID] = true
 	}
-	lanes := domain.Lanes()
-	if len(lanes) != len(want) {
-		t.Fatalf("got %d lanes, want %d", len(lanes), len(want))
+	if len(lanes) != 4 {
+		t.Fatalf("got %d lanes, want 4", len(lanes))
 	}
-	for _, lane := range lanes {
-		if lane.ID.Owner() != want[lane.ID] {
-			t.Errorf("%s owner = %s, want %s", lane.ID, lane.ID.Owner(), want[lane.ID])
+	for _, stage := range domain.Stages() {
+		if !lanes[stage.Lane] {
+			t.Errorf("stage %s has unknown lane %q", stage.ID, stage.Lane)
 		}
 	}
 }

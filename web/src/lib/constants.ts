@@ -1,7 +1,20 @@
 import type { LaneId, Owner } from "../api/types";
 
-/** Viewport width at which the board switches from one lane to six columns. */
-export const DESKTOP_MIN_WIDTH_PX = 900;
+/** Narrowest a desktop lane column may get. */
+export const COLUMN_MIN_WIDTH_PX = 230;
+
+/** Gap between desktop lane columns. */
+export const COLUMN_GAP_PX = 12;
+
+/** Padding around the desktop columns, per side. */
+export const COLUMNS_PADDING_PX = 16;
+
+/**
+ * Viewport width at which the board switches from one lane to four columns.
+ * Four columns at their minimum width fit below this, so there is no
+ * horizontal scroll (layout.css `.columns` uses the same numbers).
+ */
+export const DESKTOP_MIN_WIDTH_PX = 1000;
 
 /** Media query matching the desktop layout. */
 export const DESKTOP_MEDIA_QUERY = `(min-width: ${DESKTOP_MIN_WIDTH_PX}px)`;
@@ -16,29 +29,25 @@ export const REFETCH_DEBOUNCE_MS = 250;
 export const TOAST_DURATION_MS = 4000;
 
 /** Lane the mobile view falls back to. */
-export const DEFAULT_LANE: LaneId = "new";
+export const DEFAULT_LANE: LaneId = "todo";
 
 /** Short lane names for the mobile lane strip. */
 export const LANE_SHORT_LABELS: Record<LaneId, string> = {
-  new: "New",
-  answers: "Answers",
-  ready: "Ready",
+  todo: "Todo",
   in_progress: "Doing",
-  review: "PR",
-  done: "Done",
+  review: "Review",
+  merged: "Merged",
 };
 
 /** One-line hints shown in empty lanes. */
 export const LANE_EMPTY_HINTS: Record<LaneId, string> = {
-  new: "Drop an idea here — the AI will refine it.",
-  answers: "No questions waiting on you.",
-  ready: "Refined work waits here for the AI.",
-  in_progress: "Nothing being built right now.",
+  todo: "Drop an idea here — the AI will refine it.",
+  in_progress: "Nothing being designed or built right now.",
   review: "No pull requests waiting for review.",
-  done: "Shipped work lands here.",
+  merged: "Merged work lands here.",
 };
 
-/** Text labels for lane owners, so ownership is never conveyed by color alone. */
+/** Text labels for ticket owners, so ownership is never conveyed by color alone. */
 export const OWNER_LABELS: Record<Owner, string> = {
   agent: "AI",
   human: "You",

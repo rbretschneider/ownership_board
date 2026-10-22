@@ -7,7 +7,9 @@ import (
 	"time"
 )
 
-// Ticket is a story or bug moving across the board.
+// Ticket is a story or bug moving across the board. Its Stage is the source of
+// truth for where it is; Lane is derived from the stage and only ever set by
+// setStage.
 type Ticket struct {
 	ID            int64
 	RepoID        int64
@@ -15,24 +17,33 @@ type Ticket struct {
 	Title         string
 	Body          string
 	Spec          string
+	Design        string
 	Lane          Lane
+	Stage         Stage
 	Rank          float64
 	PRURL         string
 	Branch        string
 	Lease         *Lease
-	CreatedBy     string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	LaneChangedAt time.Time
+	BlockedReason string
+	// Revisions count saves of the spec and design; approvals record which
+	// revision the owner signed off, so a later edit needs a new approval.
+	SpecRevision           int
+	DesignRevision         int
+	ApprovedSpecRevision   int
+	ApprovedDesignRevision int
+	CreatedBy              string
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+	LaneChangedAt          time.Time
 }
 
-// TicketDraft is the input for a new ticket.
+// TicketDraft is the input for a new ticket. Every ticket starts in Todo,
+// being refined: nobody, agent or person, can create one further along.
 type TicketDraft struct {
 	RepoID int64
 	Kind   string
 	Title  string
 	Body   string
-	Lane   string
 }
 
 // TicketEdit lists the fields to change; nil leaves a field as it is.
@@ -45,8 +56,7 @@ type TicketEdit struct {
 	Branch *string
 }
 
-// NewTicket validates a draft and returns an unsaved ticket. Lane defaults to
-// New so every idea goes through refinement unless the author says otherwise.
+// NewTicket validates a draft and returns an unsaved ticket in todo/refine.
 func NewTicket(draft TicketDraft, actor Actor, now time.Time) (Ticket, error) {
 	if draft.RepoID < 0 {
 		return Ticket{}, Invalidf("repo_id must be positive")
@@ -63,19 +73,10 @@ func NewTicket(draft TicketDraft, actor Actor, now time.Time) (Ticket, error) {
 	if err != nil {
 		return Ticket{}, err
 	}
-	lane, err := initialLane(draft.Lane)
-	if err != nil {
-		return Ticket{}, err
-	}
 	return Ticket{
-		RepoID: draft.RepoID, Kind: kind, Title: title, Body: body, Lane: lane,
+		RepoID: draft.RepoID, Kind: kind, Title: title, Body: body, Lane: LaneTodo, Stage: StageRefine,
 		CreatedBy: actor.Name, CreatedAt: now, UpdatedAt: now, LaneChangedAt: now,
 	}, nil
-}
-
-// Owner returns who holds the ball for this ticket.
-func (t *Ticket) Owner() Owner {
-	return t.Lane.Owner()
 }
 
 // IsLeased reports whether an agent currently holds the ticket.
@@ -83,13 +84,47 @@ func (t *Ticket) IsLeased(now time.Time) bool {
 	return t.Lease.IsActive(now)
 }
 
-// MoveTo places the ticket in a lane at a rank and drops any lease, because a
-// move means whoever held it no longer owns the next step. It reports whether
-// the lane changed.
-func (t *Ticket) MoveTo(lane Lane, rank float64, now time.Time) bool {
-	isLaneChange := t.Lane != lane
-	t.Lane = lane
+// IsBlocked reports whether an agent stopped and a person must decide.
+func (t *Ticket) IsBlocked() bool {
+	return t.BlockedReason != ""
+}
+
+// NeedsOwner reports whether the ball is with the owner: questions to answer,
+// a block to resolve, or a checkpoint or PR to review.
+func (t *Ticket) NeedsOwner(openQuestions int) bool {
+	return openQuestions > 0 || t.IsBlocked() || t.Stage.IsOwnerReview()
+}
+
+// Owner says who acts next.
+func (t *Ticket) Owner(openQuestions int) Owner {
+	switch {
+	case t.NeedsOwner(openQuestions):
+		return OwnerHuman
+	case t.Stage == StageDone:
+		return OwnerNobody
+	default:
+		return OwnerAgent
+	}
+}
+
+// IsClaimable reports whether an agent may take the ticket now: an agent stage,
+// nothing waiting on the owner, and no live lease.
+func (t *Ticket) IsClaimable(openQuestions int, now time.Time) bool {
+	return t.Stage.IsAgentStage() && openQuestions == 0 && !t.IsBlocked() && !t.IsLeased(now)
+}
+
+// Reorder places the ticket at a new rank within its lane. Nothing else
+// changes: reordering is never a way to move a ticket past a checkpoint.
+func (t *Ticket) Reorder(rank float64, now time.Time) {
 	t.Rank = rank
+	t.UpdatedAt = now
+}
+
+// setStage is the only place a ticket's stage and lane change. Every stage
+// change is a hand-off, so it always drops the lease.
+func (t *Ticket) setStage(stage Stage, rank float64, now time.Time) bool {
+	isLaneChange := t.Lane != stage.Lane()
+	t.Stage, t.Lane, t.Rank = stage, stage.Lane(), rank
 	t.Lease = nil
 	t.UpdatedAt = now
 	if isLaneChange {
@@ -114,17 +149,6 @@ func (t *Ticket) Release(now time.Time) {
 	t.UpdatedAt = now
 }
 
-// SetSpec stores the refined specification.
-func (t *Ticket) SetSpec(spec string, now time.Time) error {
-	value, err := LimitText("spec", strings.TrimSpace(spec), MaxSpecLength)
-	if err != nil {
-		return err
-	}
-	t.Spec = value
-	t.UpdatedAt = now
-	return nil
-}
-
 // Apply changes the given fields and returns the names of those that changed.
 func (t *Ticket) Apply(edit TicketEdit, now time.Time) ([]string, error) {
 	next := *t
@@ -146,13 +170,6 @@ func (t *Ticket) Apply(edit TicketEdit, now time.Time) ([]string, error) {
 		*t = next
 	}
 	return changed, nil
-}
-
-func initialLane(raw string) (Lane, error) {
-	if raw == "" {
-		return LaneNew, nil
-	}
-	return ParseLane(raw)
 }
 
 func applyRepo(t *Ticket, edit TicketEdit) (string, error) {

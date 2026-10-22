@@ -1,10 +1,11 @@
 import type { PointerEvent } from "react";
-import type { Lane, LaneId, Repo, TicketSummary } from "../../api/types";
+import type { Lane, LaneId, Repo, Stage, TicketSummary } from "../../api/types";
 import type { DropTarget } from "../../lib/dropTargets";
 
 /** What both board layouts (desktop columns, mobile single lane) receive. */
 export interface BoardViewProps {
   lanes: Lane[];
+  stages: Stage[];
   ticketsByLane: Map<LaneId, TicketSummary[]>;
   reposById: Map<number, Repo>;
   draggedId: number | null;

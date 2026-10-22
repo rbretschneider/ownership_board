@@ -9,7 +9,7 @@ import (
 const (
 	MaxTitleLength      = 200
 	MaxBodyLength       = 20_000
-	MaxSpecLength       = 50_000
+	MaxSpecLength       = 20_000
 	MaxCommentLength    = 20_000
 	MaxPromptLength     = 1_000
 	MaxOptionLength     = 200

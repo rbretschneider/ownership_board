@@ -33,13 +33,13 @@ func requireKind(t *testing.T, err error, want domain.ErrorKind) {
 	}
 }
 
-func TestNewTicketDefaultsToNewLaneWithoutRepo(t *testing.T) {
+func TestNewTicketStartsBeingRefinedWithoutRepo(t *testing.T) {
 	ticket := mustTicket(t)
-	if ticket.Lane != domain.LaneNew || ticket.RepoID != 0 || ticket.Title != "Dark mode" {
-		t.Fatalf("got lane %q repo %d title %q", ticket.Lane, ticket.RepoID, ticket.Title)
+	if ticket.Lane != domain.LaneTodo || ticket.Stage != domain.StageRefine || ticket.RepoID != 0 || ticket.Title != "Dark mode" {
+		t.Fatalf("got %s/%s repo %d title %q", ticket.Lane, ticket.Stage, ticket.RepoID, ticket.Title)
 	}
-	if ticket.Owner() != domain.OwnerAgent {
-		t.Fatalf("owner = %q, want agent", ticket.Owner())
+	if ticket.Owner(0) != domain.OwnerAgent || ticket.Owner(1) != domain.OwnerHuman {
+		t.Fatalf("owner without questions %q, with %q", ticket.Owner(0), ticket.Owner(1))
 	}
 }
 
@@ -48,7 +48,6 @@ func TestNewTicketRejectsBadInput(t *testing.T) {
 		"blank title":    func(d *domain.TicketDraft) { d.Title = "   " },
 		"long title":     func(d *domain.TicketDraft) { d.Title = strings.Repeat("x", domain.MaxTitleLength+1) },
 		"unknown kind":   func(d *domain.TicketDraft) { d.Kind = "epic" },
-		"unknown lane":   func(d *domain.TicketDraft) { d.Lane = "backlog" },
 		"negative repo":  func(d *domain.TicketDraft) { d.RepoID = -1 },
 		"oversized body": func(d *domain.TicketDraft) { d.Body = strings.Repeat("x", domain.MaxBodyLength+1) },
 	}
@@ -62,24 +61,24 @@ func TestNewTicketRejectsBadInput(t *testing.T) {
 	}
 }
 
-func TestMoveToDropsLeaseAndStampsLaneChange(t *testing.T) {
+func TestStageChangeDropsLeaseAndStampsLaneChange(t *testing.T) {
 	ticket := mustTicket(t)
 	if err := ticket.Claim("agent-a", time.Hour, now); err != nil {
 		t.Fatalf("Claim: %v", err)
 	}
 	later := now.Add(time.Minute)
-	if !ticket.MoveTo(domain.LaneReady, 5, later) {
-		t.Fatal("MoveTo reported no lane change")
+	if !ticket.MoveToStage(domain.StageBuild, 5, later) {
+		t.Fatal("MoveToStage reported no lane change")
 	}
-	if ticket.Lease != nil || !ticket.LaneChangedAt.Equal(later) {
-		t.Fatalf("lease %v lane changed at %v", ticket.Lease, ticket.LaneChangedAt)
+	if ticket.Lane != domain.LaneInProgress || ticket.Lease != nil || !ticket.LaneChangedAt.Equal(later) {
+		t.Fatalf("lane %s lease %v lane changed at %v", ticket.Lane, ticket.Lease, ticket.LaneChangedAt)
 	}
 }
 
-func TestReorderWithinLaneKeepsLaneChangedAt(t *testing.T) {
+func TestStageChangeWithinLaneKeepsLaneChangedAt(t *testing.T) {
 	ticket := mustTicket(t)
-	if ticket.MoveTo(domain.LaneNew, 9, now.Add(time.Hour)) {
-		t.Fatal("reorder reported a lane change")
+	if ticket.MoveToStage(domain.StageSpecReview, 9, now.Add(time.Hour)) {
+		t.Fatal("same-lane stage change reported a lane change")
 	}
 	if !ticket.LaneChangedAt.Equal(now) {
 		t.Fatalf("lane changed at moved to %v", ticket.LaneChangedAt)

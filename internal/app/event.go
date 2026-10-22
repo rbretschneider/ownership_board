@@ -9,6 +9,7 @@ type Event struct {
 	TicketID int64
 	Title    string
 	Lane     domain.Lane
+	Stage    domain.Stage
 	PRURL    string
 	Actor    domain.Actor
 	// Detail is a short human-readable line, such as a round summary.
@@ -18,6 +19,6 @@ type Event struct {
 func eventFor(ticket domain.Ticket, entry domain.TimelineEntry) Event {
 	return Event{
 		Cursor: entry.ID, Type: entry.Type, TicketID: ticket.ID, Title: ticket.Title,
-		Lane: ticket.Lane, PRURL: ticket.PRURL, Actor: entry.Actor, Detail: entry.Body,
+		Lane: ticket.Lane, Stage: ticket.Stage, PRURL: ticket.PRURL, Actor: entry.Actor, Detail: entry.Body,
 	}
 }

@@ -47,8 +47,9 @@ type TicketRepository interface {
 	// LaneOrder returns ticket ids and ranks in a lane, sorted by rank.
 	LaneOrder(ctx context.Context, lane domain.Lane) ([]RankedTicket, error)
 	SetRank(ctx context.Context, id int64, rank float64) error
-	// NextClaimable returns the top unleased ticket in lane matching filter.
-	NextClaimable(ctx context.Context, lane domain.Lane, filter TicketFilter, now time.Time) (domain.Ticket, bool, error)
+	// NextClaimable returns the top claimable ticket in stage matching filter:
+	// unleased, not blocked and with no open questions.
+	NextClaimable(ctx context.Context, stage domain.Stage, filter TicketFilter, now time.Time) (domain.Ticket, bool, error)
 }
 
 // RankedTicket is a ticket's position within its lane.
@@ -82,7 +83,9 @@ type RepoRepository interface {
 	ByFullName(ctx context.Context, fullName string) ([]domain.Repo, error)
 	ByProvider(ctx context.Context, provider domain.Provider) ([]domain.Repo, error)
 	Insert(ctx context.Context, repo *domain.Repo) error
+	// Update writes everything but the checkpoint settings.
 	Update(ctx context.Context, repo domain.Repo) error
+	SetGates(ctx context.Context, id int64, gates domain.Gates) error
 }
 
 // SourceStatusRepository persists the outcome of the last sync per provider.

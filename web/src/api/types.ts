@@ -1,10 +1,16 @@
 /** Wire types for the ownership_board HTTP API (see docs/api.md). */
 
-/** The six fixed lane ids. */
-export type LaneId = "new" | "answers" | "ready" | "in_progress" | "review" | "done";
+/** The four fixed lane ids. Finer progress lives in a ticket's stage. */
+export type LaneId = "todo" | "in_progress" | "review" | "merged";
 
-/** Who holds the ball in a lane. */
+/** A ticket's place within its lane (each stage belongs to one lane). */
+export type StageId = "refine" | "spec_review" | "ready" | "design" | "design_review" | "build" | "pr" | "done";
+
+/** Who holds the ball for a ticket. */
 export type Owner = "agent" | "human" | "nobody";
+
+/** An approval checkpoint the owner resolves. */
+export type Checkpoint = "spec" | "design";
 
 /** Ticket kind. */
 export type Kind = "story" | "bug";
@@ -38,8 +44,16 @@ export interface AuthStatus {
 export interface Lane {
   id: LaneId;
   label: string;
-  owner: Owner;
   description: string;
+}
+
+/** A stage definition served by the API. */
+export interface Stage {
+  id: StageId;
+  lane: LaneId;
+  label: string;
+  /** The board waits for the owner at this stage. */
+  is_owner_review: boolean;
 }
 
 /** Where a repository comes from. */
@@ -70,6 +84,10 @@ export interface Repo {
    * said private and nobody ticked "Treat as public"; manual repos are public.
    */
   visibility: RepoVisibility;
+  /** Agents wait for the owner to approve the spec before building. */
+  require_spec_approval: boolean;
+  /** Agents wait for the owner to approve the design before implementing. */
+  require_design_approval: boolean;
 }
 
 /** Whether board content may appear in a repo's commits and PRs. */
@@ -84,7 +102,13 @@ export interface ManualRepoInput {
 }
 
 /** Body of PATCH /repos/{id}. */
-export type RepoEdit = Partial<{ color: string; description: string; treat_as_public: boolean }>;
+export type RepoEdit = Partial<{
+  color: string;
+  description: string;
+  treat_as_public: boolean;
+  require_spec_approval: boolean;
+  require_design_approval: boolean;
+}>;
 
 /** A provider the board can connect to for repo sync. */
 export type ConnectionProvider = Exclude<Provider, "manual">;
@@ -172,7 +196,15 @@ export interface TicketSummary {
   kind: Kind;
   title: string;
   lane: LaneId;
+  stage: StageId;
+  /** "human" whenever needs_owner. */
   owner: Owner;
+  /** Open questions, blocked, or a stage where the owner reviews. */
+  needs_owner: boolean;
+  /** "" when not blocked. Plain text, written by an agent. */
+  blocked_reason: string;
+  spec_revision: number;
+  design_revision: number;
   pr_url: string;
   branch: string;
   open_questions: number;
@@ -216,7 +248,13 @@ export type TimelineType =
   | "released"
   | "work_link"
   | "decision"
-  | "relation";
+  | "relation"
+  | "stage"
+  | "approved"
+  | "changes_requested"
+  | "blocked"
+  | "unblocked"
+  | "design";
 
 /** Who performed a timeline event. */
 export type ActorKind = "human" | "agent" | "system";
@@ -320,6 +358,11 @@ export interface RelationInput {
 export interface TicketDetail extends TicketSummary {
   body: string;
   spec: string;
+  design: string;
+  approved_spec_revision: number;
+  approved_design_revision: number;
+  /** Effective checkpoints for this ticket (no repo means both on). */
+  gates: { spec: boolean; design: boolean };
   created_by: string;
   questions: Question[];
   timeline: TimelineEntry[];
@@ -331,17 +374,29 @@ export interface TicketDetail extends TicketSummary {
 /** Result of GET /board. */
 export interface Board {
   lanes: Lane[];
+  stages: Stage[];
   repos: Repo[];
   tickets: TicketSummary[];
 }
 
-/** Body of POST /tickets. */
+/** Body of POST /tickets. Tickets always start in todo / refine. */
 export interface CreateTicket {
   repo_id?: number | null;
   kind: Kind;
   title: string;
   body: string;
-  lane?: LaneId;
+}
+
+/** Body of POST /tickets/{id}/approve. */
+export interface ApproveInput {
+  checkpoint: Checkpoint;
+  /** The revision the owner was shown; a mismatch answers 409. */
+  revision: number;
+}
+
+/** Body of POST /tickets/{id}/request-changes. */
+export interface RequestChangesInput extends ApproveInput {
+  comment: string;
 }
 
 /** Body of PATCH /tickets/{id}. */

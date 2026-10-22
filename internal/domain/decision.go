@@ -15,6 +15,8 @@ const (
 	DecisionFromAnswer DecisionSource = "answer"
 	DecisionFromAgent  DecisionSource = "agent"
 	DecisionFromHuman  DecisionSource = "human"
+	// DecisionFromApproval is the owner approving a spec or design revision.
+	DecisionFromApproval DecisionSource = "approval"
 )
 
 // DecisionWeight says how much a decision binds later work.
@@ -106,6 +108,16 @@ func DecisionFromQuestion(question Question, actor Actor, now time.Time) Decisio
 		TicketID: question.TicketID, Summary: summary, Rationale: truncate(answer.Text, MaxDecisionRationaleLength),
 		Source: DecisionFromAnswer, Weight: weight, DecidedBy: actor, AskedBy: question.AskedBy,
 		QuestionID: &questionID, At: now,
+	}
+}
+
+// DecisionFromCheckpoint records the owner's approval of one revision. It is
+// always binding: the owner read it and said yes.
+func DecisionFromCheckpoint(ticketID int64, checkpoint Checkpoint, revision int, actor Actor, now time.Time) Decision {
+	summary := fmt.Sprintf("Approved the %s (revision %d)", checkpoint, revision)
+	return Decision{
+		TicketID: ticketID, Summary: summary, Source: DecisionFromApproval, Weight: WeightBinding,
+		DecidedBy: actor, At: now,
 	}
 }
 

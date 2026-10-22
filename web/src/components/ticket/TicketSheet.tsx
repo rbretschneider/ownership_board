@@ -1,16 +1,19 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CircleCheck } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 import { useApi } from "../../api/ApiContext";
-import type { Lane, Repo, TicketDetail, TicketSummary } from "../../api/types";
+import type { Lane, Repo, Stage, TicketDetail, TicketSummary } from "../../api/types";
 import { useTicket } from "../../hooks/useTicket";
 import { openQuestions } from "../../lib/answers";
 import { BOARD_HASH, navigate } from "../../lib/hashRoute";
+import { checkpointFor, isApprovedRevision } from "../../lib/stages";
 import { ErrorState } from "../common/ErrorState";
 import { LoadingState } from "../common/LoadingState";
 import { Markdown } from "../common/Markdown";
 import { Overlay } from "../common/Overlay";
 import { useToast } from "../toast/ToastContext";
 import { AnsweredHistory } from "./AnsweredHistory";
+import { BlockedPanel } from "./BlockedPanel";
+import { CheckpointPanel } from "./CheckpointPanel";
 import { CommentComposer } from "./CommentComposer";
 import { DecisionsSection } from "./DecisionsSection";
 import { EditableMarkdown } from "./EditableMarkdown";
@@ -26,6 +29,7 @@ import { WorkSection } from "./WorkSection";
 export interface TicketSheetProps {
   ticketId: number;
   lanes: Lane[];
+  stages: Stage[];
   repos: Repo[];
   /** Every ticket on the board, for the related-ticket picker. */
   tickets: TicketSummary[];
@@ -39,7 +43,7 @@ export interface TicketSheetProps {
 export type RunMutation = (action: () => Promise<TicketDetail>, success?: string) => Promise<boolean>;
 
 /** The ticket detail sheet (#/t/:id). */
-export function TicketSheet({ ticketId, lanes, repos, tickets, refreshSignal, onChanged }: TicketSheetProps) {
+export function TicketSheet({ ticketId, lanes, stages, repos, tickets, refreshSignal, onChanged }: TicketSheetProps) {
   const api = useApi();
   const toast = useToast();
   const { ticket, error, isMissing, isLoading, reload, accept } = useTicket(ticketId);
@@ -67,7 +71,14 @@ export function TicketSheet({ ticketId, lanes, repos, tickets, refreshSignal, on
     }
   }, [accept, onChanged, toast]);
 
+  const resolved = useCallback((next: TicketDetail, message: string) => {
+    accept(next);
+    onChanged();
+    toast.success(message);
+  }, [accept, onChanged, toast]);
+
   const open = ticket === null ? [] : openQuestions(ticket.questions);
+  const checkpoint = ticket === null ? null : checkpointFor(ticket.stage);
 
   return (
     <Overlay variant="panel" label={`Ticket #${ticketId}`} onClose={close}>
@@ -103,7 +114,17 @@ export function TicketSheet({ ticketId, lanes, repos, tickets, refreshSignal, on
           )}
           {ticket !== null && (
             <>
-              <TicketHeader ticket={ticket} lanes={lanes} repos={repos} run={run} />
+              {checkpoint !== null && (
+                <CheckpointPanel
+                  key={`${ticket.stage}:${ticket.spec_revision}:${ticket.design_revision}`}
+                  ticket={ticket}
+                  checkpoint={checkpoint}
+                  onResolved={resolved}
+                  onReload={reload}
+                />
+              )}
+              {ticket.blocked_reason !== "" && <BlockedPanel key={ticket.blocked_reason} ticket={ticket} run={run} />}
+              <TicketHeader ticket={ticket} lanes={lanes} stages={stages} repos={repos} run={run} />
               {open.length > 0 && <QuestionsPanel key={open.map((q) => q.id).join(",")} ticket={ticket} open={open} run={run} />}
               <PrRow ticket={ticket} run={run} />
               <EditableMarkdown
@@ -114,13 +135,19 @@ export function TicketSheet({ ticketId, lanes, repos, tickets, refreshSignal, on
               />
               <section className="section" aria-labelledby="spec-title">
                 <h3 id="spec-title" className="section__title">Spec <span className="section__hint">refined by the AI</span></h3>
+                <ApprovedNote approved={ticket.approved_spec_revision} current={ticket.spec_revision} />
                 {ticket.spec.trim() === "" ? <p className="muted">Not refined yet.</p> : <Markdown source={ticket.spec} />}
+              </section>
+              <section className="section" aria-labelledby="design-title">
+                <h3 id="design-title" className="section__title">Design <span className="section__hint">written by the AI</span></h3>
+                <ApprovedNote approved={ticket.approved_design_revision} current={ticket.design_revision} />
+                {ticket.design.trim() === "" ? <p className="muted">No design yet.</p> : <Markdown source={ticket.design} />}
               </section>
               <DecisionsSection ticket={ticket} run={run} />
               <WorkSection ticket={ticket} run={run} />
               <RelatedSection ticket={ticket} tickets={tickets} lanes={lanes} run={run} />
               <AnsweredHistory questions={ticket.questions} />
-              <Timeline entries={ticket.timeline} lanes={lanes} />
+              <Timeline entries={ticket.timeline} lanes={lanes} stages={stages} />
             </>
           )}
         </div>
@@ -129,5 +156,18 @@ export function TicketSheet({ ticketId, lanes, repos, tickets, refreshSignal, on
         )}
       </div>
     </Overlay>
+  );
+}
+
+/** "Approved (revision N)" when the shown revision is the approved one. */
+function ApprovedNote({ approved, current }: { approved: number; current: number }) {
+  if (!isApprovedRevision(approved, current)) {
+    return null;
+  }
+  return (
+    <p className="approved-note">
+      <CircleCheck size={14} aria-hidden="true" />
+      Approved (revision {current})
+    </p>
   );
 }
