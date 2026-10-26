@@ -101,7 +101,12 @@ the whole board each time it runs:
    `security_researcher` → `technical_writer` in a separate git worktree,
    then `senior_dev` opens the PR with the `pr` skill and waits for green CI.
    Each stage runs on a model picked by the spec's build tier (small, normal
-   or large), and two QA failures move the build up a tier.
+   or large), and two QA failures move the build up a tier. On normal and
+   large builds, an optional advisory review by another model family runs
+   after the security review when a `gpt-review` command is installed (the
+   OpenAI Codex CLI wrapper in the Hawaii agent runner). Its findings go to
+   `senior_dev` once, and the ones not fixed are listed in the ticket comment.
+   It never blocks the build.
 5. Reports work links, the PR and a summary to the board and moves the ticket
    to review.
 
