@@ -90,6 +90,15 @@ const tracingInstructions = `To trace why code is the way it is: find the commit
 // review of each pull request is the final check; these rules are advisory.
 const publicRepoRules = `This repo is PUBLIC, treated as public, or not chosen yet. Board content is private. Never copy the ticket's title or text, its spec or design, questions and answers (including the owner's free-text answers), decision summaries or rationales, comments, the board's address or host names, or agent names into anything that leaves the board: commits, branch names, pull request or issue text, review comments, code comments, docs, tests or changelogs. Describe the change itself in neutral words. Use the branch name shown above, which carries only the ticket number.`
 
+// autonomousRules replace asking the owner on an autonomous ticket. They come
+// after the action's instructions and override what those say about asking.
+const autonomousRules = `The owner agreed this spec in a chat and asked for a pull request with no stops. There are no checkpoints, and the board refuses questions on this ticket; this overrides anything above about asking.
+
+- Where you would have asked, choose: take the option you would have recommended, record it with record_decision (the choice, the alternatives and why), and carry on.
+- Keep to the spec. Do not widen it; file follow-ups with create_ticket instead.
+- Call mark_blocked only when you cannot go on at all, for example the spec contradicts the code or a build cannot be made to pass. That is the only way this ticket stops before review.
+- The owner reviews only the pull request, so make it complete: say what changed, how it was verified, every choice you made in their place, and any review finding you did not fix. In a public repo, describe those in neutral technical words and leave board text out, as the public repo rules say.`
+
 // noRepoInstructions apply whenever a ticket has no repo yet.
 const noRepoInstructions = `This ticket has no repo yet. Work out which repo it belongs to from the request and the list above, then set repo_id on the ticket. If you cannot tell with confidence, make "Which repo is this for?" one of your questions, with the likely repos as options. A ticket must have a repo before its spec can be submitted.`
 
@@ -174,6 +183,9 @@ func instructionsFor(input BriefInput) string {
 	}
 	if instructions, isKnown := actionInstructions[input.Action]; isKnown {
 		fmt.Fprintf(&b, "## What to do now\n\n%s\n\n%s\n\n%s\n\n", instructions, decisionAuthority, tracingInstructions)
+		if input.Detail.Ticket.IsAutonomous {
+			fmt.Fprintf(&b, "## Autonomous ticket\n\n%s\n\n", autonomousRules)
+		}
 	}
 	return b.String()
 }
@@ -186,6 +198,9 @@ func (r *briefRenderer) facts(input BriefInput) {
 	r.repoFact(input.Repo, visibility)
 	if input.Action != "" {
 		fmt.Fprintf(&r.b, "- Action: **%s**\n", input.Action)
+	}
+	if ticket.IsAutonomous {
+		r.b.WriteString("- Mode: **autonomous**: no checkpoints and no questions; the owner reviews the pull request\n")
 	}
 	if ticket.Lease != nil {
 		fmt.Fprintf(&r.b, "- Lease: %s until %s\n", oneLine(ticket.Lease.Holder), ticket.Lease.ExpiresAt.UTC().Format(timeLayout))

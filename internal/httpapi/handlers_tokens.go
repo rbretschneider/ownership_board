@@ -17,12 +17,13 @@ func (s *server) listTokens(w http.ResponseWriter, r *http.Request, _ caller) er
 
 func (s *server) createToken(w http.ResponseWriter, r *http.Request, who caller) error {
 	var body struct {
-		Name string `json:"name"`
+		Name       string `json:"name"`
+		IsDelegate bool   `json:"is_delegate"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
 	}
-	token, secret, err := s.deps.Auth.CreateAPIToken(r.Context(), who.user, body.Name)
+	token, secret, err := s.deps.Auth.CreateAPIToken(r.Context(), who.user, body.Name, body.IsDelegate)
 	if err != nil {
 		return err
 	}

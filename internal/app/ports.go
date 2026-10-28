@@ -85,7 +85,7 @@ type RepoRepository interface {
 	Insert(ctx context.Context, repo *domain.Repo) error
 	// Update writes everything but the checkpoint settings.
 	Update(ctx context.Context, repo domain.Repo) error
-	SetGates(ctx context.Context, id int64, gates domain.Gates) error
+	SetGates(ctx context.Context, id int64, gates domain.Gates, allowAutonomous bool) error
 }
 
 // SourceStatusRepository persists the outcome of the last sync per provider.

@@ -148,7 +148,7 @@ func TestLogoutEndsTheRefreshToken(t *testing.T) {
 func TestAPITokenWorksUntilRevoked(t *testing.T) {
 	h := newHarness(t)
 	owner := h.setup().User
-	token, secret, err := h.auth.CreateAPIToken(h.ctx, owner, "loop")
+	token, secret, err := h.auth.CreateAPIToken(h.ctx, owner, "loop", false)
 	if err != nil {
 		t.Fatalf("CreateAPIToken: %v", err)
 	}
@@ -164,6 +164,21 @@ func TestAPITokenWorksUntilRevoked(t *testing.T) {
 	}
 	if _, err := h.auth.TokenFromSecret(h.ctx, secret); !errors.Is(err, auth.ErrUnauthorized) {
 		t.Fatalf("revoked token: %v", err)
+	}
+}
+
+func TestOnlyADelegateTokenMayFileAutonomousTickets(t *testing.T) {
+	h := newHarness(t)
+	owner := h.setup().User
+	for name, isDelegate := range map[string]bool{"desktop": true, "runner": false} {
+		_, secret, err := h.auth.CreateAPIToken(h.ctx, owner, name, isDelegate)
+		if err != nil {
+			t.Fatalf("CreateAPIToken %s: %v", name, err)
+		}
+		found, err := h.auth.TokenFromSecret(h.ctx, secret)
+		if err != nil || found.Actor().MayFileAutonomous() != isDelegate {
+			t.Fatalf("%s: delegate %v, want %v (%v)", name, found.Actor().MayFileAutonomous(), isDelegate, err)
+		}
 	}
 }
 
@@ -199,7 +214,7 @@ func TestPasswordHashRoundTrip(t *testing.T) {
 func TestAgentTokenCannotTakeAPersonsName(t *testing.T) {
 	h := newHarness(t)
 	owner := h.setup().User
-	if _, _, err := h.auth.CreateAPIToken(h.ctx, owner, "owner"); domain.KindOf(err) != domain.KindConflict {
+	if _, _, err := h.auth.CreateAPIToken(h.ctx, owner, "owner", false); domain.KindOf(err) != domain.KindConflict {
 		t.Fatalf("token named like a person: %v", err)
 	}
 }

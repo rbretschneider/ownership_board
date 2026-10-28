@@ -191,7 +191,9 @@ func gatesAndOpen(ctx context.Context, repos Repos, ticket domain.Ticket) (domai
 	if repoChosenByAgent(timeline) {
 		gates = domain.GatesFor(nil)
 	}
-	return gates, countOpen(questions), nil
+	// An autonomous ticket's repo was agreed with the owner, so the agent
+	// that filed it chose it in the owner's name.
+	return ticket.Gates(gates), countOpen(questions), nil
 }
 
 // repoChosenByAgent reports whether the latest repo choice, at creation or in

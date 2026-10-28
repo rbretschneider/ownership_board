@@ -29,7 +29,7 @@ function ticket(id: number, stage: StageId, overrides: Partial<TicketSummary> = 
   const lane = STAGES.find((s) => s.id === stage)?.lane ?? "todo";
   return {
     id, lane, stage, repo_id: 1, kind: "story", title: `t${id}`, owner: "agent",
-    needs_owner: false, blocked_reason: "", spec_revision: 0, design_revision: 0,
+    needs_owner: false, blocked_reason: "", is_autonomous: false, spec_revision: 0, design_revision: 0,
     pr_url: "", branch: "", open_questions: 0, lease: null,
     created_at: "", updated_at: "", lane_changed_at: "", ...overrides,
   };

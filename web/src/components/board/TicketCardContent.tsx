@@ -1,4 +1,4 @@
-import { Bot, CircleAlert, GitPullRequest, Hand, MessageCircleQuestion } from "lucide-react";
+import { Bot, CircleAlert, GitPullRequest, Hand, MessageCircleQuestion, Zap } from "lucide-react";
 import type { Repo, Stage, TicketSummary } from "../../api/types";
 import { KindTag } from "../common/KindTag";
 import { StageChip } from "../common/StageChip";
@@ -24,6 +24,12 @@ export function TicketCardContent({ ticket, stages, repo }: { ticket: TicketSumm
       {(ticket.stage !== "done" || ticket.needs_owner || isBlocked) && (
         <div className="card__status">
           {ticket.stage !== "done" && <StageChip stage={ticket.stage} stages={stages} />}
+          {ticket.is_autonomous && ticket.stage !== "done" && (
+            <span className="badge badge--agent" title="Runs to a pull request with no checkpoints or questions">
+              <Zap size={13} aria-hidden="true" />
+              Autonomous
+            </span>
+          )}
           {ticket.needs_owner && (
             <span className="badge badge--needs">
               <Hand size={13} aria-hidden="true" />

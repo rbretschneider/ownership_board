@@ -150,6 +150,9 @@ func (t *Ticket) HandOffForQuestions(now time.Time) error {
 	if !t.Stage.IsAgentStage() {
 		return Conflictf("questions can only be asked while an agent works on ticket %d", t.ID)
 	}
+	if t.IsAutonomous {
+		return Conflictf("ticket %d is autonomous: the owner is not answering questions on it. Make the call, record it with record_decision, and carry on; call mark_blocked only if you cannot go on at all", t.ID)
+	}
 	t.Lease, t.UpdatedAt = nil, now
 	return nil
 }
@@ -210,9 +213,14 @@ func (t *Ticket) ClearBlockForDrop() {
 
 // AgentMayEdit limits which fields an agent may change in each stage: what the
 // ticket is (title, body, kind, repo) only while refining, and the delivery
-// fields (branch, pr_url) only while building.
+// fields (branch, pr_url) only while building. The autonomous flag is the
+// owner's alone, and so is an autonomous ticket's repo: the owner agreed to
+// skip the checkpoints for that repo, not for whichever one an agent picks.
 func (t *Ticket) AgentMayEdit(fields []string) error {
 	for _, field := range fields {
+		if field == "autonomous" || (field == "repo" && t.IsAutonomous) {
+			return Forbiddenf("only a person can change %s on ticket %d", field, t.ID)
+		}
 		isRefineField := field == "title" || field == "body" || field == "kind" || field == "repo"
 		isBuildField := field == "branch" || field == "pr_url"
 		if (isRefineField && t.Stage != StageRefine) || (isBuildField && t.Stage != StageBuild) {

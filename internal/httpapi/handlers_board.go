@@ -81,6 +81,8 @@ type editBody struct {
 	Body   *string    `json:"body"`
 	PRURL  *string    `json:"pr_url"`
 	Branch *string    `json:"branch"`
+	// IsAutonomous is the owner's to change; agents are refused.
+	IsAutonomous *bool `json:"is_autonomous"`
 }
 
 func (s *server) editTicket(w http.ResponseWriter, r *http.Request, who caller) error {
@@ -92,7 +94,9 @@ func (s *server) editTicket(w http.ResponseWriter, r *http.Request, who caller) 
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
 	}
-	edit := domain.TicketEdit{Kind: body.Kind, Title: body.Title, Body: body.Body, PRURL: body.PRURL, Branch: body.Branch}
+	edit := domain.TicketEdit{
+		Kind: body.Kind, Title: body.Title, Body: body.Body, PRURL: body.PRURL, Branch: body.Branch, IsAutonomous: body.IsAutonomous,
+	}
 	if body.RepoID.isSet {
 		repoID := body.RepoID.value
 		edit.RepoID = &repoID

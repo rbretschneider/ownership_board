@@ -88,6 +88,8 @@ export interface Repo {
   require_spec_approval: boolean;
   /** Agents wait for the owner to approve the design before implementing. */
   require_design_approval: boolean;
+  /** A delegate agent may file autonomous tickets here, which skip both checkpoints. */
+  allow_autonomous: boolean;
 }
 
 /** Whether board content may appear in a repo's commits and PRs. */
@@ -108,6 +110,7 @@ export type RepoEdit = Partial<{
   treat_as_public: boolean;
   require_spec_approval: boolean;
   require_design_approval: boolean;
+  allow_autonomous: boolean;
 }>;
 
 /** A provider the board can connect to for repo sync. */
@@ -201,6 +204,8 @@ export interface TicketSummary {
   owner: Owner;
   /** Open questions, blocked, or a stage where the owner reviews. */
   needs_owner: boolean;
+  /** Runs to a pull request with no checkpoints or questions; set by a delegate agent or the owner. */
+  is_autonomous: boolean;
   /** "" when not blocked. Plain text, written by an agent. */
   blocked_reason: string;
   spec_revision: number;
@@ -300,7 +305,7 @@ export interface WorkLinkInput {
 }
 
 /** Where a decision came from. */
-export type DecisionSource = "answer" | "agent" | "human";
+export type DecisionSource = "answer" | "agent" | "human" | "approval" | "chat";
 
 /**
  * How much a decision binds: a person chose explicitly (binding), a person let
@@ -408,6 +413,7 @@ export type EditTicket = Partial<{
   body: string;
   pr_url: string;
   branch: string;
+  is_autonomous: boolean;
 }>;
 
 /** One answer submitted by the human. */
@@ -427,6 +433,8 @@ export interface Token {
   prefix: string;
   created_at: string;
   last_used_at: string | null;
+  /** May file autonomous tickets (specs agreed in a chat). */
+  is_delegate: boolean;
 }
 
 /** A freshly created token, including its one-time secret. */

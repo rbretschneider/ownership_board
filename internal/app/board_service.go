@@ -94,6 +94,83 @@ func (s *BoardService) Create(ctx context.Context, actor domain.Actor, draft dom
 	return detail, nil
 }
 
+// CreateAutonomous files a ticket whose spec the owner agreed in a chat with a
+// delegate agent. It starts Ready with the spec approved, and the agreement
+// is logged as a binding decision, so every brief carries it.
+func (s *BoardService) CreateAutonomous(ctx context.Context, actor domain.Actor, draft domain.AutonomousDraft) (TicketDetail, error) {
+	if err := rejectHiddenFromAgent(actor, map[string]string{"title": draft.Title, "body": draft.Body, "spec": draft.Spec}); err != nil {
+		return TicketDetail{}, err
+	}
+	if err := domain.RejectConcealedMarkdown("spec", draft.Spec); err != nil {
+		return TicketDetail{}, err
+	}
+	ticket, err := domain.NewAutonomousTicket(draft, actor, s.clock.Now())
+	if err != nil {
+		return TicketDetail{}, err
+	}
+	var detail TicketDetail
+	var events []Event
+	err = s.store.Write(ctx, func(repos Repos) error {
+		if err := requireAutonomousRoom(ctx, repos, ticket.RepoID); err != nil {
+			return err
+		}
+		if ticket.Rank, err = rankFor(ctx, repos.Tickets(), ticket.Lane, 0, atBottom); err != nil {
+			return err
+		}
+		if err := repos.Tickets().Insert(ctx, &ticket); err != nil {
+			return err
+		}
+		decision := domain.DecisionFromAgreedSpec(ticket.ID, ticket.SpecRevision, actor, ticket.CreatedAt)
+		if err := repos.Decisions().Insert(ctx, &decision); err != nil {
+			return err
+		}
+		entries := []domain.TimelineEntry{
+			domain.NewEntry(ticket.ID, domain.TimelineCreated, actor, ticket.CreatedAt).With("autonomous", true),
+			domain.NewEntry(ticket.ID, domain.TimelineSpec, actor, ticket.CreatedAt).With("revision", ticket.SpecRevision).With("submitted", true),
+		}
+		if events, err = record(ctx, repos, ticket, entries); err != nil {
+			return err
+		}
+		detail, err = loadDetail(ctx, repos, ticket)
+		return err
+	})
+	if err != nil {
+		return TicketDetail{}, err
+	}
+	s.writer.sink.Publish(ctx, events)
+	return detail, nil
+}
+
+// maxOpenAutonomous caps autonomous tickets not yet in Review, so a leaked
+// delegate token cannot flood the runner.
+const maxOpenAutonomous = 10
+
+// requireAutonomousRoom lets an autonomous ticket in only on a repo where a
+// person allowed them, and only while fewer than maxOpenAutonomous are open.
+func requireAutonomousRoom(ctx context.Context, repos Repos, repoID int64) error {
+	repo, err := repos.CodeRepos().Get(ctx, repoID)
+	if err != nil {
+		return err
+	}
+	if !repo.AllowAutonomous {
+		return domain.Forbiddenf("repo %s does not take autonomous tickets; a person turns on \"Allow autonomous\" for it in Settings", repo.FullName)
+	}
+	tickets, err := repos.Tickets().List(ctx, TicketFilter{})
+	if err != nil {
+		return err
+	}
+	open := 0
+	for _, ticket := range tickets {
+		if ticket.IsAutonomous && ticket.Lane != domain.LaneReview && ticket.Lane != domain.LaneMerged {
+			open++
+		}
+	}
+	if open >= maxOpenAutonomous {
+		return domain.Conflictf("%d autonomous tickets are already open, the most allowed; wait for some to reach Review", open)
+	}
+	return nil
+}
+
 // Edit changes a ticket's descriptive fields.
 func (s *BoardService) Edit(ctx context.Context, actor domain.Actor, id int64, edit domain.TicketEdit) (TicketDetail, error) {
 	if err := rejectHiddenFromAgent(actor, editText(edit)); err != nil {
@@ -116,6 +193,12 @@ func (s *BoardService) Edit(ctx context.Context, actor domain.Actor, id int64, e
 		}
 		if err := s.linkPRField(ctx, repos, *ticket, changed, actor); err != nil {
 			return nil, err
+		}
+		if slices.Contains(changed, "autonomous") {
+			decision := domain.DecisionFromAutonomySwitch(ticket.ID, ticket.IsAutonomous, actor, ticket.UpdatedAt)
+			if err := repos.Decisions().Insert(ctx, &decision); err != nil {
+				return nil, err
+			}
 		}
 		entry := domain.NewEntry(ticket.ID, domain.TimelineEdited, actor, ticket.UpdatedAt).With("fields", changed)
 		return []domain.TimelineEntry{entry}, nil

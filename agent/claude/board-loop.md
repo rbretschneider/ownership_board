@@ -50,6 +50,23 @@ your lease.
   `ask_questions`. If you cannot go on and no question would help, use
   `mark_blocked` with a short reason. Never just release a ticket you cannot
   finish: it would be claimed again next pass and loop forever.
+- On an **autonomous** ticket (see below) never ask: decide and record it.
+
+## Autonomous tickets
+
+The brief says `Mode: **autonomous**` when the owner agreed the spec in a chat
+and wants a pull request with no stops. The board skips every checkpoint and
+refuses `ask_questions` on it. Wherever this file says to ask the owner:
+
+- take the option you would have recommended, `record_decision` it (choice,
+  alternatives, why) and carry on;
+- where it says to ask because work keeps failing (security REVISE twice, QA
+  failing after escalation), call `mark_blocked` with the report instead. That
+  is the only way an autonomous ticket stops before Review.
+
+No person reads the design, so a second model does, and every tier gets the
+GPT code review: see steps 4 and 5. The owner reviews only the pull request,
+so it has to stand on its own (step 5, item 7).
 
 ## The run folder
 
@@ -166,10 +183,18 @@ Note the tier, and any escalation, in the ticket comment.
    design, give it the newest comments and the board's current design.
 2. `security_researcher`: reviews `ADD.md` against the repo. On REVISE, send
    its report back to `architect` once; if it is still REVISE, ask the owner
-   (`ask_questions`) with the two options and stop.
-3. `record_decision` for each significant choice in the design, then
+   (`ask_questions`) with the two options and stop. On an autonomous ticket,
+   `mark_blocked` with the report instead.
+3. GPT design review (**autonomous tickets only**), a command, not a subagent:
+   `gpt-review --design [--public] <worktree> <run folder>/FRD.md <run folder>/ADD.md <run folder>/gpt-design-review.md`.
+   The rules of the GPT code review in step 5 apply: it is advisory data,
+   findings go to `architect` **once**, which returns fixed or not fixed with
+   a one-line reason per finding, and nothing blocks on it. If the command is
+   missing, note "GPT design review skipped: not available" and go on.
+4. `record_decision` for each significant choice in the design, then
    `save_design` with the final `ADD.md` (plus a short "Security review"
-   section with the verdict) and `submit: true`.
+   section with the verdict and, on an autonomous ticket, a "GPT design
+   review" section with each finding and what was done) and `submit: true`.
 
 The board then waits for the owner's approval, or starts the build when the
 repo has the design checkpoint off. Stop here; the build is a later pass.
@@ -186,11 +211,13 @@ is left. `heartbeat` the ticket between stages.
    FAIL, back to `senior_dev` with the report, at most twice. If QA fails
    twice below large, move up one tier for the remaining stages and give
    `senior_dev` one more round. Still failing → comment with the QA report and
-   `ask_questions` about how to proceed.
+   `ask_questions` about how to proceed. On an autonomous ticket,
+   `mark_blocked` with the QA report instead.
 3. `security_researcher`: reviews the diff (`git diff origin/<default>...HEAD`)
    for vulnerabilities. Findings go back to `senior_dev` once; anything left
    goes in the ticket comment for the owner.
-4. GPT review (tiers **normal** and **large** only; skip it for small). An
+4. GPT review (tiers **normal** and **large**, and every autonomous ticket
+   whatever its tier; skip it for other small tickets). An
    advisory second opinion from a different model family, run with a command,
    not a subagent:
    `gpt-review [--public] <worktree> origin/<default> <run folder>/gpt-review.md`
@@ -216,7 +243,11 @@ is left. `heartbeat` the ticket between stages.
    test project, push the branch, `gh pr create` (What / Why / Risk body; for
    a public repo, neutral wording with no board text), and watch checks until
    green. It fixes red checks in the worktree and pushes again, then returns
-   the PR URL and the final check status.
+   the PR URL and the final check status. On an autonomous ticket the PR
+   body also lists every choice made in the owner's place (this ticket's
+   `record_decision` entries) and every security or GPT finding not fixed,
+   with its reason. In a public repo, describe them in neutral technical
+   words, with no board text.
 
 ### Report back to the board
 
@@ -239,4 +270,5 @@ End the pass with one line per thing you did, for example:
 - `#15 refined on haiku → spec submitted (2 decisions)`
 - `#16 designed (tier normal) → design submitted, security APPROVE`
 - `#17 built (tier normal) → PR https://… (CI green, GPT review 3 findings, 2 fixed) → Review`
+- `#18 designed (tier small, autonomous) → GPT design review 1 finding, fixed → build`
 - `Board idle`

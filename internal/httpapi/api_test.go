@@ -192,6 +192,31 @@ func TestMCPToolCallThroughTheEndpoint(t *testing.T) {
 	}
 }
 
+func TestOnlyPeopleChangeAnAutonomousTicketsFlagOrRepo(t *testing.T) {
+	browser, token := signedIn(t)
+	api := jsonNumber(browser.expect(http.StatusCreated, "POST", "/api/v1/repos", `{"full_name":"acme/api"}`)["id"])
+	web := jsonNumber(browser.expect(http.StatusCreated, "POST", "/api/v1/repos", `{"full_name":"acme/web"}`)["id"])
+	browser.expect(http.StatusOK, "PATCH", "/api/v1/repos/"+api, `{"allow_autonomous":true}`)
+	delegate := browser.expect(http.StatusCreated, "POST", "/api/v1/tokens", `{"name":"desktop","is_delegate":true}`)
+	if delegate["is_delegate"] != true {
+		t.Fatalf("token is not a delegate: %v", delegate)
+	}
+	reply := browser.asAgent(delegate["secret"].(string)).expect(http.StatusOK, "POST", "/mcp",
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"create_autonomous_ticket","arguments":`+
+			`{"kind":"story","title":"Agreed","spec":"Spec.","repo_id":`+api+`}}}`)
+	if reply["result"].(map[string]any)["isError"].(bool) {
+		t.Fatalf("create_autonomous_ticket: %v", reply)
+	}
+
+	agent := browser.asAgent(token)
+	agent.expect(http.StatusOK, "POST", "/api/v1/agent/claim", "")
+	agent.expect(http.StatusForbidden, "PATCH", "/api/v1/tickets/1", `{"is_autonomous":false}`)
+	agent.expect(http.StatusForbidden, "PATCH", "/api/v1/tickets/1", `{"repo_id":`+web+`}`)
+	if edited := browser.expect(http.StatusOK, "PATCH", "/api/v1/tickets/1", `{"is_autonomous":false}`); edited["is_autonomous"] != false {
+		t.Fatalf("the owner could not turn autonomy off: %v", edited["is_autonomous"])
+	}
+}
+
 func TestMCPRejectsPeople(t *testing.T) {
 	browser, _ := signedIn(t)
 	browser.expect(http.StatusForbidden, "POST", "/mcp", `{"jsonrpc":"2.0","id":1,"method":"ping"}`)

@@ -17,7 +17,7 @@ type ticketRepo struct {
 
 const ticketColumns = `id, repo_id, kind, title, body, spec, design, lane, stage, rank, pr_url, branch, blocked_reason,
 	spec_revision, design_revision, approved_spec_revision, approved_design_revision,
-	lease_holder, lease_expires_at, created_by, created_at, updated_at, lane_changed_at`
+	lease_holder, lease_expires_at, created_by, created_at, updated_at, lane_changed_at, is_autonomous`
 
 func (r ticketRepo) Get(ctx context.Context, id int64) (domain.Ticket, error) {
 	row := r.q.QueryRowContext(ctx, `SELECT `+ticketColumns+` FROM tickets WHERE id = ?`, id)
@@ -47,8 +47,8 @@ func (r ticketRepo) Insert(ctx context.Context, ticket *domain.Ticket) error {
 	result, err := r.q.ExecContext(ctx,
 		`INSERT INTO tickets (repo_id, kind, title, body, spec, design, lane, stage, rank, pr_url, branch, blocked_reason,
 			spec_revision, design_revision, approved_spec_revision, approved_design_revision,
-			lease_holder, lease_expires_at, created_by, created_at, updated_at, lane_changed_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			lease_holder, lease_expires_at, created_by, created_at, updated_at, lane_changed_at, is_autonomous)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ticketValues(*ticket)...)
 	if err != nil {
 		return fmt.Errorf("sqlite: insert ticket: %w", err)
@@ -63,7 +63,7 @@ func (r ticketRepo) Update(ctx context.Context, ticket domain.Ticket) error {
 		`UPDATE tickets SET repo_id = ?, kind = ?, title = ?, body = ?, spec = ?, design = ?, lane = ?, stage = ?, rank = ?,
 			pr_url = ?, branch = ?, blocked_reason = ?, spec_revision = ?, design_revision = ?,
 			approved_spec_revision = ?, approved_design_revision = ?, lease_holder = ?, lease_expires_at = ?, created_by = ?,
-			created_at = ?, updated_at = ?, lane_changed_at = ?
+			created_at = ?, updated_at = ?, lane_changed_at = ?, is_autonomous = ?
 		 WHERE id = ?`, args...)
 	if err != nil {
 		return fmt.Errorf("sqlite: update ticket %d: %w", ticket.ID, err)
@@ -126,7 +126,7 @@ func ticketValues(t domain.Ticket) []any {
 	return []any{
 		nullableID(t.RepoID), string(t.Kind), t.Title, t.Body, t.Spec, t.Design, string(t.Lane), string(t.Stage), t.Rank,
 		t.PRURL, t.Branch, t.BlockedReason, t.SpecRevision, t.DesignRevision, t.ApprovedSpecRevision, t.ApprovedDesignRevision,
-		holder, expires, t.CreatedBy, formatTime(t.CreatedAt), formatTime(t.UpdatedAt), formatTime(t.LaneChangedAt),
+		holder, expires, t.CreatedBy, formatTime(t.CreatedAt), formatTime(t.UpdatedAt), formatTime(t.LaneChangedAt), t.IsAutonomous,
 	}
 }
 
@@ -171,7 +171,7 @@ func scanTicket(row scanner) (domain.Ticket, error) {
 	var repoID sql.NullInt64
 	err := row.Scan(&t.ID, &repoID, &kind, &t.Title, &t.Body, &t.Spec, &t.Design, &lane, &stage, &t.Rank, &t.PRURL, &t.Branch,
 		&t.BlockedReason, &t.SpecRevision, &t.DesignRevision, &t.ApprovedSpecRevision, &t.ApprovedDesignRevision,
-		&holder, &expires, &t.CreatedBy, &created, &updated, &laneChanged)
+		&holder, &expires, &t.CreatedBy, &created, &updated, &laneChanged, &t.IsAutonomous)
 	if err != nil {
 		return domain.Ticket{}, err
 	}
