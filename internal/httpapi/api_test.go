@@ -196,7 +196,6 @@ func TestOnlyPeopleChangeAnAutonomousTicketsFlagOrRepo(t *testing.T) {
 	browser, token := signedIn(t)
 	api := jsonNumber(browser.expect(http.StatusCreated, "POST", "/api/v1/repos", `{"full_name":"acme/api"}`)["id"])
 	web := jsonNumber(browser.expect(http.StatusCreated, "POST", "/api/v1/repos", `{"full_name":"acme/web"}`)["id"])
-	browser.expect(http.StatusOK, "PATCH", "/api/v1/repos/"+api, `{"allow_autonomous":true}`)
 	delegate := browser.expect(http.StatusCreated, "POST", "/api/v1/tokens", `{"name":"desktop","is_delegate":true}`)
 	if delegate["is_delegate"] != true {
 		t.Fatalf("token is not a delegate: %v", delegate)

@@ -17,18 +17,6 @@ func autonomousDraft(repoID int64) domain.AutonomousDraft {
 	}
 }
 
-// autonomousRepo adds a repo that takes autonomous tickets.
-func (f *fixture) autonomousRepo(fullName string) domain.Repo {
-	f.t.Helper()
-	repo := f.repo(fullName)
-	on := true
-	repo, err := f.repos.Restyle(f.ctx, owner, repo.ID, domain.RepoStyle{AllowAutonomous: &on})
-	if err != nil {
-		f.t.Fatalf("allow autonomous: %v", err)
-	}
-	return repo
-}
-
 // designGated turns the design checkpoint on, so a test can show an
 // autonomous ticket skips it.
 func (f *fixture) designGated(repoID int64) {
@@ -41,7 +29,7 @@ func (f *fixture) designGated(repoID int64) {
 
 func TestOnlyADelegateFilesAutonomousTickets(t *testing.T) {
 	f := newFixture(t)
-	api := f.autonomousRepo("acme/api")
+	api := f.repo("acme/api")
 	for _, actor := range []domain.Actor{agent, owner} {
 		_, err := f.board.CreateAutonomous(f.ctx, actor, autonomousDraft(api.ID))
 		requireErrorKind(t, err, domain.KindForbidden)
@@ -60,7 +48,7 @@ func TestOnlyADelegateFilesAutonomousTickets(t *testing.T) {
 
 func TestAutonomousTicketStartsReadyWithTheChatAsABindingDecision(t *testing.T) {
 	f := newFixture(t)
-	api := f.autonomousRepo("acme/api")
+	api := f.repo("acme/api")
 	detail, err := f.board.CreateAutonomous(f.ctx, delegate, autonomousDraft(api.ID))
 	if err != nil {
 		t.Fatalf("CreateAutonomous: %v", err)
@@ -80,7 +68,7 @@ func TestAutonomousTicketStartsReadyWithTheChatAsABindingDecision(t *testing.T) 
 
 func TestAutonomousTicketSkipsCheckpointsAndRefusesQuestions(t *testing.T) {
 	f := newFixture(t)
-	api := f.autonomousRepo("acme/api")
+	api := f.repo("acme/api")
 	f.designGated(api.ID)
 	id := f.mustCreateAutonomous(api.ID)
 
@@ -104,7 +92,7 @@ func TestAutonomousTicketSkipsCheckpointsAndRefusesQuestions(t *testing.T) {
 
 func TestOnlyTheOwnerChangesTheAutonomousFlagOrRepo(t *testing.T) {
 	f := newFixture(t)
-	api := f.autonomousRepo("acme/api")
+	api := f.repo("acme/api")
 	web := f.repo("acme/web")
 	f.designGated(api.ID)
 	id := f.mustCreateAutonomous(api.ID)
@@ -136,16 +124,9 @@ func (f *fixture) mustCreateAutonomous(repoID int64) int64 {
 	return detail.Ticket.ID
 }
 
-func TestAutonomousTicketsNeedARepoThatAllowsThem(t *testing.T) {
-	f := newFixture(t)
-	api := f.repo("acme/api")
-	_, err := f.board.CreateAutonomous(f.ctx, delegate, autonomousDraft(api.ID))
-	requireErrorKind(t, err, domain.KindForbidden)
-}
-
 func TestOpenAutonomousTicketsAreCapped(t *testing.T) {
 	f := newFixture(t)
-	api := f.autonomousRepo("acme/api")
+	api := f.repo("acme/api")
 	for range 10 {
 		f.mustCreateAutonomous(api.ID)
 	}

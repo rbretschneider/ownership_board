@@ -29,10 +29,7 @@ type Repo struct {
 	// checkpoints for tickets in this repo.
 	RequireSpecApproval   bool
 	RequireDesignApproval bool
-	// AllowAutonomous lets a delegate agent file autonomous tickets here,
-	// which skip both checkpoints. Off unless a person turns it on.
-	AllowAutonomous bool
-	CreatedAt       time.Time
+	CreatedAt             time.Time
 }
 
 // Visibility is how agents must treat a repo's contents and history.
@@ -85,7 +82,6 @@ type RepoStyle struct {
 	// RequireSpecApproval and RequireDesignApproval change the checkpoints.
 	RequireSpecApproval   *bool
 	RequireDesignApproval *bool
-	AllowAutonomous       *bool
 }
 
 // Repo field limits.
@@ -187,16 +183,12 @@ func (r *Repo) Restyle(style RepoStyle) error {
 	if style.RequireDesignApproval != nil {
 		r.RequireDesignApproval = *style.RequireDesignApproval
 	}
-	if style.AllowAutonomous != nil {
-		r.AllowAutonomous = *style.AllowAutonomous
-	}
 	return nil
 }
 
-// ChangesGates reports whether style changes a checkpoint setting, including
-// whether autonomous tickets may skip them.
+// ChangesGates reports whether style changes a checkpoint setting.
 func (style RepoStyle) ChangesGates() bool {
-	return style.RequireSpecApproval != nil || style.RequireDesignApproval != nil || style.AllowAutonomous != nil
+	return style.RequireSpecApproval != nil || style.RequireDesignApproval != nil
 }
 
 func parseRepoName(raw string) (string, error) {

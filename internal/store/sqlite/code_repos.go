@@ -13,7 +13,7 @@ type codeRepoRepo struct {
 }
 
 const repoColumns = `id, provider, full_name, url, description, color, default_branch, is_private, is_archived, synced_at, created_at, missing_since, treat_as_public,
-	require_spec_approval, require_design_approval, allow_autonomous`
+	require_spec_approval, require_design_approval`
 
 func (r codeRepoRepo) List(ctx context.Context) ([]domain.Repo, error) {
 	return r.query(ctx, `SELECT `+repoColumns+` FROM repos ORDER BY full_name COLLATE NOCASE, provider`)
@@ -35,11 +35,11 @@ func (r codeRepoRepo) ByProvider(ctx context.Context, provider domain.Provider) 
 func (r codeRepoRepo) Insert(ctx context.Context, repo *domain.Repo) error {
 	result, err := r.q.ExecContext(ctx,
 		`INSERT INTO repos (provider, full_name, url, description, color, default_branch, is_private, is_archived, synced_at, created_at, missing_since, treat_as_public,
-			require_spec_approval, require_design_approval, allow_autonomous)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			require_spec_approval, require_design_approval)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		string(repo.Provider), repo.FullName, repo.URL, repo.Description, repo.Color, repo.DefaultBranch,
 		boolToInt(repo.IsPrivate), boolToInt(repo.IsArchived), formatOptionalTime(repo.SyncedAt), formatTime(repo.CreatedAt), formatOptionalTime(repo.MissingSince), boolToInt(repo.TreatAsPublic),
-		boolToInt(repo.RequireSpecApproval), boolToInt(repo.RequireDesignApproval), boolToInt(repo.AllowAutonomous))
+		boolToInt(repo.RequireSpecApproval), boolToInt(repo.RequireDesignApproval))
 	if err != nil {
 		return conflictOr(err, "repo %s is already on the board", repo.FullName)
 	}
@@ -60,12 +60,11 @@ func (r codeRepoRepo) Update(ctx context.Context, repo domain.Repo) error {
 	return nil
 }
 
-// SetGates writes the checkpoint settings and whether autonomous tickets may
-// skip them. Update never touches them, so a repo sync can never switch a
-// checkpoint off or let autonomous tickets in.
-func (r codeRepoRepo) SetGates(ctx context.Context, id int64, gates domain.Gates, allowAutonomous bool) error {
-	_, err := r.q.ExecContext(ctx, `UPDATE repos SET require_spec_approval = ?, require_design_approval = ?, allow_autonomous = ? WHERE id = ?`,
-		boolToInt(gates.Spec), boolToInt(gates.Design), boolToInt(allowAutonomous), id)
+// SetGates writes the checkpoint settings. Update never touches them, so a
+// repo sync can never switch a checkpoint off.
+func (r codeRepoRepo) SetGates(ctx context.Context, id int64, gates domain.Gates) error {
+	_, err := r.q.ExecContext(ctx, `UPDATE repos SET require_spec_approval = ?, require_design_approval = ? WHERE id = ?`,
+		boolToInt(gates.Spec), boolToInt(gates.Design), id)
 	if err != nil {
 		return fmt.Errorf("sqlite: set gates of repo %d: %w", id, err)
 	}
@@ -92,17 +91,16 @@ func (r codeRepoRepo) query(ctx context.Context, query string, args ...any) ([]d
 func scanRepo(row scanner) (domain.Repo, error) {
 	var repo domain.Repo
 	var provider, created string
-	var isPrivate, isArchived, treatAsPublic, requireSpec, requireDesign, allowAutonomous int
+	var isPrivate, isArchived, treatAsPublic, requireSpec, requireDesign int
 	var synced, missing sql.NullString
 	err := row.Scan(&repo.ID, &provider, &repo.FullName, &repo.URL, &repo.Description, &repo.Color, &repo.DefaultBranch,
-		&isPrivate, &isArchived, &synced, &created, &missing, &treatAsPublic, &requireSpec, &requireDesign, &allowAutonomous)
+		&isPrivate, &isArchived, &synced, &created, &missing, &treatAsPublic, &requireSpec, &requireDesign)
 	if err != nil {
 		return domain.Repo{}, err
 	}
 	repo.Provider, repo.IsPrivate, repo.IsArchived = domain.Provider(provider), isPrivate == 1, isArchived == 1
 	repo.TreatAsPublic = treatAsPublic == 1
 	repo.RequireSpecApproval, repo.RequireDesignApproval = requireSpec == 1, requireDesign == 1
-	repo.AllowAutonomous = allowAutonomous == 1
 	if repo.SyncedAt, err = parseOptionalTime(synced); err != nil {
 		return domain.Repo{}, err
 	}

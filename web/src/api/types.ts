@@ -88,8 +88,6 @@ export interface Repo {
   require_spec_approval: boolean;
   /** Agents wait for the owner to approve the design before implementing. */
   require_design_approval: boolean;
-  /** A delegate agent may file autonomous tickets here, which skip both checkpoints. */
-  allow_autonomous: boolean;
 }
 
 /** Whether board content may appear in a repo's commits and PRs. */
@@ -110,7 +108,6 @@ export type RepoEdit = Partial<{
   treat_as_public: boolean;
   require_spec_approval: boolean;
   require_design_approval: boolean;
-  allow_autonomous: boolean;
 }>;
 
 /** A provider the board can connect to for repo sync. */

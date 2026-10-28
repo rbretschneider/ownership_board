@@ -3,18 +3,16 @@ import { useApi } from "../../api/ApiContext";
 import type { Repo } from "../../api/types";
 import { useToast } from "../toast/ToastContext";
 
-type Gate = "require_spec_approval" | "require_design_approval" | "allow_autonomous";
+type Gate = "require_spec_approval" | "require_design_approval";
 
 const GATES: readonly { field: Gate; label: string }[] = [
   { field: "require_spec_approval", label: "Approve spec" },
   { field: "require_design_approval", label: "Approve design" },
-  { field: "allow_autonomous", label: "Allow autonomous" },
 ];
 
 /**
  * A repo's checkpoints: whether agents wait for the owner to approve the spec
- * before building and the design before implementing, and whether a delegate
- * agent may file autonomous tickets that skip both. Toggles apply at once
+ * before building and the design before implementing. Toggles apply at once
  * and revert if the server refuses.
  */
 export function RepoGateToggles({ repo, onUpdated }: { repo: Repo; onUpdated: (repo: Repo) => void }) {
@@ -54,10 +52,7 @@ export function RepoGateToggles({ repo, onUpdated }: { repo: Repo; onUpdated: (r
           <span className="switch__label">{label}</span>
         </label>
       ))}
-      <span id={`${id}-hint`} className="muted small">
-        Agents wait for you before building/after designing. Allow autonomous lets a delegate agent file tickets
-        that skip both.
-      </span>
+      <span id={`${id}-hint`} className="muted small">Agents wait for you before building/after designing</span>
     </div>
   );
 }

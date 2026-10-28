@@ -97,7 +97,7 @@ questions and no block. Every other `lane` from an agent answers `403`.
 | POST   | `/api/v1/tickets/{id}/unblock` | `{comment?}` | `TicketDetail` |
 | DELETE | `/api/v1/tickets/{id}` | | `204` |
 | POST   | `/api/v1/repos` | `{full_name, url?, description?, color?}` | `Repo` (added by hand) |
-| PATCH  | `/api/v1/repos/{id}` | `{color?, description?, treat_as_public?, require_spec_approval?, require_design_approval?, allow_autonomous?}` | `Repo` |
+| PATCH  | `/api/v1/repos/{id}` | `{color?, description?, treat_as_public?, require_spec_approval?, require_design_approval?}` | `Repo` |
 | *      | `/api/v1/connections/...` | | Provider connections, admin only: see [connections.md](connections.md#api-admins-only-agents-get-403) |
 | GET    | `/api/v1/tokens` | | `Token[]` |
 | POST   | `/api/v1/tokens` | `{name, is_delegate?}` | `Token & {secret}` (the secret is shown once). `is_delegate` lets the token file autonomous tickets. |
@@ -173,7 +173,6 @@ type Repo = {
   // Checkpoints. Only people change them, with PATCH /repos/{id}; repo sync never does.
   require_spec_approval: boolean;    // default true
   require_design_approval: boolean;  // default false
-  allow_autonomous: boolean;         // default false; a delegate may file autonomous tickets here
 };
 
 type Lease = { holder: string; expires_at: string };
