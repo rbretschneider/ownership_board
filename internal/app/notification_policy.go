@@ -34,6 +34,7 @@ func NewNotificationPolicy(links Links, rules ...NotificationRule) NotificationP
 // screen, and no notification offers an action beyond opening the ticket.
 func DefaultNotificationRules() []NotificationRule {
 	return []NotificationRule{
+		ownerRule{matches: isAutonomousFiled, what: "filed as autonomous", message: "An agreed ticket was filed to run to a pull request without stopping.", priority: PriorityDefault, tag: "zap"},
 		ownerRule{matches: isType(domain.TimelineQuestions), what: "needs answers", message: "The agent has questions before it can continue.", priority: PriorityHigh, tag: "question"},
 		ownerRule{matches: isStageEntry(domain.StageSpecReview), what: "spec to approve", message: "A spec is ready for your approval.", priority: PriorityHigh, tag: "memo"},
 		ownerRule{matches: isStageEntry(domain.StageDesignReview), what: "design to approve", message: "A design is ready for your approval.", priority: PriorityHigh, tag: "triangular_ruler"},
@@ -78,6 +79,12 @@ func (r ownerRule) Notification(event Event, links Links) (Notification, bool) {
 
 func isType(kind domain.TimelineType) func(Event) bool {
 	return func(event Event) bool { return event.Type == kind }
+}
+
+// isAutonomousFiled matches a delegate agent filing an autonomous ticket, so the
+// owner hears about every one, including any filed with a leaked token.
+func isAutonomousFiled(event Event) bool {
+	return event.Type == domain.TimelineCreated && event.IsAutonomous
 }
 
 func isStageEntry(stage domain.Stage) func(Event) bool {

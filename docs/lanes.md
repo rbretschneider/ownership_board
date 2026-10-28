@@ -69,6 +69,14 @@ back to `refine` (spec) or `design` (design) and the comment is in the next
 brief. Approvals are recorded as binding decisions ("Spec approved",
 "Design approved") so the decision log shows when the owner signed off.
 
+**Autonomous tickets** have no checkpoints at all. A delegate agent token
+files one with a spec the owner agreed in a chat; it starts at `ready` with
+that spec approved, and the board refuses questions on it. A repo takes them
+only when a person turned on its **Allow autonomous** setting (off by
+default; repo sync never writes it). Only a person turns the flag on or off,
+and only in `ready`, `design` or `build`; an agent cannot change an
+autonomous ticket's repo. See [agents.md](agents.md#autonomous-tickets).
+
 ## The design document
 
 Tickets gain a `design` field (markdown, same limits as the spec), written by

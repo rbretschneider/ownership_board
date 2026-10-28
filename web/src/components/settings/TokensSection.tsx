@@ -17,6 +17,7 @@ export function TokensSection() {
   const [tokens, setTokens] = useState<Token[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [isDelegate, setDelegate] = useState(false);
   const [isCreating, setCreating] = useState(false);
   const [created, setCreated] = useState<CreatedToken | null>(null);
   const [revoking, setRevoking] = useState<Token | null>(null);
@@ -41,9 +42,10 @@ export function TokensSection() {
     }
     setCreating(true);
     try {
-      const token = await api.createToken(name.trim());
+      const token = await api.createToken(name.trim(), isDelegate);
       setCreated(token);
       setName("");
+      setDelegate(false);
       setTokens((current) => [...(current ?? []), token]);
     } catch (cause) {
       toast.error(`Couldn't create the token: ${cause instanceof Error ? cause.message : String(cause)}`);
@@ -72,7 +74,10 @@ export function TokensSection() {
             <li key={token.id} className="token-row">
               <KeyRound size={16} aria-hidden="true" />
               <div className="token-row__text">
-                <span className="token-row__name">{token.name}</span>
+                <span className="token-row__name">
+                  {token.name}
+                  {token.is_delegate && <span className="token-row__badge">delegate</span>}
+                </span>
                 <span className="muted small">
                   <code>{token.prefix}…</code> · {token.last_used_at === null ? "never used" : `used ${relativeTime(token.last_used_at)}`}
                 </span>
@@ -94,6 +99,24 @@ export function TokensSection() {
           Create
         </button>
       </form>
+      <label className="switch" htmlFor="token-delegate">
+        <input
+          id="token-delegate"
+          type="checkbox"
+          role="switch"
+          className="switch__input"
+          checked={isDelegate}
+          onChange={(e) => setDelegate(e.target.checked)}
+        />
+        <span className="switch__track" aria-hidden="true" />
+        <span className="switch__label">Delegate: may file autonomous tickets</span>
+      </label>
+      {isDelegate && (
+        <p className="muted small">
+          An autonomous ticket skips every checkpoint and question and goes straight to a pull request. Give this
+          token only to the chat where you agree specs (for example desktop Claude), never to the runner.
+        </p>
+      )}
       {revoking !== null && (
         <ConfirmDialog
           title={`Revoke ${revoking.name}?`}

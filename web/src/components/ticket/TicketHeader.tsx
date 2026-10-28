@@ -11,6 +11,9 @@ import { StageChip } from "../common/StageChip";
 import { RepoCombobox } from "../repos/RepoCombobox";
 import type { RunMutation } from "./TicketSheet";
 
+/** Stages where a person may turn a ticket autonomous (domain Stage.MayTurnAutonomous). */
+const AUTONOMOUS_STAGES: readonly string[] = ["ready", "design", "build"];
+
 /** Props for {@link TicketHeader}. */
 export interface TicketHeaderProps {
   ticket: TicketDetail;
@@ -34,6 +37,15 @@ export function TicketHeader({ ticket, lanes, stages, repos, run }: TicketHeader
     if (repoId !== ticket.repo_id) {
       void run(() => api.editTicket(ticket.id, { repo_id: repoId }), "Repository updated");
     }
+  };
+  // The board refuses to turn autonomy on before the spec is past review or
+  // while the ticket waits at a checkpoint.
+  const mayTurnAutonomous = AUTONOMOUS_STAGES.includes(ticket.stage);
+  const toggleAutonomous = (next: boolean) => {
+    void run(
+      () => api.editTicket(ticket.id, { is_autonomous: next }),
+      next ? "Autonomous: runs to a pull request" : "Autonomy off: checkpoints apply again",
+    );
   };
 
   return (
@@ -73,6 +85,27 @@ export function TicketHeader({ ticket, lanes, stages, repos, run }: TicketHeader
           <RepoCombobox repos={repos} value={repoValue} onChange={changeRepo} label="Repository" noneLabel={NO_REPO_LABEL} />
         </div>
       </div>
+      <label className="switch" htmlFor="ticket-autonomous">
+        <input
+          id="ticket-autonomous"
+          type="checkbox"
+          role="switch"
+          className="switch__input"
+          checked={ticket.is_autonomous}
+          disabled={!ticket.is_autonomous && !mayTurnAutonomous}
+          onChange={(e) => toggleAutonomous(e.target.checked)}
+          aria-describedby="ticket-autonomous-hint"
+        />
+        <span className="switch__track" aria-hidden="true" />
+        <span className="switch__label">Autonomous</span>
+      </label>
+      <p id="ticket-autonomous-hint" className="muted small">
+        {ticket.is_autonomous
+          ? "No checkpoints or questions: agents decide and you review the pull request."
+          : mayTurnAutonomous
+            ? "Agents stop at this repo's checkpoints and ask when unsure."
+            : "Agents stop at this repo's checkpoints and ask when unsure. Autonomy can be turned on once the spec is approved."}
+      </p>
     </div>
   );
 }

@@ -70,6 +70,7 @@ The MCP server offers these tools:
 | `add_comment` | Adds a comment. |
 | `heartbeat` / `release_ticket` | Keeps or gives up the lease. |
 | `create_ticket` | Files a follow-up story or bug, optionally already linked (`relation` + `related_ticket_id`). |
+| `create_autonomous_ticket` | Delegate tokens only. Files a spec the owner agreed in a chat as an autonomous ticket: it starts Ready, skips every checkpoint and runs to a pull request (see [Autonomous tickets](#autonomous-tickets)). Needs `spec` and `repo_id`. |
 | `add_work_link` | Records a PR or commit for a ticket you hold. |
 | `record_decision` | Records a significant choice; agents cannot replace the owner's binding decisions. |
 | `link_tickets` | Relates two tickets (`caused_by`, `follow_up_of`, `duplicate_of`, `relates_to`). |
@@ -189,6 +190,47 @@ choose a lane or stage: the board moves the ticket when the agent hands it on.
 A lease lasts 30 minutes unless renewed with a heartbeat. Every hand-off ends
 the lease. If an agent dies, the lease expires and the ticket is claimable
 again. Leases belong to the token name, so run one agent token per loop.
+
+## Autonomous tickets
+
+For work you have already talked through with an agent in a chat, an
+autonomous ticket skips the board's stops: it runs from Ready to a pull
+request, and the PR is your only review.
+
+1. **A delegate token for the chat.** Settings > Agent tokens, turn on
+   **Delegate**, create the token, and use it for the chat agent's
+   `ownership` MCP server (for example desktop Claude Code). Only a person can
+   create one, and the flag never changes afterwards. Never give a delegate
+   token to an unattended runner: it would be approving its own work.
+   Then turn on **Allow autonomous** for each repo that may take them
+   (Settings, the repo's checkpoint switches). It is off by default, and the
+   board refuses autonomous tickets for any other repo.
+2. **File it from the chat.** Copy `agent/claude/board-task.md` to
+   `~/.claude/commands/`. When you and the agent agree on something, run
+   `/board-task`. The agent writes the spec in the refinement format (with a
+   `Build tier` line), shows it, and calls `create_autonomous_ticket` only
+   after you say yes to that text.
+3. **What the board does.** The ticket starts in Todo, stage `ready`, with the
+   spec approved as revision 1 and a binding decision "Agreed the spec ... in a
+   chat". Both checkpoints are off for it, whatever its repo says. The board
+   refuses `ask_questions` on it, and every brief tells the agent to decide,
+   record the choice with `record_decision`, and carry on. `mark_blocked` is
+   the only way it stops before Review. You are notified ("filed as
+   autonomous") every time one is filed, so a ticket from a leaked token does
+   not go unseen, and at most 10 autonomous tickets can be open before Review.
+4. **What the loop does.** `board-loop` adds a GPT review of the design
+   (`gpt-review --design`) and runs the GPT code review on every tier. The PR
+   body lists every choice made in your place and every review finding not
+   fixed.
+5. **Taking it back.** The ticket sheet's **Autonomous** switch is yours
+   alone. Turn it off and the repo's checkpoints apply from the next hand-off;
+   agents can neither change the flag nor move an autonomous ticket to
+   another repo. You can also turn it on for an ordinary ticket, but only in
+   stage ready, design or build, so a spec or design you have not seen never
+   slips through. Each switch is logged as a binding decision.
+
+Branch protection on the default branch is still the guard against an
+unreviewed merge: an autonomous ticket ends at an open pull request.
 
 ## Plain HTTP
 

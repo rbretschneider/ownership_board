@@ -74,6 +74,13 @@ func (s Stage) IsAgentStage() bool {
 	return s == StageRefine || s == StageReady || s == StageDesign || s == StageBuild
 }
 
+// MayTurnAutonomous reports whether a person may make a ticket in this stage
+// autonomous: its spec is past review and it is not parked at a checkpoint,
+// so turning the flag on never lets an unseen spec or design through.
+func (s Stage) MayTurnAutonomous() bool {
+	return s == StageReady || s == StageDesign || s == StageBuild
+}
+
 func stageInfo(s Stage) (StageInfo, bool) {
 	for _, info := range stageCatalog {
 		if info.ID == s {

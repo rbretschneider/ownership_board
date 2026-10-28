@@ -78,7 +78,7 @@ export interface BoardApi {
   connectBitbucket(input: BitbucketConnectionInput): Promise<Connection>;
   disconnect(provider: ConnectionProvider): Promise<void>;
   tokens(): Promise<Token[]>;
-  createToken(name: string): Promise<CreatedToken>;
+  createToken(name: string, isDelegate: boolean): Promise<CreatedToken>;
   revokeToken(id: number): Promise<void>;
 }
 
@@ -121,7 +121,7 @@ export function createBoardApi(http: HttpClient): BoardApi {
     connectBitbucket: (input) => http.request("PUT", "/connections/bitbucket", input),
     disconnect: (provider) => http.request("DELETE", `/connections/${provider}`),
     tokens: () => http.request("GET", "/tokens"),
-    createToken: (name) => http.request("POST", "/tokens", { name }),
+    createToken: (name, isDelegate) => http.request("POST", "/tokens", { name, is_delegate: isDelegate }),
     revokeToken: (id) => http.request("DELETE", `/tokens/${id}`),
   };
 }

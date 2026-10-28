@@ -131,8 +131,8 @@ func (s *AuthStore) RevokeUserRefreshTokens(ctx context.Context, userID int64, n
 // CreateAPIToken implements auth.Store.
 func (s *AuthStore) CreateAPIToken(ctx context.Context, token *auth.APIToken) error {
 	result, err := s.db.db.ExecContext(ctx,
-		`INSERT INTO api_tokens (name, prefix, token_hash, created_by, created_at) VALUES (?, ?, ?, ?, ?)`,
-		token.Name, token.Prefix, token.Hash, token.CreatedBy, formatTime(token.CreatedAt))
+		`INSERT INTO api_tokens (name, prefix, token_hash, created_by, created_at, is_delegate) VALUES (?, ?, ?, ?, ?, ?)`,
+		token.Name, token.Prefix, token.Hash, token.CreatedBy, formatTime(token.CreatedAt), token.IsDelegate)
 	if err != nil {
 		return conflictOr(err, "a token named %q already exists; agents are told apart by token name", token.Name)
 	}
@@ -183,7 +183,7 @@ func (s *AuthStore) TouchAPIToken(ctx context.Context, id int64, now time.Time) 
 	return err
 }
 
-const apiTokenColumns = `id, name, prefix, token_hash, created_by, created_at, last_used_at, revoked_at`
+const apiTokenColumns = `id, name, prefix, token_hash, created_by, created_at, last_used_at, revoked_at, is_delegate`
 
 func insertRefreshToken(ctx context.Context, q querier, token *auth.RefreshToken) error {
 	result, err := q.ExecContext(ctx,
@@ -213,7 +213,7 @@ func scanAPIToken(row scanner) (auth.APIToken, error) {
 	var token auth.APIToken
 	var created string
 	var lastUsed, revoked sql.NullString
-	err := row.Scan(&token.ID, &token.Name, &token.Prefix, &token.Hash, &token.CreatedBy, &created, &lastUsed, &revoked)
+	err := row.Scan(&token.ID, &token.Name, &token.Prefix, &token.Hash, &token.CreatedBy, &created, &lastUsed, &revoked, &token.IsDelegate)
 	if err != nil {
 		return auth.APIToken{}, err
 	}

@@ -50,3 +50,14 @@ func TestOwnActionsAndQuietEventsDoNotNotify(t *testing.T) {
 		})
 	}
 }
+
+func TestFilingAnAutonomousTicketNotifiesTheOwner(t *testing.T) {
+	filed := app.Event{Type: domain.TimelineCreated, TicketID: 4, Actor: delegate, IsAutonomous: true, Title: "agent words"}
+	notification, isWanted := policy().Evaluate(filed)
+	if !isWanted || notification.Title != "#4 filed as autonomous" {
+		t.Fatalf("got %+v wanted=%v", notification, isWanted)
+	}
+	if _, isWanted := policy().Evaluate(app.Event{Type: domain.TimelineCreated, Actor: agent}); isWanted {
+		t.Fatal("an ordinary agent-filed ticket notified")
+	}
+}

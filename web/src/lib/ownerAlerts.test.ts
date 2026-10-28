@@ -5,7 +5,7 @@ import { alertText, newlyWaiting, titleFor, waitingIds } from "./ownerAlerts";
 function ticket(id: number, overrides: Partial<TicketSummary> = {}): TicketSummary {
   return {
     id, repo_id: null, kind: "story", title: "Private title", lane: "todo", stage: "refine",
-    owner: "agent", needs_owner: false, blocked_reason: "", spec_revision: 0, design_revision: 0,
+    owner: "agent", needs_owner: false, blocked_reason: "", is_autonomous: false, spec_revision: 0, design_revision: 0,
     pr_url: "", branch: "", open_questions: 0, lease: null,
     created_at: "", updated_at: "", lane_changed_at: "", ...overrides,
   };

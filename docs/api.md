@@ -97,10 +97,10 @@ questions and no block. Every other `lane` from an agent answers `403`.
 | POST   | `/api/v1/tickets/{id}/unblock` | `{comment?}` | `TicketDetail` |
 | DELETE | `/api/v1/tickets/{id}` | | `204` |
 | POST   | `/api/v1/repos` | `{full_name, url?, description?, color?}` | `Repo` (added by hand) |
-| PATCH  | `/api/v1/repos/{id}` | `{color?, description?, treat_as_public?, require_spec_approval?, require_design_approval?}` | `Repo` |
+| PATCH  | `/api/v1/repos/{id}` | `{color?, description?, treat_as_public?, require_spec_approval?, require_design_approval?, allow_autonomous?}` | `Repo` |
 | *      | `/api/v1/connections/...` | | Provider connections, admin only: see [connections.md](connections.md#api-admins-only-agents-get-403) |
 | GET    | `/api/v1/tokens` | | `Token[]` |
-| POST   | `/api/v1/tokens` | `{name}` | `Token & {secret}` (the secret is shown once) |
+| POST   | `/api/v1/tokens` | `{name, is_delegate?}` | `Token & {secret}` (the secret is shown once). `is_delegate` lets the token file autonomous tickets. |
 | DELETE | `/api/v1/tokens/{id}` | | `204` |
 
 `checkpoint` is `"spec"` or `"design"`. `revision` is the `spec_revision` or
@@ -173,6 +173,7 @@ type Repo = {
   // Checkpoints. Only people change them, with PATCH /repos/{id}; repo sync never does.
   require_spec_approval: boolean;    // default true
   require_design_approval: boolean;  // default false
+  allow_autonomous: boolean;         // default false; a delegate may file autonomous tickets here
 };
 
 type Lease = { holder: string; expires_at: string };
@@ -184,6 +185,7 @@ type TicketSummary = {
   owner: Owner;              // "human" whenever needs_owner
   needs_owner: boolean;      // open questions, blocked, or an owner-review stage
   blocked_reason: string;    // "" when not blocked
+  is_autonomous: boolean;    // no checkpoints or questions; runs to a pull request
   spec_revision: number; design_revision: number;
   pr_url: string; branch: string;
   open_questions: number;
@@ -194,7 +196,8 @@ type TicketSummary = {
 type TicketDetail = TicketSummary & {
   body: string; spec: string; design: string; created_by: string;
   approved_spec_revision: number; approved_design_revision: number;
-  // Effective checkpoints for this ticket. A ticket with no repo has both on.
+  // Effective checkpoints for this ticket. A ticket with no repo has both on;
+  // an autonomous ticket has both off.
   gates: { spec: boolean; design: boolean };
   questions: Question[];
   timeline: TimelineEntry[];
@@ -208,6 +211,7 @@ type CreateTicket = {
 type EditTicket = Partial<{
   repo_id: number | null; kind: Kind; title: string; body: string;
   pr_url: string; branch: string;
+  is_autonomous: boolean;   // people only; agents are refused
 }>;
 
 type AskQuestions = {

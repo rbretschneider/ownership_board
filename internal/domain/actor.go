@@ -15,6 +15,9 @@ type Actor struct {
 	Kind ActorKind `json:"kind"`
 	ID   int64     `json:"id"`
 	Name string    `json:"name"`
+	// IsDelegate marks an agent whose token the owner allowed to file
+	// autonomous tickets: specs the owner agreed with it in a chat.
+	IsDelegate bool `json:"delegate,omitempty"`
 }
 
 // SystemActor is used for changes the board makes on its own, such as moving a
@@ -29,4 +32,10 @@ func (a Actor) IsHuman() bool {
 // IsAgent reports whether the actor authenticated with an agent token.
 func (a Actor) IsAgent() bool {
 	return a.Kind == ActorAgent
+}
+
+// MayFileAutonomous reports whether the actor may file a ticket that runs to
+// a pull request without stopping for the owner.
+func (a Actor) MayFileAutonomous() bool {
+	return a.IsAgent() && a.IsDelegate
 }

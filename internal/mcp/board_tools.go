@@ -26,7 +26,7 @@ func BoardTools(services Services) []Tool {
 	return []Tool{
 		claimWork{services}, getTicket{services}, listRepos{services}, askQuestions{services},
 		saveSpec{services}, saveDesign{services}, markBlocked{services}, moveTicket{services}, addComment{services}, updateTicket{services},
-		heartbeat{services}, releaseTicket{services}, createTicket{services},
+		heartbeat{services}, releaseTicket{services}, createTicket{services}, createAutonomousTicket{services},
 		addWorkLink{services}, recordDecision{services}, linkTickets{services}, findTicketsForWork{services},
 		listTickets{services}, reportPRState{services},
 	}
@@ -409,6 +409,42 @@ func (t createTicket) Call(ctx context.Context, actor domain.Actor, raw json.Raw
 	}
 	detail, err := t.s.Board.Create(ctx, actor, draft)
 	return outcome(detail, "created.", err)
+}
+
+type createAutonomousTicket struct{ s Services }
+
+func (createAutonomousTicket) Definition() Definition {
+	return Definition{
+		Name: "create_autonomous_ticket",
+		Description: "File a ticket the owner already agreed with you in this chat, to run from Ready to a pull request with no checkpoints and no questions. " +
+			"Only a delegate token may call this, and only after the owner said yes to this exact spec and repo. Agents working it decide instead of asking.",
+		InputSchema: object(map[string]any{
+			"kind":    map[string]any{"type": "string", "enum": []string{string(domain.KindStory), string(domain.KindBug)}},
+			"title":   prop("string", "Short title."),
+			"body":    prop("string", "The request in a few sentences, as the owner put it."),
+			"spec":    prop("string", "The agreed spec in markdown: problem, scope, out of scope, numbered acceptance criteria, approach and risk, and a line `Build tier: small | normal | large`."),
+			"repo_id": prop("integer", "The agreed repo (see list_repos)."),
+		}, "kind", "title", "spec", "repo_id"),
+	}
+}
+
+func (t createAutonomousTicket) Call(ctx context.Context, actor domain.Actor, raw json.RawMessage) (string, error) {
+	var args struct {
+		Kind   string `json:"kind"`
+		Title  string `json:"title"`
+		Body   string `json:"body"`
+		Spec   string `json:"spec"`
+		RepoID int64  `json:"repo_id"`
+	}
+	if err := decodeArguments(raw, &args); err != nil {
+		return "", err
+	}
+	draft := domain.AutonomousDraft{
+		TicketDraft: domain.TicketDraft{RepoID: args.RepoID, Kind: args.Kind, Title: args.Title, Body: args.Body},
+		Spec:        args.Spec,
+	}
+	detail, err := t.s.Board.CreateAutonomous(ctx, actor, draft)
+	return outcome(detail, "filed as autonomous; the runner takes it from here to a pull request.", err)
 }
 
 // outcome is the one-line confirmation every mutating tool returns.

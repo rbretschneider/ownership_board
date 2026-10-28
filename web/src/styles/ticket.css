@@ -889,3 +889,13 @@
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 0.85rem;
 }
+
+.token-row__badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--agent-soft);
+  color: var(--agent);
+  font-size: 0.7rem;
+  font-weight: 600;
+}

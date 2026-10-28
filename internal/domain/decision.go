@@ -17,6 +17,9 @@ const (
 	DecisionFromHuman  DecisionSource = "human"
 	// DecisionFromApproval is the owner approving a spec or design revision.
 	DecisionFromApproval DecisionSource = "approval"
+	// DecisionFromChat is the owner agreeing a spec in a chat with a delegate
+	// agent, which filed it as an autonomous ticket.
+	DecisionFromChat DecisionSource = "chat"
 )
 
 // DecisionWeight says how much a decision binds later work.
@@ -117,6 +120,29 @@ func DecisionFromCheckpoint(ticketID int64, checkpoint Checkpoint, revision int,
 	summary := fmt.Sprintf("Approved the %s (revision %d)", checkpoint, revision)
 	return Decision{
 		TicketID: ticketID, Summary: summary, Source: DecisionFromApproval, Weight: WeightBinding,
+		DecidedBy: actor, At: now,
+	}
+}
+
+// DecisionFromAgreedSpec records that the owner agreed an autonomous ticket's
+// spec in a chat. It binds like an approval at the spec checkpoint.
+func DecisionFromAgreedSpec(ticketID int64, revision int, actor Actor, now time.Time) Decision {
+	summary := fmt.Sprintf("Agreed the spec (revision %d) in a chat; run to a pull request without stopping", revision)
+	return Decision{
+		TicketID: ticketID, Summary: summary, Source: DecisionFromChat, Weight: WeightBinding,
+		DecidedBy: actor, At: now,
+	}
+}
+
+// DecisionFromAutonomySwitch records a person turning a ticket's autonomous
+// mode on or off, so the decision log says who let it run without stopping.
+func DecisionFromAutonomySwitch(ticketID int64, isOn bool, actor Actor, now time.Time) Decision {
+	summary := "Turned autonomous mode off: the repo's checkpoints apply again"
+	if isOn {
+		summary = "Turned autonomous mode on: run to a pull request without stopping"
+	}
+	return Decision{
+		TicketID: ticketID, Summary: summary, Source: DecisionFromHuman, Weight: WeightBinding,
 		DecidedBy: actor, At: now,
 	}
 }

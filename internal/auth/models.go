@@ -45,11 +45,14 @@ type APIToken struct {
 	CreatedAt  time.Time
 	LastUsedAt *time.Time
 	RevokedAt  *time.Time
+	// IsDelegate lets the token file autonomous tickets. Only a person sets
+	// it, when creating the token.
+	IsDelegate bool
 }
 
 // Actor returns the token as the domain sees it: an agent named after it.
 func (t APIToken) Actor() domain.Actor {
-	return domain.Actor{Kind: domain.ActorAgent, ID: t.ID, Name: t.Name}
+	return domain.Actor{Kind: domain.ActorAgent, ID: t.ID, Name: t.Name, IsDelegate: t.IsDelegate}
 }
 
 // Identity is who an SSO provider says someone is.
