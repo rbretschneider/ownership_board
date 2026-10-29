@@ -202,9 +202,7 @@ request, and the PR is your only review.
    `ownership` MCP server (for example desktop Claude Code). Only a person can
    create one, and the flag never changes afterwards. Never give a delegate
    token to an unattended runner: it would be approving its own work.
-   Then turn on **Allow autonomous** for each repo that may take them
-   (Settings, the repo's checkpoint switches). It is off by default, and the
-   board refuses autonomous tickets for any other repo.
+   Any repo on the board can take autonomous tickets.
 2. **File it from the chat.** Copy `agent/claude/board-task.md` to
    `~/.claude/commands/`. When you and the agent agree on something, run
    `/board-task`. The agent writes the spec in the refinement format (with a
@@ -229,8 +227,9 @@ request, and the PR is your only review.
    stage ready, design or build, so a spec or design you have not seen never
    slips through. Each switch is logged as a binding decision.
 
-Branch protection on the default branch is still the guard against an
-unreviewed merge: an autonomous ticket ends at an open pull request.
+An autonomous ticket ends at an open pull request: the loop never merges.
+That is an instruction, not enforcement; branch protection on the default
+branch, where you have it, makes it one.
 
 ## Plain HTTP
 

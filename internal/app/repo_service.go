@@ -83,12 +83,11 @@ func (s *RepoService) Restyle(ctx context.Context, actor domain.Actor, id int64,
 		if err := repos.CodeRepos().Update(ctx, repo); err != nil || !style.ChangesGates() {
 			return err
 		}
-		return repos.CodeRepos().SetGates(ctx, repo.ID, domain.GatesFor(&repo), repo.AllowAutonomous)
+		return repos.CodeRepos().SetGates(ctx, repo.ID, domain.GatesFor(&repo))
 	})
 	if err == nil && style.ChangesGates() {
 		s.logger.Info("repo checkpoints changed", "repo", repo.FullName, "by", actor.Name,
-			"require_spec_approval", repo.RequireSpecApproval, "require_design_approval", repo.RequireDesignApproval,
-			"allow_autonomous", repo.AllowAutonomous)
+			"require_spec_approval", repo.RequireSpecApproval, "require_design_approval", repo.RequireDesignApproval)
 	}
 	return repo, err
 }

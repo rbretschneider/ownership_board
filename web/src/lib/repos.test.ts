@@ -9,7 +9,7 @@ function repo(id: number, fullName: string, overrides: Partial<Repo> = {}): Repo
     url: "", description: "", color: "", default_branch: "main",
     is_private: false, is_archived: false, synced_at: null, missing_since: null,
     treat_as_public: false, visibility: "public",
-    require_spec_approval: true, require_design_approval: false, allow_autonomous: false, ...overrides,
+    require_spec_approval: true, require_design_approval: false, ...overrides,
   };
 }
 

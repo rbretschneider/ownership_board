@@ -31,23 +31,22 @@ type oidcDTO struct {
 }
 
 type repoDTO struct {
-	ID              int64             `json:"id"`
-	Provider        domain.Provider   `json:"provider"`
-	FullName        string            `json:"full_name"`
-	Name            string            `json:"name"`
-	URL             string            `json:"url"`
-	Description     string            `json:"description"`
-	Color           string            `json:"color"`
-	DefaultBranch   string            `json:"default_branch"`
-	IsPrivate       bool              `json:"is_private"`
-	IsArchived      bool              `json:"is_archived"`
-	SyncedAt        *time.Time        `json:"synced_at"`
-	MissingSince    *time.Time        `json:"missing_since"`
-	TreatAsPublic   bool              `json:"treat_as_public"`
-	RequireSpec     bool              `json:"require_spec_approval"`
-	RequireDesign   bool              `json:"require_design_approval"`
-	AllowAutonomous bool              `json:"allow_autonomous"`
-	Visibility      domain.Visibility `json:"visibility"`
+	ID            int64             `json:"id"`
+	Provider      domain.Provider   `json:"provider"`
+	FullName      string            `json:"full_name"`
+	Name          string            `json:"name"`
+	URL           string            `json:"url"`
+	Description   string            `json:"description"`
+	Color         string            `json:"color"`
+	DefaultBranch string            `json:"default_branch"`
+	IsPrivate     bool              `json:"is_private"`
+	IsArchived    bool              `json:"is_archived"`
+	SyncedAt      *time.Time        `json:"synced_at"`
+	MissingSince  *time.Time        `json:"missing_since"`
+	TreatAsPublic bool              `json:"treat_as_public"`
+	RequireSpec   bool              `json:"require_spec_approval"`
+	RequireDesign bool              `json:"require_design_approval"`
+	Visibility    domain.Visibility `json:"visibility"`
 }
 
 type ticketSummaryDTO struct {
@@ -160,7 +159,7 @@ func toRepo(repo domain.Repo) repoDTO {
 		Description: repo.Description, Color: repo.Color, DefaultBranch: repo.DefaultBranch,
 		IsPrivate: repo.IsPrivate, IsArchived: repo.IsArchived, SyncedAt: repo.SyncedAt, MissingSince: repo.MissingSince,
 		TreatAsPublic: repo.TreatAsPublic, Visibility: repo.Visibility(time.Now()),
-		RequireSpec: repo.RequireSpecApproval, RequireDesign: repo.RequireDesignApproval, AllowAutonomous: repo.AllowAutonomous,
+		RequireSpec: repo.RequireSpecApproval, RequireDesign: repo.RequireDesignApproval,
 	}
 }
 

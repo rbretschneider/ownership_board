@@ -111,7 +111,7 @@ func (s *BoardService) CreateAutonomous(ctx context.Context, actor domain.Actor,
 	var detail TicketDetail
 	var events []Event
 	err = s.store.Write(ctx, func(repos Repos) error {
-		if err := requireAutonomousRoom(ctx, repos, ticket.RepoID); err != nil {
+		if err := requireAutonomousRoom(ctx, repos); err != nil {
 			return err
 		}
 		if ticket.Rank, err = rankFor(ctx, repos.Tickets(), ticket.Lane, 0, atBottom); err != nil {
@@ -145,16 +145,9 @@ func (s *BoardService) CreateAutonomous(ctx context.Context, actor domain.Actor,
 // delegate token cannot flood the runner.
 const maxOpenAutonomous = 10
 
-// requireAutonomousRoom lets an autonomous ticket in only on a repo where a
-// person allowed them, and only while fewer than maxOpenAutonomous are open.
-func requireAutonomousRoom(ctx context.Context, repos Repos, repoID int64) error {
-	repo, err := repos.CodeRepos().Get(ctx, repoID)
-	if err != nil {
-		return err
-	}
-	if !repo.AllowAutonomous {
-		return domain.Forbiddenf("repo %s does not take autonomous tickets; a person turns on \"Allow autonomous\" for it in Settings", repo.FullName)
-	}
+// requireAutonomousRoom lets an autonomous ticket in only while fewer than
+// maxOpenAutonomous are open.
+func requireAutonomousRoom(ctx context.Context, repos Repos) error {
 	tickets, err := repos.Tickets().List(ctx, TicketFilter{})
 	if err != nil {
 		return err
