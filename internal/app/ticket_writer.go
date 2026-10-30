@@ -44,7 +44,10 @@ func (w ticketWriter) change(ctx context.Context, actor domain.Actor, id int64, 
 
 // apply runs fn on an already loaded ticket within the caller's transaction.
 // The caller publishes the returned events once the transaction commits.
+// Every way into Merged passes through here, so this is where tickets that
+// depended on this one learn they are free.
 func (w ticketWriter) apply(ctx context.Context, repos Repos, ticket *domain.Ticket, fn ticketChange) (TicketDetail, []Event, error) {
+	before := ticket.Stage
 	entries, err := fn(ctx, repos, ticket)
 	if err != nil {
 		return TicketDetail{}, nil, err
@@ -55,6 +58,13 @@ func (w ticketWriter) apply(ctx context.Context, repos Repos, ticket *domain.Tic
 	events, err := record(ctx, repos, *ticket, entries)
 	if err != nil {
 		return TicketDetail{}, nil, err
+	}
+	if before != domain.StageDone && ticket.Stage == domain.StageDone {
+		released, err := releaseDependants(ctx, repos, *ticket, mergedBy(entries), w.clock.Now())
+		if err != nil {
+			return TicketDetail{}, nil, err
+		}
+		events = append(events, released...)
 	}
 	detail, err := loadDetail(ctx, repos, *ticket)
 	return detail, events, err
@@ -82,8 +92,12 @@ func loadDetail(ctx context.Context, repos Repos, ticket domain.Ticket) (TicketD
 	if err != nil {
 		return TicketDetail{}, err
 	}
+	waitingOn, err := repos.Relations().WaitingOn(ctx, ticket.ID)
+	if err != nil {
+		return TicketDetail{}, err
+	}
 	detail := TicketDetail{
-		TicketSummary: TicketSummary{Ticket: ticket, OpenQuestions: countOpen(questions)},
+		TicketSummary: TicketSummary{Ticket: ticket, OpenQuestions: countOpen(questions), WaitingOn: waitingOn},
 		Questions:     questions, Timeline: timeline,
 	}
 	if detail.Repo, err = repoOf(ctx, repos, ticket.RepoID); err != nil {

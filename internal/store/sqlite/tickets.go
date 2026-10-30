@@ -109,6 +109,8 @@ func (r ticketRepo) NextClaimable(ctx context.Context, stage domain.Stage, filte
 		`SELECT `+ticketColumns+` FROM tickets
 		 WHERE stage = ? AND blocked_reason = '' AND (lease_holder = '' OR lease_expires_at <= ?)
 		   AND NOT EXISTS (SELECT 1 FROM questions q WHERE q.ticket_id = tickets.id AND q.answered_at IS NULL)
+		   AND NOT EXISTS (SELECT 1 FROM relations r JOIN tickets dep ON dep.id = r.to_id
+		                   WHERE r.from_id = tickets.id AND r.kind = 'depends_on' AND dep.stage <> 'done')
 		   AND `+clause+`
 		 ORDER BY rank, id LIMIT 1`, args...)
 	ticket, err := scanTicket(row)
@@ -116,6 +118,17 @@ func (r ticketRepo) NextClaimable(ctx context.Context, stage domain.Stage, filte
 		return domain.Ticket{}, false, nil
 	}
 	return ticket, err == nil, err
+}
+
+func (r ticketRepo) CountInFlightAutonomous(ctx context.Context) (int, error) {
+	return countRows(ctx, r.q, `SELECT COUNT(*) FROM tickets WHERE is_autonomous = 1 AND stage IN ('design', 'build')`)
+}
+
+// CountAutonomousFiledSince compares stored times as text, which is correct
+// because they are fixed-width UTC.
+func (r ticketRepo) CountAutonomousFiledSince(ctx context.Context, createdBy string, since time.Time) (int, error) {
+	return countRows(ctx, r.q, `SELECT COUNT(*) FROM tickets WHERE is_autonomous = 1 AND created_by = ? AND created_at > ?`,
+		createdBy, formatTime(since))
 }
 
 func ticketValues(t domain.Ticket) []any {
@@ -130,9 +143,17 @@ func ticketValues(t domain.Ticket) []any {
 	}
 }
 
-// filterClause turns a filter into a WHERE fragment. Only "?" placeholders are
-// generated; every value travels as a bound argument.
+// filterClause turns a filter into a WHERE fragment. Only "?" placeholders and
+// constant fragments are generated; every value travels as a bound argument.
 func filterClause(filter app.TicketFilter) (string, []any) {
+	clause, args := scopeClause(filter)
+	if filter.ExcludeAutonomous {
+		clause += " AND is_autonomous = 0"
+	}
+	return clause, args
+}
+
+func scopeClause(filter app.TicketFilter) (string, []any) {
 	if !filter.IsScoped {
 		return "1 = 1", nil
 	}

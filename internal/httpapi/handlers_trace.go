@@ -15,7 +15,8 @@ func (s *server) traceRoutes(rt *router) {
 	rt.anyone("POST /api/v1/tickets/{id}/decisions", s.recordDecision)
 	rt.human("DELETE /api/v1/tickets/{id}/decisions/{decision}", s.removeDecision)
 	rt.anyone("POST /api/v1/tickets/{id}/relations", s.linkTickets)
-	rt.human("DELETE /api/v1/tickets/{id}/relations/{kind}/{other}", s.unlinkTickets)
+	// Agents may remove only a depends_on link they added; the service checks.
+	rt.anyone("DELETE /api/v1/tickets/{id}/relations/{kind}/{other}", s.unlinkTickets)
 }
 
 type actorRefFullDTO struct {

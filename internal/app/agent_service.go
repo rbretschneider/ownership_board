@@ -189,14 +189,40 @@ func (s *AgentService) tryClaim(ctx context.Context, actor domain.Actor, request
 	return work, isClaimed, nil
 }
 
+// nextClaimable runs inside the claim's write transaction, so the in-flight
+// count and the claim cannot race another claim.
 func (s *AgentService) nextClaimable(ctx context.Context, repos Repos, request claimRequest) (domain.Ticket, bool, error) {
 	for _, stage := range domain.ClaimOrder {
-		ticket, isFound, err := repos.Tickets().NextClaimable(ctx, stage, request.filterFor(stage), s.clock.Now())
+		filter := request.filterFor(stage)
+		if stage == domain.StageReady {
+			isFull, err := autonomousSlotsFull(ctx, repos)
+			if err != nil {
+				return domain.Ticket{}, false, err
+			}
+			filter.ExcludeAutonomous = isFull
+		}
+		ticket, isFound, err := repos.Tickets().NextClaimable(ctx, stage, filter, s.clock.Now())
 		if err != nil || isFound {
 			return ticket, isFound, err
 		}
 	}
 	return domain.Ticket{}, false, nil
+}
+
+// autonomousSlotsFull reports whether as many autonomous tickets as the
+// board allows are already in design or build. Only a claim from Ready puts
+// an autonomous ticket in flight, so only that claim is held back; one
+// already in flight can always be picked up again.
+func autonomousSlotsFull(ctx context.Context, repos Repos) (bool, error) {
+	settings, err := repos.Settings().Get(ctx)
+	if err != nil {
+		return false, err
+	}
+	inFlight, err := repos.Tickets().CountInFlightAutonomous(ctx)
+	if err != nil {
+		return false, err
+	}
+	return inFlight >= settings.AutonomousInFlightCap, nil
 }
 
 // claimChange moves the ticket to the stage its action works in, then leases

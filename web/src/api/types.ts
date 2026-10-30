@@ -210,6 +210,8 @@ export interface TicketSummary {
   pr_url: string;
   branch: string;
   open_questions: number;
+  /** Tickets this one depends on that are not merged yet; agents cannot claim it until this is empty. */
+  waiting_on: number[];
   lease: Lease | null;
   created_at: string;
   updated_at: string;
@@ -256,7 +258,8 @@ export type TimelineType =
   | "changes_requested"
   | "blocked"
   | "unblocked"
-  | "design";
+  | "design"
+  | "dependencies_met";
 
 /** Who performed a timeline event. */
 export type ActorKind = "human" | "agent" | "system";
@@ -337,7 +340,7 @@ export interface DecisionInput {
 }
 
 /** The stored kinds of ticket relation (always read from the "from" side). */
-export type RelationKind = "caused_by" | "follow_up_of" | "duplicate_of" | "relates_to";
+export type RelationKind = "caused_by" | "follow_up_of" | "duplicate_of" | "relates_to" | "depends_on";
 
 /** A relation as seen from one ticket. */
 export interface Relation {
@@ -387,6 +390,14 @@ export interface CreateTicket {
   kind: Kind;
   title: string;
   body: string;
+  /** Tickets in the same repo the new one waits for. */
+  depends_on?: number[];
+}
+
+/** Board-wide settings (GET and PATCH /settings; only people change them). */
+export interface BoardSettings {
+  /** How many autonomous tickets may be in design or build at once (1–10). */
+  autonomous_in_flight_cap: number;
 }
 
 /** Body of POST /tickets/{id}/approve. */

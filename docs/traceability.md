@@ -64,15 +64,46 @@ superseded_by_id, at}`
 
 ## Related tickets
 
-`Relation {from_id, to_id, kind: caused_by|follow_up_of|duplicate_of|relates_to, added_by, added_at}`
+`Relation {from_id, to_id, kind: caused_by|follow_up_of|duplicate_of|relates_to|depends_on, added_by, added_at}`
 
 - Directed, stored once, shown from both ends with the inverse label
   ("caused by #42" on one ticket, "caused #57" on the other).
 - No self-links; both tickets must exist; unique per (from, to, kind).
   At most 50 per ticket.
-- Agents and people may add relations. Only people may remove them.
+- Agents and people may add relations. Only people may remove them, except
+  that an agent may remove a `depends_on` link its own token added.
 - `create_ticket` from an agent may name a relation at creation, so a bug
   filed while fixing #42 starts as "follow-up of #42".
+
+### Dependencies
+
+`depends_on` ("depends on #B" / "needed by #A") keeps agents from claiming
+the `from` ticket until the `to` ticket is merged; see
+[agents.md](agents.md#dependencies). Its extra rules:
+
+- Same repo only: both tickets need a repo, and the same one. Changing or
+  clearing a ticket's repo is refused (409) while that would leave a
+  dependency across repos or on a ticket with no repo.
+- No cycles: a link that would close one is refused (409) with the path.
+- No stalled slots: an autonomous ticket in `design` or `build` cannot depend
+  on an autonomous ticket still in `todo` (409), since the in-flight cap would
+  keep that ticket from starting while the dependant holds its slot.
+  Every check runs in the write transaction, and write transactions are
+  serialised, so two opposite links added at once cannot both succeed.
+- At most 20 per ticket. `waiting_on` is computed when read, never stored.
+- New tickets list them in `depends_on` (`POST /api/v1/tickets`,
+  `create_ticket`, `create_autonomous_ticket`); the ticket and its links are
+  written together, so a refused id creates nothing. `create_ticket`'s
+  `relation` cannot be `depends_on`.
+- Adding one needs a person, the lease on the `from` ticket, or the agent
+  that filed it. Removing one needs a person or the agent that added it.
+- When a ticket reaches Merged, each ticket that now waits on nothing gets a
+  `dependencies_met` timeline entry, `{ticket_id, merged_by_kind}`, by the
+  actor that merged it. It sends no notification.
+- Migration `0008_depends_on` creates the `board_settings` table (seeded with
+  `autonomous_in_flight_cap` = 1) and a partial index on `depends_on` links.
+  Existing tickets and relations are not changed. Going down deletes every
+  `depends_on` link and the settings table, so take a backup first.
 
 ## The commit-trailer rule (agent instructions)
 
@@ -117,7 +148,7 @@ New sections, size-capped so the brief stays focused:
 | POST | `/api/v1/tickets/{id}/decisions` | `{summary, rationale?, alternatives?, supersedes_id?}` | anyone |
 | DELETE | `/api/v1/tickets/{id}/decisions/{decision_id}` | | people |
 | POST | `/api/v1/tickets/{id}/relations` | `{kind, ticket_id}` | anyone |
-| DELETE | `/api/v1/tickets/{id}/relations/{kind}/{other_id}` | | people |
+| DELETE | `/api/v1/tickets/{id}/relations/{kind}/{other_id}` | | people; an agent only for a `depends_on` link it added |
 
 `TicketDetail` gains `work_links`, `decisions`, `relations` (each relation
 carries the other ticket's id, title and lane, and a `direction` of
@@ -173,7 +204,8 @@ These override anything above that disagrees.
 - **Agents need the lease (SEC-06).** An agent may add decisions and work links
   only to a ticket it holds the lease on, and a relation only when it holds the
   lease on one end. `create_ticket` with a relation needs the lease on the
-  related ticket.
+  related ticket. A `depends_on` link follows its own rule (see Dependencies
+  above).
 - **URLs (SEC-07).** A work link URL must be on the same host as the ticket's
   repo URL (when the repo has one). URLs are normalised (lowercase host, no
   fragment, no trailing slash) before de-duplication. The UI shows the host

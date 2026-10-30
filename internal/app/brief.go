@@ -195,6 +195,7 @@ func (r *briefRenderer) facts(input BriefInput) {
 	visibility := visibilityOf(input.Repo, input.Now)
 	fmt.Fprintf(&r.b, "- Ticket id: %d\n- Kind: %s\n- Lane: %s (%s), stage %s (%s)\n", ticket.ID, ticket.Kind, ticket.Lane.Label(), ticket.Lane, ticket.Stage.Label(), ticket.Stage)
 	r.revisionFacts(ticket)
+	r.dependencyFacts(input.Detail.Related)
 	r.repoFact(input.Repo, visibility)
 	if input.Action != "" {
 		fmt.Fprintf(&r.b, "- Action: **%s**\n", input.Action)
@@ -212,6 +213,32 @@ func (r *briefRenderer) facts(input BriefInput) {
 	r.b.WriteString("\n")
 	if input.Repo != nil && input.Repo.Description != "" {
 		r.field("About the repo", input.Repo.Description, "")
+	}
+}
+
+// dependencyFacts list the tickets this one depends on, with whether each is
+// merged, and the tickets that wait for this one. Ids and states only.
+func (r *briefRenderer) dependencyFacts(related []RelatedTicket) {
+	var dependsOn, neededBy []string
+	for _, item := range related {
+		if item.Relation.Kind != domain.RelationDependsOn {
+			continue
+		}
+		if !item.IsOutgoing {
+			neededBy = append(neededBy, fmt.Sprintf("#%d", item.Other.ID))
+			continue
+		}
+		state := "waiting"
+		if item.Other.Lane == domain.LaneMerged {
+			state = "merged"
+		}
+		dependsOn = append(dependsOn, fmt.Sprintf("#%d (%s)", item.Other.ID, state))
+	}
+	if len(dependsOn) > 0 {
+		fmt.Fprintf(&r.b, "- Depends on: %s\n", strings.Join(dependsOn, ", "))
+	}
+	if len(neededBy) > 0 {
+		fmt.Fprintf(&r.b, "- Needed by: %s\n", strings.Join(neededBy, ", "))
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/rbretschneider/ownership_board/internal/domain"
 )
@@ -59,12 +60,18 @@ func (s *BoardService) Ticket(ctx context.Context, id int64) (TicketDetail, erro
 }
 
 // Create adds a ticket at the bottom of its lane, so a lane is first come,
-// first served until someone drags it into a different order.
+// first served until someone drags it into a different order. Any
+// dependencies are added in the same transaction: if one is refused, no
+// ticket is created.
 func (s *BoardService) Create(ctx context.Context, actor domain.Actor, draft domain.TicketDraft) (TicketDetail, error) {
 	if err := rejectHiddenFromAgent(actor, map[string]string{"title": draft.Title, "body": draft.Body}); err != nil {
 		return TicketDetail{}, err
 	}
 	ticket, err := domain.NewTicket(draft, actor, s.clock.Now())
+	if err != nil {
+		return TicketDetail{}, err
+	}
+	dependsOn, err := parseDependencies(ticket, draft.DependsOn)
 	if err != nil {
 		return TicketDetail{}, err
 	}
@@ -80,11 +87,8 @@ func (s *BoardService) Create(ctx context.Context, actor domain.Actor, draft dom
 		if err := repos.Tickets().Insert(ctx, &ticket); err != nil {
 			return err
 		}
-		entry := domain.NewEntry(ticket.ID, domain.TimelineCreated, actor, ticket.CreatedAt)
-		if events, err = record(ctx, repos, ticket, []domain.TimelineEntry{entry}); err != nil {
-			return err
-		}
-		detail, err = loadDetail(ctx, repos, ticket)
+		entries := []domain.TimelineEntry{domain.NewEntry(ticket.ID, domain.TimelineCreated, actor, ticket.CreatedAt)}
+		detail, events, err = s.recordCreated(ctx, repos, actor, ticket, entries, dependsOn)
 		return err
 	})
 	if err != nil {
@@ -96,7 +100,10 @@ func (s *BoardService) Create(ctx context.Context, actor domain.Actor, draft dom
 
 // CreateAutonomous files a ticket whose spec the owner agreed in a chat with a
 // delegate agent. It starts Ready with the spec approved, and the agreement
-// is logged as a binding decision, so every brief carries it.
+// is logged as a binding decision, so every brief carries it. The queue of
+// autonomous tickets is unlimited; how many are worked at once is the
+// in-flight cap's business, and how fast one token may file them is limited
+// here.
 func (s *BoardService) CreateAutonomous(ctx context.Context, actor domain.Actor, draft domain.AutonomousDraft) (TicketDetail, error) {
 	if err := rejectHiddenFromAgent(actor, map[string]string{"title": draft.Title, "body": draft.Body, "spec": draft.Spec}); err != nil {
 		return TicketDetail{}, err
@@ -108,10 +115,14 @@ func (s *BoardService) CreateAutonomous(ctx context.Context, actor domain.Actor,
 	if err != nil {
 		return TicketDetail{}, err
 	}
+	dependsOn, err := parseDependencies(ticket, draft.DependsOn)
+	if err != nil {
+		return TicketDetail{}, err
+	}
 	var detail TicketDetail
 	var events []Event
 	err = s.store.Write(ctx, func(repos Repos) error {
-		if err := requireAutonomousRoom(ctx, repos); err != nil {
+		if err := requireFilingRoom(ctx, repos, actor, ticket.CreatedAt); err != nil {
 			return err
 		}
 		if ticket.Rank, err = rankFor(ctx, repos.Tickets(), ticket.Lane, 0, atBottom); err != nil {
@@ -128,10 +139,7 @@ func (s *BoardService) CreateAutonomous(ctx context.Context, actor domain.Actor,
 			domain.NewEntry(ticket.ID, domain.TimelineCreated, actor, ticket.CreatedAt).With("autonomous", true),
 			domain.NewEntry(ticket.ID, domain.TimelineSpec, actor, ticket.CreatedAt).With("revision", ticket.SpecRevision).With("submitted", true),
 		}
-		if events, err = record(ctx, repos, ticket, entries); err != nil {
-			return err
-		}
-		detail, err = loadDetail(ctx, repos, ticket)
+		detail, events, err = s.recordCreated(ctx, repos, actor, ticket, entries, dependsOn)
 		return err
 	})
 	if err != nil {
@@ -141,25 +149,48 @@ func (s *BoardService) CreateAutonomous(ctx context.Context, actor domain.Actor,
 	return detail, nil
 }
 
-// maxOpenAutonomous caps autonomous tickets not yet in Review, so a leaked
-// delegate token cannot flood the runner.
-const maxOpenAutonomous = 10
+// recordCreated adds a new ticket's dependencies and records its first
+// timeline entries, in the caller's transaction.
+func (s *BoardService) recordCreated(ctx context.Context, repos Repos, actor domain.Actor, ticket domain.Ticket, entries []domain.TimelineEntry, dependsOn []int64) (TicketDetail, []Event, error) {
+	dependencyEntries, otherEvents, err := s.addDependencies(ctx, repos, actor, ticket, dependsOn)
+	if err != nil {
+		return TicketDetail{}, nil, err
+	}
+	events, err := record(ctx, repos, ticket, append(entries, dependencyEntries...))
+	if err != nil {
+		return TicketDetail{}, nil, err
+	}
+	detail, err := loadDetail(ctx, repos, ticket)
+	return detail, append(events, otherEvents...), err
+}
 
-// requireAutonomousRoom lets an autonomous ticket in only while fewer than
-// maxOpenAutonomous are open.
-func requireAutonomousRoom(ctx context.Context, repos Repos) error {
-	tickets, err := repos.Tickets().List(ctx, TicketFilter{})
+// parseDependencies validates the ids a new ticket depends on. Dependencies
+// are same repo only, so they need the ticket to have one.
+func parseDependencies(ticket domain.Ticket, ids []int64) ([]int64, error) {
+	dependsOn, err := domain.ParseDependencies(ids)
+	if err != nil {
+		return nil, err
+	}
+	if len(dependsOn) > 0 && ticket.RepoID == 0 {
+		return nil, domain.Invalidf("depends_on needs repo_id: dependencies are same repo only")
+	}
+	return dependsOn, nil
+}
+
+// requireFilingRoom limits how many autonomous tickets one token files in an
+// hour, so a leaked or looping delegate token cannot flood the queue or the
+// owner's phone. Revoking the token stops it at once. Tickets record their
+// creator by name, so the count is per token only because agent token names
+// are unique and never reused, even after a token is revoked: the same
+// invariant isCreator relies on. A new token never inherits or shares an old
+// token's budget.
+func requireFilingRoom(ctx context.Context, repos Repos, actor domain.Actor, now time.Time) error {
+	filed, err := repos.Tickets().CountAutonomousFiledSince(ctx, actor.Name, now.Add(-time.Hour))
 	if err != nil {
 		return err
 	}
-	open := 0
-	for _, ticket := range tickets {
-		if ticket.IsAutonomous && ticket.Lane != domain.LaneReview && ticket.Lane != domain.LaneMerged {
-			open++
-		}
-	}
-	if open >= maxOpenAutonomous {
-		return domain.Conflictf("%d autonomous tickets are already open, the most allowed; wait for some to reach Review", open)
+	if filed >= domain.MaxAutonomousFilingsPerHour {
+		return domain.Conflictf("this token filed %d autonomous tickets in the last hour, the most allowed; file the rest later", filed)
 	}
 	return nil
 }
@@ -181,6 +212,11 @@ func (s *BoardService) Edit(ctx context.Context, actor domain.Actor, id int64, e
 		}
 		if actor.IsAgent() {
 			if err := ticket.AgentMayEdit(changed); err != nil {
+				return nil, err
+			}
+		}
+		if slices.Contains(changed, "repo") {
+			if err := requireDependenciesFollowRepo(ctx, repos, *ticket); err != nil {
 				return nil, err
 			}
 		}
@@ -471,9 +507,13 @@ func loadBoard(ctx context.Context, repos Repos, filter TicketFilter) (Board, er
 	if err != nil {
 		return Board{}, err
 	}
+	waiting, err := repos.Relations().Waiting(ctx)
+	if err != nil {
+		return Board{}, err
+	}
 	summaries := make([]TicketSummary, 0, len(tickets))
 	for _, ticket := range tickets {
-		summaries = append(summaries, TicketSummary{Ticket: ticket, OpenQuestions: openCounts[ticket.ID]})
+		summaries = append(summaries, TicketSummary{Ticket: ticket, OpenQuestions: openCounts[ticket.ID], WaitingOn: waiting[ticket.ID]})
 	}
 	return Board{Lanes: domain.Lanes(), Stages: domain.Stages(), Repos: codeRepos, Tickets: summaries}, nil
 }

@@ -182,6 +182,12 @@
   font-weight: 650;
 }
 
+/* Quiet: waiting is expected, not something for the owner to act on. */
+.badge--waiting {
+  background: var(--surface-3);
+  color: var(--text-muted);
+}
+
 .stage-chip {
   display: inline-flex;
   align-items: center;

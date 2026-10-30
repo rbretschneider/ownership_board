@@ -20,6 +20,11 @@ const (
 	MaxBranchLength     = 200
 )
 
+// MaxAutonomousFilingsPerHour caps how many autonomous tickets one token can
+// file in an hour. The queue itself is unlimited; the cap bounds how fast a
+// leaked or looping delegate token can fill it and notify the owner.
+const MaxAutonomousFilingsPerHour = 50
+
 // RequireText trims value and fails when it is empty or longer than max runes.
 func RequireText(field, value string, max int) (string, error) {
 	trimmed := strings.TrimSpace(value)

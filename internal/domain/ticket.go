@@ -48,6 +48,8 @@ type TicketDraft struct {
 	Kind   string
 	Title  string
 	Body   string
+	// DependsOn lists tickets in the same repo the new ticket waits for.
+	DependsOn []int64
 }
 
 // AutonomousDraft is a ticket whose spec the owner already agreed in a chat

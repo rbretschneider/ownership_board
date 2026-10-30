@@ -1,8 +1,11 @@
 package app_test
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rbretschneider/ownership_board/internal/app"
 	"github.com/rbretschneider/ownership_board/internal/domain"
@@ -124,14 +127,101 @@ func (f *fixture) mustCreateAutonomous(repoID int64) int64 {
 	return detail.Ticket.ID
 }
 
-func TestOpenAutonomousTicketsAreCapped(t *testing.T) {
+func TestTheAutonomousQueueHasNoLengthLimit(t *testing.T) {
 	f := newFixture(t)
 	api := f.repo("acme/api")
-	for range 10 {
-		f.mustCreateAutonomous(api.ID)
+	for i := range 25 {
+		if _, err := f.board.CreateAutonomous(f.ctx, delegate, autonomousDraft(api.ID)); err != nil {
+			t.Fatalf("filing %d of 25: %v", i+1, err)
+		}
 	}
+}
+
+func TestAutonomousFilingsAreLimitedPerTokenPerHour(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	for i := range domain.MaxAutonomousFilingsPerHour {
+		if _, err := f.board.CreateAutonomous(f.ctx, delegate, autonomousDraft(api.ID)); err != nil {
+			t.Fatalf("filing %d of %d: %v", i+1, domain.MaxAutonomousFilingsPerHour, err)
+		}
+	}
+	before := f.ticketCount()
 	_, err := f.board.CreateAutonomous(f.ctx, delegate, autonomousDraft(api.ID))
 	requireErrorKind(t, err, domain.KindConflict)
+	if got := f.ticketCount(); got != before {
+		t.Fatalf("the refused filing left %d tickets, want %d", got, before)
+	}
+
+	secondToken := domain.Actor{Kind: domain.ActorAgent, ID: 4, Name: "laptop", IsDelegate: true}
+	if _, err := f.board.CreateAutonomous(f.ctx, secondToken, autonomousDraft(api.ID)); err != nil {
+		t.Fatalf("another token's filing was refused: %v", err)
+	}
+	f.clock.Advance(time.Hour)
+	if _, err := f.board.CreateAutonomous(f.ctx, delegate, autonomousDraft(api.ID)); err != nil {
+		t.Fatalf("filing an hour later: %v", err)
+	}
+}
+
+func (f *fixture) setInFlightCap(value int) {
+	f.t.Helper()
+	settings, err := f.board.UpdateSettings(f.ctx, owner, domain.SettingsEdit{AutonomousInFlightCap: &value})
+	if err != nil || settings.AutonomousInFlightCap != value {
+		f.t.Fatalf("set the in-flight cap to %d: %+v, %v", value, settings, err)
+	}
+}
+
+func TestOneAutonomousTicketInFlightHoldsBackTheNextButNotOtherWork(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	first := f.mustCreateAutonomous(api.ID)
+	second := f.mustCreateAutonomous(api.ID)
+	if work := f.mustClaim(agent, app.ClaimInput{}); work.Ticket.Ticket.ID != first {
+		t.Fatalf("claimed #%d, want the first autonomous ticket #%d", work.Ticket.Ticket.ID, first)
+	}
+	f.requireStage(first, domain.StageDesign)
+
+	normal := f.ticket("normal work", api.ID)
+	f.toReady(normal)
+	if work := f.mustClaim(other, app.ClaimInput{}); work.Ticket.Ticket.ID != normal {
+		t.Fatalf("claimed #%d, want the normal ticket #%d past the held-back autonomous one", work.Ticket.Ticket.ID, normal)
+	}
+	f.requireNoClaim(other, "a second autonomous ticket while one is in flight")
+
+	f.setInFlightCap(2)
+	if work := f.mustClaim(other, app.ClaimInput{}); work.Ticket.Ticket.ID != second {
+		t.Fatalf("claimed #%d with the cap at 2, want #%d", work.Ticket.Ticket.ID, second)
+	}
+}
+
+func TestTheInFlightCapCountsBuildAndBlockedTickets(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	first := f.mustCreateAutonomous(api.ID)
+	f.mustCreateAutonomous(api.ID)
+	f.mustClaim(agent, app.ClaimInput{})
+	if _, err := f.board.SaveDesign(f.ctx, agent, first, app.SaveTextInput{Text: "The plan.", IsSubmit: true}); err != nil {
+		t.Fatalf("submit design: %v", err)
+	}
+	f.requireStage(first, domain.StageBuild)
+	f.mustClaim(agent, app.ClaimInput{})
+	if _, err := f.board.Block(f.ctx, agent, first, "cannot go on"); err != nil {
+		t.Fatalf("block: %v", err)
+	}
+	f.requireNoClaim(other, "a second autonomous ticket while a blocked one is in build")
+}
+
+func TestAnInFlightAutonomousTicketWithAnExpiredLeaseCanBeClaimedAgain(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	first := f.mustCreateAutonomous(api.ID)
+	f.mustCreateAutonomous(api.ID)
+	f.mustClaim(agent, app.ClaimInput{LeaseMinutes: 30})
+	f.requireNoClaim(other, "while the lease is live and the cap is reached")
+
+	f.clock.Advance(31 * time.Minute)
+	if work := f.mustClaim(other, app.ClaimInput{}); work.Ticket.Ticket.ID != first {
+		t.Fatalf("claimed #%d after the lease expired, want the in-flight #%d", work.Ticket.Ticket.ID, first)
+	}
 }
 
 func TestTheOwnerTurnsAutonomyOnOnlyPastTheSpecCheckpoint(t *testing.T) {
@@ -151,4 +241,120 @@ func TestTheOwnerTurnsAutonomyOnOnlyPastTheSpecCheckpoint(t *testing.T) {
 	if !detail.Ticket.IsAutonomous || last.Source != domain.DecisionFromHuman || last.Weight != domain.WeightBinding || last.DecidedBy.Name != owner.Name {
 		t.Fatalf("autonomous %v, last decision %+v", detail.Ticket.IsAutonomous, last)
 	}
+}
+
+// An autonomous ticket in design or build holds an in-flight slot. If it
+// could wait on an autonomous ticket that has not started, the cap would
+// keep that prerequisite out of design for as long as the slot is held, and
+// neither ticket could ever be claimed again.
+func TestAnInFlightAutonomousTicketCannotWaitOnAnUnstartedAutonomousOne(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	inFlight := f.mustCreateAutonomous(api.ID)
+	if work := f.mustClaim(agent, app.ClaimInput{LeaseMinutes: 30}); work.Ticket.Ticket.ID != inFlight {
+		t.Fatalf("claimed #%d, want #%d", work.Ticket.Ticket.ID, inFlight)
+	}
+	queued := f.mustCreateAutonomous(api.ID)
+
+	for _, actor := range []domain.Actor{delegate, agent, owner} {
+		_, err := f.board.LinkTickets(f.ctx, actor, inFlight, dependsOn, queued)
+		requireErrorKind(t, err, domain.KindConflict)
+		requireMessage(t, err, fmt.Sprintf("ticket %d", queued))
+	}
+	if got := f.waitingOn(inFlight); len(got) != 0 {
+		t.Fatalf("the in-flight ticket waits on %v after the refused links", got)
+	}
+
+	f.clock.Advance(31 * time.Minute)
+	if work := f.mustClaim(other, app.ClaimInput{}); work.Ticket.Ticket.ID != inFlight {
+		t.Fatalf("claimed #%d after the lease lapsed, want the in-flight #%d", work.Ticket.Ticket.ID, inFlight)
+	}
+}
+
+// The same stall can run through ordinary tickets: an in-flight autonomous
+// ticket waits on an ordinary one, which waits on an unstarted autonomous
+// one. Each link alone joins tickets that may wait on each other, so the
+// check follows the whole chain, whichever link is added last.
+func TestAnInFlightAutonomousTicketCannotWaitOnAnUnstartedAutonomousOneThroughAChain(t *testing.T) {
+	for _, isHolderLinkLast := range []bool{true, false} {
+		t.Run(fmt.Sprintf("holder link last %v", isHolderLinkLast), func(t *testing.T) {
+			f := newFixture(t)
+			api := f.repo("acme/api")
+			inFlight := f.mustCreateAutonomous(api.ID)
+			if work := f.mustClaim(agent, app.ClaimInput{LeaseMinutes: 30}); work.Ticket.Ticket.ID != inFlight {
+				t.Fatalf("claimed #%d, want #%d", work.Ticket.Ticket.ID, inFlight)
+			}
+			middle := f.ticket("ordinary work", api.ID)
+			queued := f.mustCreateAutonomous(api.ID)
+
+			var refused error
+			if isHolderLinkLast {
+				f.mustLink(owner, middle, queued)
+				_, refused = f.board.LinkTickets(f.ctx, owner, inFlight, dependsOn, middle)
+			} else {
+				f.mustLink(owner, inFlight, middle)
+				_, refused = f.board.LinkTickets(f.ctx, owner, middle, dependsOn, queued)
+			}
+			requireErrorKind(t, refused, domain.KindConflict)
+			requireMessage(t, refused, fmt.Sprintf("autonomous ticket %d holds an in-flight slot", inFlight))
+			requireMessage(t, refused, fmt.Sprintf("on autonomous ticket %d", queued))
+			if !isHolderLinkLast {
+				if got := f.waitingOn(middle); len(got) != 0 {
+					t.Fatalf("#%d waits on %v after the refused link", middle, got)
+				}
+				return
+			}
+
+			f.clock.Advance(31 * time.Minute)
+			if work := f.mustClaim(other, app.ClaimInput{}); work.Ticket.Ticket.ID != inFlight {
+				t.Fatalf("claimed #%d after the lease lapsed, want the in-flight #%d", work.Ticket.Ticket.ID, inFlight)
+			}
+		})
+	}
+}
+
+func TestAnInFlightAutonomousTicketMayWaitOnAChainOfOrdinaryWork(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	inFlight := f.mustCreateAutonomous(api.ID)
+	f.mustClaim(agent, app.ClaimInput{})
+	f.requireStage(inFlight, domain.StageDesign)
+	first := f.ticket("first", api.ID)
+	second := f.ticket("second", api.ID)
+	third := f.ticket("third", api.ID)
+
+	f.mustLink(owner, second, third)
+	f.mustLink(owner, inFlight, first)
+	f.mustLink(owner, first, second)
+
+	queued := f.mustCreateAutonomous(api.ID)
+	unrelated := f.ticket("unrelated", api.ID)
+	f.mustLink(owner, unrelated, queued)
+	if got := f.waitingOn(first); !slices.Equal(got, []int64{second}) {
+		t.Fatalf("#%d waits on %v, want [%d]", first, got, second)
+	}
+}
+
+func TestAnInFlightAutonomousTicketMayWaitOnWorkTheCapDoesNotHoldBack(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	f.setInFlightCap(2)
+	inFlight := f.mustCreateAutonomous(api.ID)
+	alsoInFlight := f.mustCreateAutonomous(api.ID)
+	f.mustClaim(agent, app.ClaimInput{})
+	f.mustClaim(other, app.ClaimInput{})
+	f.requireStage(inFlight, domain.StageDesign)
+	f.requireStage(alsoInFlight, domain.StageDesign)
+	normal := f.ticket("normal work", api.ID)
+	f.toReady(normal)
+
+	f.mustLink(delegate, inFlight, normal)
+	f.mustLink(delegate, inFlight, alsoInFlight)
+	if got := f.waitingOn(inFlight); !slices.Equal(got, []int64{alsoInFlight, normal}) {
+		t.Fatalf("waiting on %v, want [%d %d]", got, alsoInFlight, normal)
+	}
+
+	queued := f.mustCreateAutonomous(api.ID)
+	waiting := f.mustCreateAutonomous(api.ID)
+	f.mustLink(delegate, waiting, queued)
 }

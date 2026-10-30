@@ -15,3 +15,4 @@ func (r repos) SourceStatuses() app.SourceStatusRepository { return sourceStatus
 func (r repos) WorkLinks() app.WorkLinkRepository          { return workLinkRepo{q: r.q} }
 func (r repos) Decisions() app.DecisionRepository          { return decisionRepo{q: r.q} }
 func (r repos) Relations() app.RelationRepository          { return relationRepo{q: r.q} }
+func (r repos) Settings() app.SettingsRepository           { return settingsRepo{q: r.q} }

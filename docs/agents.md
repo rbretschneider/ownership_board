@@ -58,7 +58,7 @@ The MCP server offers these tools:
 
 | Tool | Does |
 |------|------|
-| `claim_work` | Claims the next ticket and returns its brief. `repo` limits it to one repo; `wait_seconds` (up to 300) blocks until work appears. |
+| `claim_work` | Claims the next ticket and returns its brief. `repo` limits it to one repo; `wait_seconds` (up to 300) blocks until work appears. It never returns a ticket that is waiting on an unmerged dependency (see [Dependencies](#dependencies)). |
 | `get_ticket` | Reads a brief without claiming. |
 | `list_repos` | Lists repos with their ids, to work out where a ticket belongs. |
 | `ask_questions` | Posts a round of questions. The ticket keeps its lane and stage, the human is notified, and your lease ends. The ticket is claimable again once every question is answered. |
@@ -69,13 +69,13 @@ The MCP server offers these tools:
 | `move_ticket` | Moves a finished build to `review`. Needs `pr_url` set, no open questions and no block. This is the only lane move an agent makes, and it ends your lease. |
 | `add_comment` | Adds a comment. |
 | `heartbeat` / `release_ticket` | Keeps or gives up the lease. |
-| `create_ticket` | Files a follow-up story or bug, optionally already linked (`relation` + `related_ticket_id`). |
-| `create_autonomous_ticket` | Delegate tokens only. Files a spec the owner agreed in a chat as an autonomous ticket: it starts Ready, skips every checkpoint and runs to a pull request (see [Autonomous tickets](#autonomous-tickets)). Needs `spec` and `repo_id`. |
+| `create_ticket` | Files a follow-up story or bug, optionally already linked (`relation` + `related_ticket_id`). `depends_on: [ids]` lists tickets in the same repo it waits for. |
+| `create_autonomous_ticket` | Delegate tokens only. Files a spec the owner agreed in a chat as an autonomous ticket: it starts Ready, skips every checkpoint and runs to a pull request (see [Autonomous tickets](#autonomous-tickets)). Needs `spec` and `repo_id`; takes `depends_on: [ids]` too. |
 | `add_work_link` | Records a PR or commit for a ticket you hold. |
 | `record_decision` | Records a significant choice; agents cannot replace the owner's binding decisions. |
-| `link_tickets` | Relates two tickets (`caused_by`, `follow_up_of`, `duplicate_of`, `relates_to`). |
+| `link_tickets` | Relates two tickets (`caused_by`, `follow_up_of`, `duplicate_of`, `relates_to`, `depends_on`). |
 | `find_tickets_for_work` | Commit sha or PR URL → the tickets it was recorded on. |
-| `list_tickets` | Read-only overview, optionally by lane or repo. |
+| `list_tickets` | Read-only overview, optionally by lane or repo. Each line shows what the ticket is waiting on, if anything. |
 | `report_pr_state` | For a ticket in review: `merged` → Merged, `closed` → back to build, blocked until the owner decides, `open` → no change. The only agent write that needs no lease, and it only ever moves review tickets along those two edges. |
 
 **Traceability rules agents follow** (they are also in every brief): end each
@@ -245,12 +245,20 @@ request, and the PR is your only review.
    record the choice with `record_decision`, and carry on. `mark_blocked` is
    the only way it stops before Review. You are notified ("filed as
    autonomous") every time one is filed, so a ticket from a leaked token does
-   not go unseen, and at most 10 autonomous tickets can be open before Review.
-4. **What the loop does.** `board-loop` adds a GPT review of the design
+   not go unseen. The queue has no length limit, but one token can file at
+   most 50 autonomous tickets an hour; the 51st is refused with a conflict.
+4. **One at a time.** Settings > Agent work sets how many autonomous tickets
+   may be in design or build at once, board-wide (1 to 10, default 1). While
+   that many are, `claim_work` hands out no other autonomous ticket from
+   Ready; ordinary work, and autonomous tickets already in design or build,
+   are still handed out. A blocked autonomous ticket in build still counts.
+   File a whole series at once and link it with `depends_on`: the tickets
+   wait in Ready and start in order.
+5. **What the loop does.** `board-loop` adds a GPT review of the design
    (`gpt-review --design`) and runs the GPT code review on every tier
    (except when Codex built). The PR body lists every choice made in your
    place and every review finding not fixed.
-5. **Taking it back.** The ticket sheet's **Autonomous** switch is yours
+6. **Taking it back.** The ticket sheet's **Autonomous** switch is yours
    alone. Turn it off and the repo's checkpoints apply from the next hand-off;
    agents can neither change the flag nor move an autonomous ticket to
    another repo. You can also turn it on for an ordinary ticket, but only in
@@ -260,6 +268,49 @@ request, and the PR is your only review.
 An autonomous ticket ends at an open pull request: the loop never merges.
 That is an instruction, not enforcement; branch protection on the default
 branch, where you have it, makes it one.
+
+## Dependencies
+
+`A depends_on B` means agents cannot claim A, in any stage, until B is in
+**Merged**. Nothing else changes: A keeps its lane and stage (a Ready ticket
+stays in Ready) and a person can still move it. A pull request closed without
+merging does not satisfy a dependency.
+
+- **Adding.** `create_ticket` and `create_autonomous_ticket` take
+  `depends_on: [ids]` (at most 20 entries, repeats included); `link_tickets` takes kind `depends_on`
+  with `id` = A and `other_id` = B. Both tickets must be in the same repo,
+  and an unknown id or one in another repo refuses the whole call, naming the
+  id, so nothing is filed. A link that would close a cycle (A on B and B on A,
+  or longer) is refused with the path, for example `#3 -> #5 -> #3`.
+- **In flight.** An autonomous ticket in design or build cannot be made to
+  depend on an autonomous ticket that has not reached design yet, either
+  directly or through a chain of other tickets that are not merged (A on B
+  and B on C, with A in flight and C autonomous in Ready): the link that
+  would complete such a chain is refused with a conflict, whichever link it
+  is. The waiting ticket would keep its in-flight slot, and the cap would
+  hold the other one in Ready, so none of them could move. Dependencies on
+  ordinary tickets, and on autonomous tickets already in flight, are
+  allowed as long as no such chain forms.
+- **Who may add one.** A person; the agent holding A's lease; or the agent
+  that filed A, without a lease. A lease on B alone is not enough.
+- **Who may remove one.** A person may remove any link. An agent may remove
+  only a `depends_on` link its own token added, from either end and without a
+  lease (`DELETE /api/v1/tickets/{A}/relations/depends_on/{B}`).
+- **Who filed it.** The board matches the filing agent by token name. Token
+  names are unique and are never reused, even after a token is revoked, so a
+  new token cannot take over an old token's tickets.
+- **Unblocking.** When B reaches Merged, through `report_pr_state merged` or
+  a person moving it, every ticket that was waiting only on B gets a timeline
+  line saying who merged B, and becomes claimable on the next `claim_work`.
+  The line sends no notification. `report_pr_state merged` is the agent's
+  report, so a false report would release the dependants early: only report
+  what you verified.
+- **Reading it.** Every ticket on `GET /api/v1/board` and
+  `GET /api/v1/tickets/{id}` has `waiting_on`, the ids of its dependencies
+  that are not merged yet (always an array, `[]` when free). Briefs list
+  "Depends on" and "Needed by" with each ticket's state. A runner that picks
+  its own work from the board (an `actionable` filter) should skip tickets
+  whose `waiting_on` is not empty, as `claim_work` does.
 
 ## Plain HTTP
 

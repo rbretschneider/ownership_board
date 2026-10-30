@@ -7,6 +7,7 @@ import {
   CirclePlus,
   DraftingCompass,
   FileText,
+  GitMerge,
   GitPullRequest,
   Hand,
   Link2,
@@ -22,7 +23,7 @@ import {
   User,
 } from "lucide-react";
 import type { ActorKind, Lane, RelationKind, Stage, StageId, TimelineEntry, TimelineType } from "../../api/types";
-import { relationLabel } from "../../lib/relations";
+import { dependenciesMetText, relationLabel } from "../../lib/relations";
 import { stageLabel } from "../../lib/stages";
 import { relativeTime } from "../../lib/relativeTime";
 import { Markdown } from "../common/Markdown";
@@ -45,6 +46,7 @@ const EVENT_ICONS: Record<Exclude<TimelineType, "comment">, typeof Bot> = {
   blocked: CircleAlert,
   unblocked: Play,
   design: DraftingCompass,
+  dependencies_met: GitMerge,
 };
 
 /** Event types whose body is shown under the line, as plain text. */
@@ -125,6 +127,8 @@ function describe(entry: TimelineEntry, lanes: Lane[], stages: Stage[]): string 
       return "unblocked this";
     case "design":
       return "updated the design";
+    case "dependencies_met":
+      return dependenciesMetText(entry.data);
     default:
       return String(entry.type).replace(/_/g, " ");
   }

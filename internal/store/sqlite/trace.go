@@ -252,6 +252,42 @@ func (r relationRepo) CountOutgoing(ctx context.Context, ticketID int64) (int, e
 	return countRows(ctx, r.q, `SELECT COUNT(*) FROM relations WHERE from_id = ?`, ticketID)
 }
 
+// waitingQuery lists depends_on links whose target is not merged yet.
+const waitingQuery = `SELECT r.from_id, r.to_id FROM relations r JOIN tickets dep ON dep.id = r.to_id
+	WHERE r.kind = 'depends_on' AND dep.stage <> 'done'`
+
+func (r relationRepo) Waiting(ctx context.Context) (map[int64][]int64, error) {
+	return r.edges(ctx, waitingQuery+` ORDER BY r.from_id, r.to_id`)
+}
+
+func (r relationRepo) WaitingOn(ctx context.Context, ticketID int64) ([]int64, error) {
+	edges, err := r.edges(ctx, waitingQuery+` AND r.from_id = ? ORDER BY r.to_id`, ticketID)
+	return edges[ticketID], err
+}
+
+func (r relationRepo) DependencyEdges(ctx context.Context) (map[int64][]int64, error) {
+	return r.edges(ctx, `SELECT from_id, to_id FROM relations WHERE kind = 'depends_on' ORDER BY from_id, to_id`)
+}
+
+// edges reads (from_id, to_id) rows into a map from each from_id to its
+// to_ids.
+func (r relationRepo) edges(ctx context.Context, query string, args ...any) (map[int64][]int64, error) {
+	rows, err := r.q.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: dependencies: %w", err)
+	}
+	defer rows.Close()
+	edges := map[int64][]int64{}
+	for rows.Next() {
+		var from, to int64
+		if err := rows.Scan(&from, &to); err != nil {
+			return nil, err
+		}
+		edges[from] = append(edges[from], to)
+	}
+	return edges, rows.Err()
+}
+
 func countRows(ctx context.Context, q querier, query string, args ...any) (int, error) {
 	var count int
 	if err := q.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {

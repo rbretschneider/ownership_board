@@ -26,6 +26,7 @@ type Repos interface {
 	WorkLinks() WorkLinkRepository
 	Decisions() DecisionRepository
 	Relations() RelationRepository
+	Settings() SettingsRepository
 }
 
 // TicketFilter narrows a ticket listing. The zero value matches every ticket.
@@ -35,6 +36,8 @@ type TicketFilter struct {
 	IsScoped          bool
 	RepoIDs           []int64
 	IncludeUnassigned bool
+	// ExcludeAutonomous leaves out autonomous tickets, whatever the scope.
+	ExcludeAutonomous bool
 }
 
 // TicketRepository persists tickets.
@@ -48,8 +51,23 @@ type TicketRepository interface {
 	LaneOrder(ctx context.Context, lane domain.Lane) ([]RankedTicket, error)
 	SetRank(ctx context.Context, id int64, rank float64) error
 	// NextClaimable returns the top claimable ticket in stage matching filter:
-	// unleased, not blocked and with no open questions.
+	// unleased, not blocked, with no open questions, and with every ticket it
+	// depends on merged.
 	NextClaimable(ctx context.Context, stage domain.Stage, filter TicketFilter, now time.Time) (domain.Ticket, bool, error)
+	// CountInFlightAutonomous counts autonomous tickets in design or build,
+	// in any repo, whether leased, blocked or waiting.
+	CountInFlightAutonomous(ctx context.Context) (int, error)
+	// CountAutonomousFiledSince counts autonomous tickets createdBy filed
+	// after since.
+	CountAutonomousFiledSince(ctx context.Context, createdBy string, since time.Time) (int, error)
+}
+
+// SettingsRepository persists the board-wide settings.
+type SettingsRepository interface {
+	// Get returns the stored settings; a missing or unreadable value gives
+	// that setting's default.
+	Get(ctx context.Context) (domain.BoardSettings, error)
+	Save(ctx context.Context, settings domain.BoardSettings, actor domain.Actor, now time.Time) error
 }
 
 // RankedTicket is a ticket's position within its lane.

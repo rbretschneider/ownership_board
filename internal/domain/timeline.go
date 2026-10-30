@@ -29,6 +29,10 @@ const (
 	TimelineBlocked          TimelineType = "blocked"
 	TimelineUnblocked        TimelineType = "unblocked"
 	TimelineDesign           TimelineType = "design"
+	// TimelineDependenciesMet records that the last ticket this one depended
+	// on was merged, so agents can claim it; data {ticket_id, merged_by_kind},
+	// with the actor that merged that ticket.
+	TimelineDependenciesMet TimelineType = "dependencies_met"
 )
 
 // TimelineEntry is one line of a ticket's history.

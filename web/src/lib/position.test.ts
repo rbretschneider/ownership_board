@@ -6,7 +6,7 @@ function ticket(id: number, lane: LaneId): TicketSummary {
   return {
     id, lane, repo_id: 1, kind: "story", title: `t${id}`, owner: "agent",
     stage: "refine", needs_owner: false, blocked_reason: "", is_autonomous: false, spec_revision: 0, design_revision: 0,
-    pr_url: "", branch: "", open_questions: 0, lease: null,
+    pr_url: "", branch: "", open_questions: 0, waiting_on: [], lease: null,
     created_at: "", updated_at: "", lane_changed_at: "",
   };
 }

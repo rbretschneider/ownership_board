@@ -41,6 +41,7 @@ func TestOwnActionsAndQuietEventsDoNotNotify(t *testing.T) {
 		"person moves to review": {Type: domain.TimelineStage, Stage: domain.StagePR, Actor: owner},
 		"agent comments":         {Type: domain.TimelineComment, Actor: agent},
 		"agent starts a design":  {Type: domain.TimelineStage, Stage: domain.StageDesign, Actor: agent},
+		"dependencies merged":    {Type: domain.TimelineDependenciesMet, Stage: domain.StageReady, Actor: agent, IsAutonomous: true},
 	}
 	for name, event := range cases {
 		t.Run(name, func(t *testing.T) {
