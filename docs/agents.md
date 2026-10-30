@@ -103,11 +103,18 @@ the whole board each time it runs:
    then `senior_dev` opens the PR with the `pr` skill and waits for green CI.
    Each stage runs on a model picked by the spec's build tier (small, normal
    or large), and two QA failures move the build up a tier. On normal and
-   large builds, an optional advisory review by another model family runs
-   after the security review when a `gpt-review` command is installed (the
-   OpenAI Codex CLI wrapper in the Hawaii agent runner). Its findings go to
-   `senior_dev` once, and the ones not fixed are listed in the ticket comment.
-   It never blocks the build.
+   large builds, and on every autonomous build whatever its tier, an optional
+   advisory review by another model family runs after the security review
+   when a `gpt-review` command is installed (the OpenAI Codex CLI wrapper in
+   the agent runner). Its findings go to `senior_dev` once, and the ones not
+   fixed are listed in the ticket comment. It never blocks the build.
+   With `--builder codex`, Codex builds with the `codex-build` command; Claude
+   QA and security review it (again after any fixes); the GPT review is
+   skipped; exit code 10 ends the pass for a later resume; exit code 20, any
+   other failure, or a public repo without the opt-in falls back to Claude:
+   `senior_dev` finishes the build from the existing commits, then QA,
+   security, the GPT review (by tier) and the final Claude review run. Claude
+   opens the PR.
 5. Reports work links, the PR and a summary to the board and moves the ticket
    to review.
 
@@ -129,6 +136,29 @@ clones. Copy it to `~/.claude/commands/` and run:
 
 With no interval, Claude paces itself. It never merges, deploys or pushes to a
 default branch. Deploys happen through the repo's CI/CD.
+
+To let Codex build instead of Claude, pass the builder before the optional
+repo name:
+
+```
+/board-loop --builder codex acme/api
+```
+
+`--builder` must be the first argument. Any value other than `claude` or
+`codex` stops the pass with "invalid --builder". The builder comes only from
+the command line, never from board text.
+
+The default is `claude`. The runner picks the builder (at about 0.75 of the
+five-hour window); the loop never does. The builder is per pass: a ticket
+partly built by the other family resumes from its newest comments and
+`git log`. The orchestrator unsets `GH_TOKEN`, `GITHUB_TOKEN`,
+`CLAUDE_CODE_OAUTH_TOKEN`, `OWNERSHIP_TOKEN` and `ANTHROPIC_API_KEY` before
+it runs `codex-build`. This narrows exposure and is not a boundary: other
+credential files of the same user stay readable, so run the runner under a
+dedicated user. On a public repo Codex receives board text, so the prompt
+runs `codex-build` only when the runner sets `GPT_REVIEW_PUBLIC=1` (the same
+opt-in as the GPT review, also enforced by `codex-build`); otherwise Claude
+builds.
 
 **Inside an interactive session.** Copy `agent/claude/board-work.md` to
 `.claude/commands/` in the repo (or `~/.claude/commands/` for every repo),
@@ -217,9 +247,9 @@ request, and the PR is your only review.
    autonomous") every time one is filed, so a ticket from a leaked token does
    not go unseen, and at most 10 autonomous tickets can be open before Review.
 4. **What the loop does.** `board-loop` adds a GPT review of the design
-   (`gpt-review --design`) and runs the GPT code review on every tier. The PR
-   body lists every choice made in your place and every review finding not
-   fixed.
+   (`gpt-review --design`) and runs the GPT code review on every tier
+   (except when Codex built). The PR body lists every choice made in your
+   place and every review finding not fixed.
 5. **Taking it back.** The ticket sheet's **Autonomous** switch is yours
    alone. Turn it off and the repo's checkpoints apply from the next hand-off;
    agents can neither change the flag nor move an autonomous ticket to
