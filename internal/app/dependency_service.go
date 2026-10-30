@@ -12,8 +12,8 @@ import (
 // agent holding A's lease, or the agent that filed A may add one; only a
 // person or the agent that added it may remove one; both tickets are in the
 // same repo; the links never form a cycle; and an autonomous ticket in
-// design or build never waits on an autonomous ticket the in-flight cap
-// would keep from starting.
+// design or build never waits, directly or through other tickets, on an
+// autonomous ticket the in-flight cap would keep from starting.
 
 // addDependencies links a ticket being created to every ticket in ids, in the
 // caller's transaction, so a refusal leaves no ticket behind. It returns the
@@ -71,11 +71,6 @@ func (s *BoardService) insertDependency(ctx context.Context, repos Repos, actor 
 	if err := requireSameRepo(dependant, prerequisite); err != nil {
 		return domain.TimelineEntry{}, nil, err
 	}
-	if domain.DependencyStallsInFlightSlot(dependant, prerequisite) {
-		return domain.TimelineEntry{}, nil, domain.Conflictf(
-			"depends_on: ticket %d is autonomous and has not started, and autonomous ticket %d holds an in-flight slot; the cap would keep ticket %d from starting while ticket %d waits for it",
-			prerequisite.ID, dependant.ID, prerequisite.ID, dependant.ID)
-	}
 	now := s.clock.Now()
 	relation, err := domain.NewRelation(dependant.ID, prerequisite.ID, domain.RelationDependsOn, actor, now)
 	if err != nil {
@@ -83,6 +78,9 @@ func (s *BoardService) insertDependency(ctx context.Context, repos Repos, actor 
 	}
 	edges, err := repos.Relations().DependencyEdges(ctx)
 	if err != nil {
+		return domain.TimelineEntry{}, nil, err
+	}
+	if err := requireNoInFlightStall(ctx, repos, edges, dependant, prerequisite); err != nil {
 		return domain.TimelineEntry{}, nil, err
 	}
 	if len(edges[dependant.ID]) >= domain.MaxDependencies {
@@ -103,6 +101,36 @@ func (s *BoardService) insertDependency(ctx context.Context, repos Repos, actor 
 	outgoing := domain.NewEntry(dependant.ID, domain.TimelineRelation, actor, now).
 		With("kind", string(domain.RelationDependsOn)).With("ticket_id", prerequisite.ID).With("direction", "outgoing")
 	return outgoing, events, nil
+}
+
+// requireNoInFlightStall refuses a link that would make an autonomous ticket
+// in design or build wait, directly or through other tickets, on an
+// autonomous ticket that has not started. The waiting ticket keeps its slot
+// and the cap keeps the other one in Ready, so neither could move. Links stay
+// within one repo, so only that repo's tickets are loaded for the walk.
+func requireNoInFlightStall(ctx context.Context, repos Repos, edges map[int64][]int64, dependant, prerequisite domain.Ticket) error {
+	if domain.DependencyStallsInFlightSlot(dependant, prerequisite) {
+		return domain.Conflictf(
+			"depends_on: ticket %d is autonomous and has not started, and autonomous ticket %d holds an in-flight slot; the cap would keep ticket %d from starting while ticket %d waits for it",
+			prerequisite.ID, dependant.ID, prerequisite.ID, dependant.ID)
+	}
+	listed, err := repos.Tickets().List(ctx, TicketFilter{IsScoped: true, RepoIDs: []int64{dependant.RepoID}})
+	if err != nil {
+		return err
+	}
+	tickets := make(map[int64]domain.Ticket, len(listed)+2)
+	for _, ticket := range listed {
+		tickets[ticket.ID] = ticket
+	}
+	tickets[dependant.ID] = dependant
+	tickets[prerequisite.ID] = prerequisite
+	stall, isStall := domain.DependencyStall(edges, tickets, dependant.ID, prerequisite.ID)
+	if !isStall {
+		return nil
+	}
+	return domain.Conflictf(
+		"depends_on: autonomous ticket %d holds an in-flight slot and would wait, through ticket %d depends_on ticket %d, on autonomous ticket %d, which has not started; the cap would keep ticket %d from starting while ticket %d waits for it",
+		stall.Holder, dependant.ID, prerequisite.ID, stall.Waiter, stall.Waiter, stall.Holder)
 }
 
 // requireSameRepo keeps dependencies within one repo. The message names only

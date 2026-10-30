@@ -70,3 +70,41 @@ func TestDependencyStallsInFlightSlot(t *testing.T) {
 		}
 	}
 }
+
+func TestDependencyStallFollowsTheWholeChain(t *testing.T) {
+	ticket := func(id int64, stage domain.Stage, isAutonomous bool) domain.Ticket {
+		return domain.Ticket{ID: id, Stage: stage, Lane: stage.Lane(), IsAutonomous: isAutonomous}
+	}
+	tickets := map[int64]domain.Ticket{
+		1: ticket(1, domain.StageBuild, true),   // holds a slot
+		2: ticket(2, domain.StageRefine, false), // ordinary
+		3: ticket(3, domain.StageReady, true),   // held back by the cap
+		4: ticket(4, domain.StageDone, false),   // merged
+		5: ticket(5, domain.StageReady, false),  // ordinary
+		6: ticket(6, domain.StageDesign, true),  // holds a slot
+	}
+	cases := map[string]struct {
+		edges    map[int64][]int64
+		from, to int64
+		want     domain.InFlightStall
+		isStall  bool
+	}{
+		"direct":                        {nil, 1, 3, domain.InFlightStall{Holder: 1, Waiter: 3}, true},
+		"holder link added last":        {map[int64][]int64{2: {3}}, 1, 2, domain.InFlightStall{Holder: 1, Waiter: 3}, true},
+		"waiter link added last":        {map[int64][]int64{1: {2}}, 2, 3, domain.InFlightStall{Holder: 1, Waiter: 3}, true},
+		"longer chain":                  {map[int64][]int64{1: {5}, 2: {3}}, 5, 2, domain.InFlightStall{Holder: 1, Waiter: 3}, true},
+		"lowest holder is named":        {map[int64][]int64{6: {5}, 1: {5}}, 5, 3, domain.InFlightStall{Holder: 1, Waiter: 3}, true},
+		"ordinary chain":                {map[int64][]int64{1: {2}}, 2, 5, domain.InFlightStall{}, false},
+		"no holder upstream":            {map[int64][]int64{5: {2}}, 2, 3, domain.InFlightStall{}, false},
+		"merged ticket ends the chain":  {map[int64][]int64{1: {4}}, 4, 3, domain.InFlightStall{}, false},
+		"merged prerequisite":           {map[int64][]int64{4: {3}}, 1, 4, domain.InFlightStall{}, false},
+		"existing cycle is walked once": {map[int64][]int64{2: {5}, 5: {2}}, 1, 2, domain.InFlightStall{}, false},
+		"unknown ticket ends the chain": {map[int64][]int64{2: {99}, 99: {3}}, 1, 2, domain.InFlightStall{}, false},
+	}
+	for name, c := range cases {
+		got, isStall := domain.DependencyStall(c.edges, tickets, c.from, c.to)
+		if got != c.want || isStall != c.isStall {
+			t.Errorf("%s: %+v, %v, want %+v, %v", name, got, isStall, c.want, c.isStall)
+		}
+	}
+}

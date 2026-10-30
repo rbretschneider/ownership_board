@@ -271,6 +271,70 @@ func TestAnInFlightAutonomousTicketCannotWaitOnAnUnstartedAutonomousOne(t *testi
 	}
 }
 
+// The same stall can run through ordinary tickets: an in-flight autonomous
+// ticket waits on an ordinary one, which waits on an unstarted autonomous
+// one. Each link alone joins tickets that may wait on each other, so the
+// check follows the whole chain, whichever link is added last.
+func TestAnInFlightAutonomousTicketCannotWaitOnAnUnstartedAutonomousOneThroughAChain(t *testing.T) {
+	for _, isHolderLinkLast := range []bool{true, false} {
+		t.Run(fmt.Sprintf("holder link last %v", isHolderLinkLast), func(t *testing.T) {
+			f := newFixture(t)
+			api := f.repo("acme/api")
+			inFlight := f.mustCreateAutonomous(api.ID)
+			if work := f.mustClaim(agent, app.ClaimInput{LeaseMinutes: 30}); work.Ticket.Ticket.ID != inFlight {
+				t.Fatalf("claimed #%d, want #%d", work.Ticket.Ticket.ID, inFlight)
+			}
+			middle := f.ticket("ordinary work", api.ID)
+			queued := f.mustCreateAutonomous(api.ID)
+
+			var refused error
+			if isHolderLinkLast {
+				f.mustLink(owner, middle, queued)
+				_, refused = f.board.LinkTickets(f.ctx, owner, inFlight, dependsOn, middle)
+			} else {
+				f.mustLink(owner, inFlight, middle)
+				_, refused = f.board.LinkTickets(f.ctx, owner, middle, dependsOn, queued)
+			}
+			requireErrorKind(t, refused, domain.KindConflict)
+			requireMessage(t, refused, fmt.Sprintf("autonomous ticket %d holds an in-flight slot", inFlight))
+			requireMessage(t, refused, fmt.Sprintf("on autonomous ticket %d", queued))
+			if !isHolderLinkLast {
+				if got := f.waitingOn(middle); len(got) != 0 {
+					t.Fatalf("#%d waits on %v after the refused link", middle, got)
+				}
+				return
+			}
+
+			f.clock.Advance(31 * time.Minute)
+			if work := f.mustClaim(other, app.ClaimInput{}); work.Ticket.Ticket.ID != inFlight {
+				t.Fatalf("claimed #%d after the lease lapsed, want the in-flight #%d", work.Ticket.Ticket.ID, inFlight)
+			}
+		})
+	}
+}
+
+func TestAnInFlightAutonomousTicketMayWaitOnAChainOfOrdinaryWork(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	inFlight := f.mustCreateAutonomous(api.ID)
+	f.mustClaim(agent, app.ClaimInput{})
+	f.requireStage(inFlight, domain.StageDesign)
+	first := f.ticket("first", api.ID)
+	second := f.ticket("second", api.ID)
+	third := f.ticket("third", api.ID)
+
+	f.mustLink(owner, second, third)
+	f.mustLink(owner, inFlight, first)
+	f.mustLink(owner, first, second)
+
+	queued := f.mustCreateAutonomous(api.ID)
+	unrelated := f.ticket("unrelated", api.ID)
+	f.mustLink(owner, unrelated, queued)
+	if got := f.waitingOn(first); !slices.Equal(got, []int64{second}) {
+		t.Fatalf("#%d waits on %v, want [%d]", first, got, second)
+	}
+}
+
 func TestAnInFlightAutonomousTicketMayWaitOnWorkTheCapDoesNotHoldBack(t *testing.T) {
 	f := newFixture(t)
 	api := f.repo("acme/api")

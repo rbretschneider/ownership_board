@@ -283,11 +283,14 @@ merging does not satisfy a dependency.
   id, so nothing is filed. A link that would close a cycle (A on B and B on A,
   or longer) is refused with the path, for example `#3 -> #5 -> #3`.
 - **In flight.** An autonomous ticket in design or build cannot be made to
-  depend on an autonomous ticket that has not reached design yet: the link is
-  refused with a conflict. The waiting ticket would keep its in-flight slot,
-  and the cap would hold the other one in Ready, so neither could move.
-  Dependencies on ordinary tickets, and on autonomous tickets already in
-  flight, are allowed.
+  depend on an autonomous ticket that has not reached design yet, either
+  directly or through a chain of other tickets that are not merged (A on B
+  and B on C, with A in flight and C autonomous in Ready): the link that
+  would complete such a chain is refused with a conflict, whichever link it
+  is. The waiting ticket would keep its in-flight slot, and the cap would
+  hold the other one in Ready, so none of them could move. Dependencies on
+  ordinary tickets, and on autonomous tickets already in flight, are
+  allowed as long as no such chain forms.
 - **Who may add one.** A person; the agent holding A's lease; or the agent
   that filed A, without a lease. A lease on B alone is not enough.
 - **Who may remove one.** A person may remove any link. An agent may remove
