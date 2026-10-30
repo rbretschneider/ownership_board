@@ -218,3 +218,18 @@ func TestAgentTokenCannotTakeAPersonsName(t *testing.T) {
 		t.Fatalf("token named like a person: %v", err)
 	}
 }
+
+func TestARevokedTokensNameIsNeverReused(t *testing.T) {
+	h := newHarness(t)
+	owner := h.setup().User
+	token, _, err := h.auth.CreateAPIToken(h.ctx, owner, "desktop", true)
+	if err != nil {
+		t.Fatalf("CreateAPIToken: %v", err)
+	}
+	if err := h.auth.RevokeAPIToken(h.ctx, token.ID); err != nil {
+		t.Fatalf("Revoke: %v", err)
+	}
+	if _, _, err := h.auth.CreateAPIToken(h.ctx, owner, "desktop", false); domain.KindOf(err) != domain.KindConflict {
+		t.Fatalf("a new token took a revoked token's name: %v", err)
+	}
+}

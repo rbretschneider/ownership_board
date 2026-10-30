@@ -115,7 +115,8 @@ func (s *BoardService) RemoveDecision(ctx context.Context, actor domain.Actor, i
 }
 
 // LinkTickets relates ticket id to another ticket. An agent needs the lease on
-// one of the two.
+// one of the two, except for depends_on, which has its own rule (see
+// requireDependencyWriter).
 func (s *BoardService) LinkTickets(ctx context.Context, actor domain.Actor, id int64, kind string, otherID int64) (TicketDetail, error) {
 	relationKind, err := domain.ParseRelationKind(kind)
 	if err != nil {
@@ -135,28 +136,48 @@ func (s *BoardService) LinkTickets(ctx context.Context, actor domain.Actor, id i
 	return detail, nil
 }
 
-// UnlinkTickets removes a relation in either direction. Only people unlink.
+// UnlinkTickets removes a relation in either direction. A person may remove
+// any link; an agent only a depends_on link it added (see mayUnlink). The
+// check is made against the stored relation, not a lease, so the agent that
+// filed a ticket can take back its own dependency without claiming it.
 func (s *BoardService) UnlinkTickets(ctx context.Context, actor domain.Actor, id int64, kind string, otherID int64) (TicketDetail, error) {
-	if !actor.IsHuman() {
-		return TicketDetail{}, domain.Forbiddenf("only a person can remove ticket links")
-	}
 	relationKind, err := domain.ParseRelationKind(kind)
 	if err != nil {
 		return TicketDetail{}, err
 	}
-	return s.writer.change(ctx, actor, id, func(ctx context.Context, repos Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
+	if !actor.IsHuman() && relationKind != domain.RelationDependsOn {
+		return TicketDetail{}, domain.Forbiddenf("only a person can remove %s links", relationKind)
+	}
+	var detail TicketDetail
+	var events []Event
+	err = s.store.Write(ctx, func(repos Repos) error {
+		ticket, err := repos.Tickets().Get(ctx, id)
+		if err != nil {
+			return err
+		}
 		relation, err := findRelation(ctx, repos, ticket.ID, otherID, relationKind)
 		if err != nil {
-			return nil, err
+			return err
+		}
+		if err := mayUnlink(actor, relation); err != nil {
+			return err
 		}
 		if err := repos.Relations().Delete(ctx, relation); err != nil {
-			return nil, err
+			return err
 		}
-		ticket.UpdatedAt = s.clock.Now()
-		entry := domain.NewEntry(ticket.ID, domain.TimelineRelation, actor, ticket.UpdatedAt).
-			With("kind", string(relationKind)).With("ticket_id", otherID).With("removed", true)
-		return []domain.TimelineEntry{entry}, nil
+		detail, events, err = s.writer.apply(ctx, repos, &ticket, func(context.Context, Repos, *domain.Ticket) ([]domain.TimelineEntry, error) {
+			ticket.UpdatedAt = s.clock.Now()
+			entry := domain.NewEntry(ticket.ID, domain.TimelineRelation, actor, ticket.UpdatedAt).
+				With("kind", string(relationKind)).With("ticket_id", otherID).With("removed", true)
+			return []domain.TimelineEntry{entry}, nil
+		})
+		return err
 	})
+	if err != nil {
+		return TicketDetail{}, err
+	}
+	s.writer.sink.Publish(ctx, events)
+	return detail, nil
 }
 
 // FindTicketsForWork returns the tickets a commit or PR was recorded on. It
@@ -189,6 +210,9 @@ func (s *BoardService) linkInTx(ctx context.Context, repos Repos, actor domain.A
 	ticket, err := repos.Tickets().Get(ctx, id)
 	if err != nil {
 		return TicketDetail{}, nil, err
+	}
+	if kind == domain.RelationDependsOn {
+		return s.linkDependencyInTx(ctx, repos, actor, ticket, otherID)
 	}
 	other, err := repos.Tickets().Get(ctx, otherID)
 	if err != nil {
@@ -353,8 +377,12 @@ func decisionText(draft domain.DecisionDraft) map[string]string {
 // while working #42 ("follow_up_of" #42). An agent needs the lease on the
 // related ticket, so it can only file follow-ups for work it holds.
 func (s *BoardService) CreateRelated(ctx context.Context, actor domain.Actor, draft domain.TicketDraft, kind string, relatedID int64) (TicketDetail, error) {
-	if _, err := domain.ParseRelationKind(kind); err != nil {
+	relationKind, err := domain.ParseRelationKind(kind)
+	if err != nil {
 		return TicketDetail{}, err
+	}
+	if relationKind == domain.RelationDependsOn {
+		return TicketDetail{}, domain.Invalidf("relation cannot be depends_on; list the tickets the new one waits for in depends_on instead")
 	}
 	related, err := s.Ticket(ctx, relatedID)
 	if err != nil {
