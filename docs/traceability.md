@@ -100,6 +100,10 @@ the `from` ticket until the `to` ticket is merged; see
 - When a ticket reaches Merged, each ticket that now waits on nothing gets a
   `dependencies_met` timeline entry, `{ticket_id, merged_by_kind}`, by the
   actor that merged it. It sends no notification.
+- Migration `0008_depends_on` creates the `board_settings` table (seeded with
+  `autonomous_in_flight_cap` = 1) and a partial index on `depends_on` links.
+  Existing tickets and relations are not changed. Going down deletes every
+  `depends_on` link and the settings table, so take a backup first.
 
 ## The commit-trailer rule (agent instructions)
 
