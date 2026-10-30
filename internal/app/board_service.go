@@ -179,7 +179,11 @@ func parseDependencies(ticket domain.Ticket, ids []int64) ([]int64, error) {
 
 // requireFilingRoom limits how many autonomous tickets one token files in an
 // hour, so a leaked or looping delegate token cannot flood the queue or the
-// owner's phone. Revoking the token stops it at once.
+// owner's phone. Revoking the token stops it at once. Tickets record their
+// creator by name, so the count is per token only because agent token names
+// are unique and never reused, even after a token is revoked: the same
+// invariant isCreator relies on. A new token never inherits or shares an old
+// token's budget.
 func requireFilingRoom(ctx context.Context, repos Repos, actor domain.Actor, now time.Time) error {
 	filed, err := repos.Tickets().CountAutonomousFiledSince(ctx, actor.Name, now.Add(-time.Hour))
 	if err != nil {
