@@ -58,3 +58,13 @@ func ParseInFlightCap(raw string) (int, bool) {
 	}
 	return value, true
 }
+
+// DependencyStallsInFlightSlot reports whether "dependant depends_on
+// prerequisite" would park an in-flight autonomous ticket behind an
+// autonomous ticket that has not reached design yet. The prerequisite can
+// only start through a claim from Ready, which the in-flight cap holds back
+// while the dependant keeps its slot, so neither ticket could move again.
+func DependencyStallsInFlightSlot(dependant, prerequisite Ticket) bool {
+	return dependant.IsAutonomous && dependant.Stage.IsInFlight() &&
+		prerequisite.IsAutonomous && prerequisite.Stage.Lane() == LaneTodo
+}

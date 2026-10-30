@@ -101,7 +101,10 @@ Two more rules hold a ticket back without moving it:
   including blocked ones and ones whose lease has expired. While the count is
   at the cap, the `ready` step skips autonomous tickets and goes on to
   ordinary ones. `design` and `build` are never skipped, so an autonomous
-  ticket already in flight with an expired lease is claimed again.
+  ticket already in flight with an expired lease is claimed again. An
+  autonomous ticket in `design` or `build` may not be linked to depend on an
+  autonomous ticket still in `todo` (409): it would hold its slot while the
+  cap kept the other one from starting.
 
 | Claimed from | Action | Agent ends with |
 |---|---|---|

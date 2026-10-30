@@ -85,6 +85,9 @@ the `from` ticket until the `to` ticket is merged; see
   clearing a ticket's repo is refused (409) while that would leave a
   dependency across repos or on a ticket with no repo.
 - No cycles: a link that would close one is refused (409) with the path.
+- No stalled slots: an autonomous ticket in `design` or `build` cannot depend
+  on an autonomous ticket still in `todo` (409), since the in-flight cap would
+  keep that ticket from starting while the dependant holds its slot.
   Every check runs in the write transaction, and write transactions are
   serialised, so two opposite links added at once cannot both succeed.
 - At most 20 per ticket. `waiting_on` is computed when read, never stored.

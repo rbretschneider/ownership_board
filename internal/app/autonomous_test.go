@@ -1,6 +1,8 @@
 package app_test
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -239,4 +241,56 @@ func TestTheOwnerTurnsAutonomyOnOnlyPastTheSpecCheckpoint(t *testing.T) {
 	if !detail.Ticket.IsAutonomous || last.Source != domain.DecisionFromHuman || last.Weight != domain.WeightBinding || last.DecidedBy.Name != owner.Name {
 		t.Fatalf("autonomous %v, last decision %+v", detail.Ticket.IsAutonomous, last)
 	}
+}
+
+// An autonomous ticket in design or build holds an in-flight slot. If it
+// could wait on an autonomous ticket that has not started, the cap would
+// keep that prerequisite out of design for as long as the slot is held, and
+// neither ticket could ever be claimed again.
+func TestAnInFlightAutonomousTicketCannotWaitOnAnUnstartedAutonomousOne(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	inFlight := f.mustCreateAutonomous(api.ID)
+	if work := f.mustClaim(agent, app.ClaimInput{LeaseMinutes: 30}); work.Ticket.Ticket.ID != inFlight {
+		t.Fatalf("claimed #%d, want #%d", work.Ticket.Ticket.ID, inFlight)
+	}
+	queued := f.mustCreateAutonomous(api.ID)
+
+	for _, actor := range []domain.Actor{delegate, agent, owner} {
+		_, err := f.board.LinkTickets(f.ctx, actor, inFlight, dependsOn, queued)
+		requireErrorKind(t, err, domain.KindConflict)
+		requireMessage(t, err, fmt.Sprintf("ticket %d", queued))
+	}
+	if got := f.waitingOn(inFlight); len(got) != 0 {
+		t.Fatalf("the in-flight ticket waits on %v after the refused links", got)
+	}
+
+	f.clock.Advance(31 * time.Minute)
+	if work := f.mustClaim(other, app.ClaimInput{}); work.Ticket.Ticket.ID != inFlight {
+		t.Fatalf("claimed #%d after the lease lapsed, want the in-flight #%d", work.Ticket.Ticket.ID, inFlight)
+	}
+}
+
+func TestAnInFlightAutonomousTicketMayWaitOnWorkTheCapDoesNotHoldBack(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	f.setInFlightCap(2)
+	inFlight := f.mustCreateAutonomous(api.ID)
+	alsoInFlight := f.mustCreateAutonomous(api.ID)
+	f.mustClaim(agent, app.ClaimInput{})
+	f.mustClaim(other, app.ClaimInput{})
+	f.requireStage(inFlight, domain.StageDesign)
+	f.requireStage(alsoInFlight, domain.StageDesign)
+	normal := f.ticket("normal work", api.ID)
+	f.toReady(normal)
+
+	f.mustLink(delegate, inFlight, normal)
+	f.mustLink(delegate, inFlight, alsoInFlight)
+	if got := f.waitingOn(inFlight); !slices.Equal(got, []int64{alsoInFlight, normal}) {
+		t.Fatalf("waiting on %v, want [%d %d]", got, alsoInFlight, normal)
+	}
+
+	queued := f.mustCreateAutonomous(api.ID)
+	waiting := f.mustCreateAutonomous(api.ID)
+	f.mustLink(delegate, waiting, queued)
 }

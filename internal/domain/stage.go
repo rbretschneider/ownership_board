@@ -74,6 +74,12 @@ func (s Stage) IsAgentStage() bool {
 	return s == StageRefine || s == StageReady || s == StageDesign || s == StageBuild
 }
 
+// IsInFlight reports whether an autonomous ticket in this stage takes one of
+// the in-flight slots.
+func (s Stage) IsInFlight() bool {
+	return s == StageDesign || s == StageBuild
+}
+
 // MayTurnAutonomous reports whether a person may make a ticket in this stage
 // autonomous: its spec is past review and it is not parked at a checkpoint,
 // so turning the flag on never lets an unseen spec or design through.

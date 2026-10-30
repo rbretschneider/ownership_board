@@ -282,6 +282,12 @@ merging does not satisfy a dependency.
   and an unknown id or one in another repo refuses the whole call, naming the
   id, so nothing is filed. A link that would close a cycle (A on B and B on A,
   or longer) is refused with the path, for example `#3 -> #5 -> #3`.
+- **In flight.** An autonomous ticket in design or build cannot be made to
+  depend on an autonomous ticket that has not reached design yet: the link is
+  refused with a conflict. The waiting ticket would keep its in-flight slot,
+  and the cap would hold the other one in Ready, so neither could move.
+  Dependencies on ordinary tickets, and on autonomous tickets already in
+  flight, are allowed.
 - **Who may add one.** A person; the agent holding A's lease; or the agent
   that filed A, without a lease. A lease on B alone is not enough.
 - **Who may remove one.** A person may remove any link. An agent may remove

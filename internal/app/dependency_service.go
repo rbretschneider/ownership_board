@@ -11,7 +11,9 @@ import (
 // merged. The rules below keep that gate trustworthy: only a person, the
 // agent holding A's lease, or the agent that filed A may add one; only a
 // person or the agent that added it may remove one; both tickets are in the
-// same repo; and the links never form a cycle.
+// same repo; the links never form a cycle; and an autonomous ticket in
+// design or build never waits on an autonomous ticket the in-flight cap
+// would keep from starting.
 
 // addDependencies links a ticket being created to every ticket in ids, in the
 // caller's transaction, so a refusal leaves no ticket behind. It returns the
@@ -68,6 +70,11 @@ func (s *BoardService) linkDependencyInTx(ctx context.Context, repos Repos, acto
 func (s *BoardService) insertDependency(ctx context.Context, repos Repos, actor domain.Actor, dependant, prerequisite domain.Ticket) (domain.TimelineEntry, []Event, error) {
 	if err := requireSameRepo(dependant, prerequisite); err != nil {
 		return domain.TimelineEntry{}, nil, err
+	}
+	if domain.DependencyStallsInFlightSlot(dependant, prerequisite) {
+		return domain.TimelineEntry{}, nil, domain.Conflictf(
+			"depends_on: ticket %d is autonomous and has not started, and autonomous ticket %d holds an in-flight slot; the cap would keep ticket %d from starting while ticket %d waits for it",
+			prerequisite.ID, dependant.ID, prerequisite.ID, dependant.ID)
 	}
 	now := s.clock.Now()
 	relation, err := domain.NewRelation(dependant.ID, prerequisite.ID, domain.RelationDependsOn, actor, now)
