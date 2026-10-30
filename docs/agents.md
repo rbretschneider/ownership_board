@@ -277,7 +277,7 @@ stays in Ready) and a person can still move it. A pull request closed without
 merging does not satisfy a dependency.
 
 - **Adding.** `create_ticket` and `create_autonomous_ticket` take
-  `depends_on: [ids]` (at most 20); `link_tickets` takes kind `depends_on`
+  `depends_on: [ids]` (at most 20 entries, repeats included); `link_tickets` takes kind `depends_on`
   with `id` = A and `other_id` = B. Both tickets must be in the same repo,
   and an unknown id or one in another repo refuses the whole call, naming the
   id, so nothing is filed. A link that would close a cycle (A on B and B on A,
