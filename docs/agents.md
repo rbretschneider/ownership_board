@@ -107,7 +107,10 @@ the whole board each time it runs:
    after the security review when a `gpt-review` command is installed (the
    OpenAI Codex CLI wrapper in the Hawaii agent runner). Its findings go to
    `senior_dev` once, and the ones not fixed are listed in the ticket comment.
-   It never blocks the build.
+   It never blocks the build. With `--builder codex`, Codex builds with the
+   `codex-build` command; Claude QA and security review it (again after any
+   fixes); the GPT review is skipped; exit code 10 ends the pass for a later
+   resume; exit code 20 falls back to Claude; Claude opens the PR.
 5. Reports work links, the PR and a summary to the board and moves the ticket
    to review.
 
@@ -129,6 +132,23 @@ clones. Copy it to `~/.claude/commands/` and run:
 
 With no interval, Claude paces itself. It never merges, deploys or pushes to a
 default branch. Deploys happen through the repo's CI/CD.
+
+To let Codex build instead of Claude, pass the builder before the optional
+repo name:
+
+```
+/board-loop --builder codex acme/api
+```
+
+The default is `claude`. The runner picks the builder (at about 0.75 of the
+five-hour window); the loop never does. The builder is per pass: a ticket
+partly built by the other family resumes from its newest comments and
+`git log`. The orchestrator unsets `GH_TOKEN`, `GITHUB_TOKEN`,
+`CLAUDE_CODE_OAUTH_TOKEN`, `OWNERSHIP_TOKEN` and `ANTHROPIC_API_KEY` before it
+runs `codex-build`. This narrows exposure and is not a boundary: other
+credential files of the same user stay readable, so run the runner under a
+dedicated user. On a public repo, Codex building needs the same opt-in as the
+GPT review.
 
 **Inside an interactive session.** Copy `agent/claude/board-work.md` to
 `.claude/commands/` in the repo (or `~/.claude/commands/` for every repo),
@@ -217,7 +237,7 @@ request, and the PR is your only review.
    autonomous") every time one is filed, so a ticket from a leaked token does
    not go unseen, and at most 10 autonomous tickets can be open before Review.
 4. **What the loop does.** `board-loop` adds a GPT review of the design
-   (`gpt-review --design`) and runs the GPT code review on every tier. The PR
+   (`gpt-review --design`) and runs the GPT code review on every tier (except when Codex built). The PR
    body lists every choice made in your place and every review finding not
    fixed.
 5. **Taking it back.** The ticket sheet's **Autonomous** switch is yours
