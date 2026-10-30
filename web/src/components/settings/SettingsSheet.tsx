@@ -5,6 +5,7 @@ import { BOARD_HASH, navigate, SETTINGS_HASH, type Route } from "../../lib/hashR
 import { Overlay } from "../common/Overlay";
 import { useToast } from "../toast/ToastContext";
 import { AccountSection } from "./AccountSection";
+import { AgentWorkSection } from "./AgentWorkSection";
 import { AlertsSection } from "./AlertsSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { RepositoriesSection } from "./RepositoriesSection";
@@ -19,7 +20,7 @@ export interface SettingsSheetProps {
   onChanged: () => void;
 }
 
-/** Settings (#/settings): repositories, agent tokens, appearance, account. */
+/** Settings (#/settings): repositories, agent tokens, agent work, appearance, account. */
 export function SettingsSheet({ route, status, onSignedOut, onChanged }: SettingsSheetProps) {
   const toast = useToast();
   const isJustLinked = route.params.get("linked") === "1";
@@ -49,6 +50,7 @@ export function SettingsSheet({ route, status, onSignedOut, onChanged }: Setting
         <div className="sheet__body settings__body">
           <RepositoriesSection onChanged={onChanged} />
           <TokensSection />
+          <AgentWorkSection />
           <AppearanceSection />
           <AlertsSection />
           <AccountSection status={status} onSignedOut={onSignedOut} />

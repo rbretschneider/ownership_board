@@ -4,6 +4,7 @@ import type {
   ApproveInput,
   AuthStatus,
   Board,
+  BoardSettings,
   CreatedToken,
   CreateTicket,
   EditTicket,
@@ -80,6 +81,8 @@ export interface BoardApi {
   tokens(): Promise<Token[]>;
   createToken(name: string, isDelegate: boolean): Promise<CreatedToken>;
   revokeToken(id: number): Promise<void>;
+  settings(): Promise<BoardSettings>;
+  editSettings(input: Partial<BoardSettings>): Promise<BoardSettings>;
 }
 
 /** Builds the {@link BoardApi} on top of an {@link HttpClient}. */
@@ -123,6 +126,8 @@ export function createBoardApi(http: HttpClient): BoardApi {
     tokens: () => http.request("GET", "/tokens"),
     createToken: (name, isDelegate) => http.request("POST", "/tokens", { name, is_delegate: isDelegate }),
     revokeToken: (id) => http.request("DELETE", `/tokens/${id}`),
+    settings: () => http.request("GET", "/settings"),
+    editSettings: (input) => http.request("PATCH", "/settings", input),
   };
 }
 

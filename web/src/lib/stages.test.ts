@@ -30,7 +30,7 @@ function ticket(id: number, stage: StageId, overrides: Partial<TicketSummary> = 
   return {
     id, lane, stage, repo_id: 1, kind: "story", title: `t${id}`, owner: "agent",
     needs_owner: false, blocked_reason: "", is_autonomous: false, spec_revision: 0, design_revision: 0,
-    pr_url: "", branch: "", open_questions: 0, lease: null,
+    pr_url: "", branch: "", open_questions: 0, waiting_on: [], lease: null,
     created_at: "", updated_at: "", lane_changed_at: "", ...overrides,
   };
 }

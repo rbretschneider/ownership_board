@@ -6,6 +6,7 @@ export const RELATION_CHOICES: readonly { kind: RelationKind; label: string }[] 
   { kind: "follow_up_of", label: "Follow-up of" },
   { kind: "duplicate_of", label: "Duplicate of" },
   { kind: "relates_to", label: "Relates to" },
+  { kind: "depends_on", label: "Depends on" },
 ];
 
 /** Display label for each (kind, direction), in display order. */
@@ -18,6 +19,8 @@ const LABELS: readonly { kind: RelationKind; direction: Relation["direction"]; l
   { kind: "duplicate_of", direction: "incoming", label: "Duplicated by" },
   { kind: "relates_to", direction: "outgoing", label: "Relates to" },
   { kind: "relates_to", direction: "incoming", label: "Relates to" },
+  { kind: "depends_on", direction: "outgoing", label: "Depends on" },
+  { kind: "depends_on", direction: "incoming", label: "Needed by" },
 ];
 
 /** Most tickets the link picker lists at once. */
@@ -60,4 +63,29 @@ export function searchTickets(tickets: readonly TicketSummary[], query: string, 
   return candidates
     .filter((t) => (isNumber && String(t.id).startsWith(needle)) || t.title.toLowerCase().includes(needle))
     .slice(0, MAX_PICKER_RESULTS);
+}
+
+/** Ticket references for display: [3, 5] becomes "#3, #5". */
+export function ticketRefs(ids: readonly number[]): string {
+  return ids.map((id) => `#${id}`).join(", ");
+}
+
+/**
+ * Tickets a ticket can depend on: dependencies are same repo only, so a
+ * ticket with no repo has none to choose from.
+ */
+export function dependencyCandidates(tickets: readonly TicketSummary[], repoId: number | null): TicketSummary[] {
+  return repoId === null ? [] : tickets.filter((t) => t.repo_id === repoId);
+}
+
+/**
+ * The timeline line for a dependencies_met entry, after the actor's name: the
+ * actor merged the last ticket this one waited for.
+ */
+export function dependenciesMetText(data: Record<string, unknown>): string {
+  if (typeof data["ticket_id"] !== "number") {
+    return "merged the last dependency: nothing else to wait for";
+  }
+  const id = `#${data["ticket_id"]}`;
+  return `merged ${id}: unblocked by ${id}, nothing else to wait for`;
 }

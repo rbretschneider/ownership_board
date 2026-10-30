@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useApi } from "../../api/ApiContext";
 import type { Lane, Relation, TicketDetail, TicketSummary } from "../../api/types";
 import { ticketHash } from "../../lib/hashRoute";
-import { groupRelations, relationEnds, relationLabel } from "../../lib/relations";
+import { groupRelations, relationEnds, relationLabel, ticketRefs } from "../../lib/relations";
 import { ConfirmDialog } from "../common/ConfirmDialog";
 import { RelationForm } from "./RelationForm";
 import type { RunMutation } from "./TicketSheet";
@@ -47,10 +47,16 @@ export function RelatedSection({ ticket, tickets, lanes, run }: RelatedSectionPr
       {isAdding && (
         <RelationForm
           ticketId={ticket.id}
+          repoId={ticket.repo_id}
           tickets={tickets}
           onSubmit={(input) => run(() => api.addRelation(ticket.id, input), "Tickets linked")}
           onCancel={() => setAdding(false)}
         />
+      )}
+      {ticket.waiting_on.length > 0 && (
+        <p className="related-waiting" role="status">
+          Waiting on {ticketRefs(ticket.waiting_on)}: agents cannot claim this until {ticket.waiting_on.length === 1 ? "it is" : "they are"} merged.
+        </p>
       )}
       {groups.length === 0 && !isAdding && <p className="muted">Not linked to other tickets.</p>}
       {groups.map((group) => (

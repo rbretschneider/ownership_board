@@ -1,25 +1,37 @@
 import { useId, useState, type FormEvent } from "react";
 import type { RelationInput, RelationKind, TicketSummary } from "../../api/types";
-import { RELATION_CHOICES, searchTickets } from "../../lib/relations";
+import { dependencyCandidates, RELATION_CHOICES, searchTickets } from "../../lib/relations";
 import { Spinner } from "../common/Spinner";
 
 /** Props for {@link RelationForm}. */
 export interface RelationFormProps {
   ticketId: number;
+  /** This ticket's repo; a dependency must be in the same one. */
+  repoId: number | null;
   tickets: readonly TicketSummary[];
   onSubmit: (input: RelationInput) => Promise<boolean>;
   onCancel: () => void;
 }
 
 /** Links this ticket to another: choose how they relate, then pick the ticket. */
-export function RelationForm({ ticketId, tickets, onSubmit, onCancel }: RelationFormProps) {
+export function RelationForm({ ticketId, repoId, tickets, onSubmit, onCancel }: RelationFormProps) {
   const id = useId();
   const [kind, setKind] = useState<RelationKind>("relates_to");
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<TicketSummary | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [isBusy, setBusy] = useState(false);
-  const results = picked === null ? searchTickets(tickets, query, ticketId) : [];
+  const isDependency = kind === "depends_on";
+  const choosable = isDependency ? dependencyCandidates(tickets, repoId) : tickets;
+  const results = picked === null ? searchTickets(choosable, query, ticketId) : [];
+
+  // A ticket picked for another kind may be in a different repo.
+  const changeKind = (next: RelationKind) => {
+    setKind(next);
+    if (next === "depends_on" && picked !== null && dependencyCandidates([picked], repoId).length === 0) {
+      setPicked(null);
+    }
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -40,11 +52,18 @@ export function RelationForm({ ticketId, tickets, onSubmit, onCancel }: Relation
     <form className="inline-form" onSubmit={(e) => void submit(e)} noValidate>
       <div className="field">
         <label className="field__label" htmlFor={`${id}-kind`}>This ticket is</label>
-        <select id={`${id}-kind`} className="select" value={kind} onChange={(e) => setKind(e.target.value as RelationKind)}>
+        <select id={`${id}-kind`} className="select" value={kind} onChange={(e) => changeKind(e.target.value as RelationKind)}>
           {RELATION_CHOICES.map((choice) => (
             <option key={choice.kind} value={choice.kind}>{choice.label}</option>
           ))}
         </select>
+        {isDependency && (
+          <p className="muted small">
+            {repoId === null
+              ? "Set this ticket's repo first: dependencies are same repo only."
+              : "Agents cannot claim this ticket until the one you pick is merged. Same repo only."}
+          </p>
+        )}
       </div>
       <div className="field">
         <label className="field__label" htmlFor={`${id}-search`}>Ticket</label>
