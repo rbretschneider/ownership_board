@@ -37,4 +37,13 @@ type RelationRepository interface {
 	Insert(ctx context.Context, relation domain.Relation) error
 	Delete(ctx context.Context, relation domain.Relation) error
 	CountOutgoing(ctx context.Context, ticketID int64) (int, error)
+	// Waiting maps each ticket that depends on an unmerged ticket to the ids
+	// of those tickets, in id order.
+	Waiting(ctx context.Context) (map[int64][]int64, error)
+	// WaitingOn returns the unmerged tickets ticketID depends on, in id
+	// order; empty when it waits for nothing.
+	WaitingOn(ctx context.Context, ticketID int64) ([]int64, error)
+	// DependencyEdges maps every dependant to the tickets it depends on,
+	// merged or not.
+	DependencyEdges(ctx context.Context) (map[int64][]int64, error)
 }
