@@ -491,3 +491,56 @@ func TestRepoChangesCannotSplitDependencies(t *testing.T) {
 		t.Fatalf("repo change without dependencies: %v", err)
 	}
 }
+
+// A link needs both tickets in one repo, so a ticket with no repo is
+// refused at either end and no relation is left behind.
+func TestLinkRefusedWhenEitherTicketHasNoRepo(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	withRepo := f.ticket("with repo", api.ID)
+	noRepo := f.ticket("no repo", 0)
+	_, err := f.board.LinkTickets(f.ctx, owner, withRepo, dependsOn, noRepo)
+	requireErrorKind(t, err, domain.KindInvalid)
+	_, err = f.board.LinkTickets(f.ctx, owner, noRepo, dependsOn, withRepo)
+	requireErrorKind(t, err, domain.KindInvalid)
+	if len(f.detail(withRepo).Related) != 0 || len(f.detail(noRepo).Related) != 0 {
+		t.Fatal("a refused link left a relation")
+	}
+}
+
+// Deleting a prerequisite drops its links, so the dependant waits for
+// nothing; the deleted id cannot be linked or depended on afterwards.
+func TestDeletingAPrerequisiteFreesTheDependant(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	b := f.ticket("b", api.ID)
+	a := f.ticket("a", api.ID)
+	f.mustLink(owner, a, b)
+	if err := f.board.Delete(f.ctx, owner, b); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if got := f.waitingOn(a); len(got) != 0 {
+		t.Fatalf("waiting on %v after the prerequisite was deleted", got)
+	}
+	_, err := f.board.LinkTickets(f.ctx, owner, a, dependsOn, b)
+	requireErrorKind(t, err, domain.KindNotFound)
+	_, err = f.create(owner, "c", api.ID, b)
+	requireErrorKind(t, err, domain.KindInvalid)
+}
+
+// In a chain each ticket waits only on its own prerequisite.
+func TestAChainWaitsOneLinkAtATime(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	c := f.ticket("c", api.ID)
+	b := f.ticket("b", api.ID)
+	a := f.ticket("a", api.ID)
+	f.mustLink(owner, a, b)
+	f.mustLink(owner, b, c)
+	if got := f.waitingOn(a); len(got) != 1 || got[0] != b {
+		t.Fatalf("a waits on %v, want [b]", got)
+	}
+	if got := f.waitingOn(b); len(got) != 1 || got[0] != c {
+		t.Fatalf("b waits on %v, want [c]", got)
+	}
+}
