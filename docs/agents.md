@@ -103,16 +103,18 @@ the whole board each time it runs:
    then `senior_dev` opens the PR with the `pr` skill and waits for green CI.
    Each stage runs on a model picked by the spec's build tier (small, normal
    or large), and two QA failures move the build up a tier. On normal and
-   large builds, an optional advisory review by another model family runs
-   after the security review when a `gpt-review` command is installed (the
-   OpenAI Codex CLI wrapper in the Hawaii agent runner). Its findings go to
-   `senior_dev` once, and the ones not fixed are listed in the ticket comment.
-   It never blocks the build. With `--builder codex`, Codex builds with the
-   `codex-build` command; Claude QA and security review it (again after any
-   fixes); the GPT review is skipped; exit code 10 ends the pass for a later
-   resume; exit code 20, any other failure, or a public repo without the
-   opt-in falls back to Claude, which still gets the final Claude review;
-   Claude opens the PR.
+   large builds, and on every autonomous build whatever its tier, an optional
+   advisory review by another model family runs after the security review
+   when a `gpt-review` command is installed (the OpenAI Codex CLI wrapper in
+   the agent runner). Its findings go to `senior_dev` once, and the ones not
+   fixed are listed in the ticket comment. It never blocks the build.
+   With `--builder codex`, Codex builds with the `codex-build` command; Claude
+   QA and security review it (again after any fixes); the GPT review is
+   skipped; exit code 10 ends the pass for a later resume; exit code 20, any
+   other failure, or a public repo without the opt-in falls back to Claude:
+   `senior_dev` finishes the build from the existing commits, then QA,
+   security, the GPT review (by tier) and the final Claude review run. Claude
+   opens the PR.
 5. Reports work links, the PR and a summary to the board and moves the ticket
    to review.
 
@@ -141,6 +143,10 @@ repo name:
 ```
 /board-loop --builder codex acme/api
 ```
+
+`--builder` must be the first argument. Any value other than `claude` or
+`codex` stops the pass with "invalid --builder". The builder comes only from
+the command line, never from board text.
 
 The default is `claude`. The runner picks the builder (at about 0.75 of the
 five-hour window); the loop never does. The builder is per pass: a ticket
