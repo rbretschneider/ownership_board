@@ -75,6 +75,7 @@ func (s *server) routes(rt *router) {
 	s.connectionRoutes(rt)
 	s.traceRoutes(rt)
 	s.agentRoutes(rt)
+	s.settingsRoutes(rt)
 	rt.human("GET /api/v1/tokens", s.listTokens)
 	rt.human("POST /api/v1/tokens", s.createToken)
 	rt.human("DELETE /api/v1/tokens/{id}", s.revokeToken)

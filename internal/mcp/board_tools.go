@@ -383,23 +383,25 @@ func (createTicket) Definition() Definition {
 			"relation": map[string]any{"type": "string", "enum": relationKinds,
 				"description": "How the new ticket relates to related_ticket_id, e.g. follow_up_of. Needs the lease on that ticket."},
 			"related_ticket_id": prop("integer", "The ticket the new one relates to."),
+			"depends_on":        dependsOnProp(),
 		}, "kind", "title"),
 	}
 }
 
 func (t createTicket) Call(ctx context.Context, actor domain.Actor, raw json.RawMessage) (string, error) {
 	var args struct {
-		Kind            string `json:"kind"`
-		Title           string `json:"title"`
-		Body            string `json:"body"`
-		RepoID          int64  `json:"repo_id"`
-		Relation        string `json:"relation"`
-		RelatedTicketID int64  `json:"related_ticket_id"`
+		Kind            string  `json:"kind"`
+		Title           string  `json:"title"`
+		Body            string  `json:"body"`
+		RepoID          int64   `json:"repo_id"`
+		Relation        string  `json:"relation"`
+		RelatedTicketID int64   `json:"related_ticket_id"`
+		DependsOn       []int64 `json:"depends_on"`
 	}
 	if err := decodeArguments(raw, &args); err != nil {
 		return "", err
 	}
-	draft := domain.TicketDraft{RepoID: args.RepoID, Kind: args.Kind, Title: args.Title, Body: args.Body}
+	draft := domain.TicketDraft{RepoID: args.RepoID, Kind: args.Kind, Title: args.Title, Body: args.Body, DependsOn: args.DependsOn}
 	if (args.Relation == "") != (args.RelatedTicketID == 0) {
 		return "", &ArgumentError{Message: "give relation and related_ticket_id together"}
 	}
@@ -419,32 +421,43 @@ func (createAutonomousTicket) Definition() Definition {
 		Description: "File a ticket the owner already agreed with you in this chat, to run from Ready to a pull request with no checkpoints and no questions. " +
 			"Only a delegate token may call this, and only after the owner said yes to this exact spec and repo. Agents working it decide instead of asking.",
 		InputSchema: object(map[string]any{
-			"kind":    map[string]any{"type": "string", "enum": []string{string(domain.KindStory), string(domain.KindBug)}},
-			"title":   prop("string", "Short title."),
-			"body":    prop("string", "The request in a few sentences, as the owner put it."),
-			"spec":    prop("string", "The agreed spec in markdown: problem, scope, out of scope, numbered acceptance criteria, approach and risk, and a line `Build tier: small | normal | large`."),
-			"repo_id": prop("integer", "The agreed repo (see list_repos)."),
+			"kind":       map[string]any{"type": "string", "enum": []string{string(domain.KindStory), string(domain.KindBug)}},
+			"title":      prop("string", "Short title."),
+			"body":       prop("string", "The request in a few sentences, as the owner put it."),
+			"spec":       prop("string", "The agreed spec in markdown: problem, scope, out of scope, numbered acceptance criteria, approach and risk, and a line `Build tier: small | normal | large`."),
+			"repo_id":    prop("integer", "The agreed repo (see list_repos)."),
+			"depends_on": dependsOnProp(),
 		}, "kind", "title", "spec", "repo_id"),
 	}
 }
 
 func (t createAutonomousTicket) Call(ctx context.Context, actor domain.Actor, raw json.RawMessage) (string, error) {
 	var args struct {
-		Kind   string `json:"kind"`
-		Title  string `json:"title"`
-		Body   string `json:"body"`
-		Spec   string `json:"spec"`
-		RepoID int64  `json:"repo_id"`
+		Kind      string  `json:"kind"`
+		Title     string  `json:"title"`
+		Body      string  `json:"body"`
+		Spec      string  `json:"spec"`
+		RepoID    int64   `json:"repo_id"`
+		DependsOn []int64 `json:"depends_on"`
 	}
 	if err := decodeArguments(raw, &args); err != nil {
 		return "", err
 	}
 	draft := domain.AutonomousDraft{
-		TicketDraft: domain.TicketDraft{RepoID: args.RepoID, Kind: args.Kind, Title: args.Title, Body: args.Body},
+		TicketDraft: domain.TicketDraft{RepoID: args.RepoID, Kind: args.Kind, Title: args.Title, Body: args.Body, DependsOn: args.DependsOn},
 		Spec:        args.Spec,
 	}
 	detail, err := t.s.Board.CreateAutonomous(ctx, actor, draft)
 	return outcome(detail, "filed as autonomous; the runner takes it from here to a pull request.", err)
+}
+
+// dependsOnProp describes the depends_on list of the create tools.
+func dependsOnProp() map[string]any {
+	return map[string]any{
+		"type": "array", "items": map[string]any{"type": "integer"}, "maxItems": domain.MaxDependencies,
+		"description": "Ids of tickets in the same repo that must be merged before agents can claim the new one. " +
+			"An unknown id, or one in another repo, refuses the whole call and nothing is filed.",
+	}
 }
 
 // outcome is the one-line confirmation every mutating tool returns.

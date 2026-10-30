@@ -50,15 +50,16 @@ func (s *server) board(w http.ResponseWriter, r *http.Request, _ caller) error {
 
 func (s *server) createTicket(w http.ResponseWriter, r *http.Request, who caller) error {
 	var body struct {
-		RepoID *int64 `json:"repo_id"`
-		Kind   string `json:"kind"`
-		Title  string `json:"title"`
-		Body   string `json:"body"`
+		RepoID    *int64  `json:"repo_id"`
+		Kind      string  `json:"kind"`
+		Title     string  `json:"title"`
+		Body      string  `json:"body"`
+		DependsOn []int64 `json:"depends_on"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
 	}
-	draft := domain.TicketDraft{RepoID: valueOrZero(body.RepoID), Kind: body.Kind, Title: body.Title, Body: body.Body}
+	draft := domain.TicketDraft{RepoID: valueOrZero(body.RepoID), Kind: body.Kind, Title: body.Title, Body: body.Body, DependsOn: body.DependsOn}
 	detail, err := s.deps.Board.Create(r.Context(), who.actor, draft)
 	return respondDetail(w, http.StatusCreated, detail, err)
 }

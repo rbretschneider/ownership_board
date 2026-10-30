@@ -14,6 +14,10 @@ var relationKinds = []string{
 	string(domain.RelationDuplicateOf), string(domain.RelationRelatesTo),
 }
 
+// linkKinds are the kinds link_tickets accepts: the relation kinds plus
+// depends_on, which create_ticket takes as its own list instead.
+var linkKinds = append(append([]string{}, relationKinds...), string(domain.RelationDependsOn))
+
 type addWorkLink struct{ s Services }
 
 func (addWorkLink) Definition() Definition {
@@ -81,11 +85,13 @@ type linkTickets struct{ s Services }
 
 func (linkTickets) Definition() Definition {
 	return Definition{
-		Name:        "link_tickets",
-		Description: "Relate two tickets, read as \"<id> <kind> <other_id>\", e.g. 57 caused_by 42. You must hold the lease on one of them.",
+		Name: "link_tickets",
+		Description: "Relate two tickets, read as \"<id> <kind> <other_id>\", e.g. 57 caused_by 42. You must hold the lease on one of them. " +
+			"For depends_on (57 depends_on 42: agents cannot claim 57 until 42 is merged) you need the lease on <id> or to have filed it; " +
+			"both tickets must be in the same repo and the link must not close a cycle.",
 		InputSchema: object(map[string]any{
 			"id":       ticketIDProp(),
-			"kind":     map[string]any{"type": "string", "enum": relationKinds},
+			"kind":     map[string]any{"type": "string", "enum": linkKinds},
 			"other_id": prop("integer", "The other ticket's id."),
 		}, "id", "kind", "other_id"),
 	}

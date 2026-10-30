@@ -289,3 +289,115 @@ func TestAgentsCannotDeleteTraceRecords(t *testing.T) {
 	}
 	agent.expect(http.StatusForbidden, "POST", "/api/v1/tickets/1/decisions", `{"summary":"agent without lease"}`)
 }
+
+func TestSettingsAreReadByAnyoneAndChangedByPeople(t *testing.T) {
+	browser, token := signedIn(t)
+	agent := browser.asAgent(token)
+	if got := agent.expect(http.StatusOK, "GET", "/api/v1/settings", "")["autonomous_in_flight_cap"]; got != float64(1) {
+		t.Fatalf("default cap %v, want 1", got)
+	}
+	agent.expect(http.StatusForbidden, "PATCH", "/api/v1/settings", `{"autonomous_in_flight_cap":2}`)
+	for _, body := range []string{
+		`{"autonomous_in_flight_cap":0}`, `{"autonomous_in_flight_cap":11}`, `{"autonomous_in_flight_cap":-1}`,
+		`{"autonomous_in_flight_cap":99999999999999999999}`, `{"autonomous_in_flight_cap":"2"}`, `{"autonomous_in_flight_cap":1.5}`,
+		`{"in_flight":2}`,
+	} {
+		browser.expect(http.StatusBadRequest, "PATCH", "/api/v1/settings", body)
+	}
+	if got := browser.expect(http.StatusOK, "PATCH", "/api/v1/settings", `{"autonomous_in_flight_cap":2}`)["autonomous_in_flight_cap"]; got != float64(2) {
+		t.Fatalf("cap after the change %v, want 2", got)
+	}
+	if got := browser.expect(http.StatusOK, "GET", "/api/v1/settings", "")["autonomous_in_flight_cap"]; got != float64(2) {
+		t.Fatalf("stored cap %v, want 2", got)
+	}
+}
+
+func TestTicketsListWhatTheyAreWaitingOn(t *testing.T) {
+	browser, _ := signedIn(t)
+	api := jsonNumber(browser.expect(http.StatusCreated, "POST", "/api/v1/repos", `{"full_name":"acme/api"}`)["id"])
+	b := jsonNumber(browser.expect(http.StatusCreated, "POST", "/api/v1/tickets", `{"kind":"story","title":"b","repo_id":`+api+`}`)["id"])
+	a := browser.expect(http.StatusCreated, "POST", "/api/v1/tickets", `{"kind":"story","title":"a","repo_id":`+api+`,"depends_on":[`+b+`]}`)
+	if got := jsonNumber(a["waiting_on"]); got != "["+b+"]" {
+		t.Fatalf("created ticket waiting_on %s, want [%s]", got, b)
+	}
+	body := browser.expect(http.StatusBadRequest, "POST", "/api/v1/tickets", `{"kind":"story","title":"c","repo_id":`+api+`,"depends_on":[999]}`)
+	if !strings.Contains(body["error"].(map[string]any)["message"].(string), "999") {
+		t.Fatalf("error does not name the unknown id: %v", body)
+	}
+
+	board := browser.expect(http.StatusOK, "GET", "/api/v1/board", "")
+	tickets := board["tickets"].([]any)
+	if len(tickets) != 2 {
+		t.Fatalf("%d tickets on the board, want 2 (a refused create added one)", len(tickets))
+	}
+	for _, raw := range tickets {
+		ticket := raw.(map[string]any)
+		want := "[]"
+		if jsonNumber(ticket["id"]) == jsonNumber(a["id"]) {
+			want = "[" + b + "]"
+		}
+		if got := jsonNumber(ticket["waiting_on"]); got != want {
+			t.Fatalf("ticket %v waiting_on %s, want %s", ticket["id"], got, want)
+		}
+	}
+	browser.expect(http.StatusConflict, "PATCH", "/api/v1/tickets/"+b, `{"repo_id":null}`)
+}
+
+func TestAgentsRemoveOnlyTheDependencyLinksTheyAdded(t *testing.T) {
+	browser, token := signedIn(t)
+	api := jsonNumber(browser.expect(http.StatusCreated, "POST", "/api/v1/repos", `{"full_name":"acme/api"}`)["id"])
+	b := jsonNumber(browser.expect(http.StatusCreated, "POST", "/api/v1/tickets", `{"kind":"story","title":"b","repo_id":`+api+`}`)["id"])
+	delegate := browser.asAgent(browser.expect(http.StatusCreated, "POST", "/api/v1/tokens", `{"name":"desktop","is_delegate":true}`)["secret"].(string))
+	reply := delegate.expect(http.StatusOK, "POST", "/mcp",
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"create_autonomous_ticket","arguments":`+
+			`{"kind":"story","title":"Agreed","spec":"Spec.","repo_id":`+api+`,"depends_on":[`+b+`]}}}`)
+	if reply["result"].(map[string]any)["isError"].(bool) {
+		t.Fatalf("create_autonomous_ticket with depends_on: %v", reply)
+	}
+	a := "2"
+	agent := browser.asAgent(token)
+	agent.expect(http.StatusForbidden, "DELETE", "/api/v1/tickets/"+a+"/relations/depends_on/"+b, "")
+	agent.expect(http.StatusForbidden, "DELETE", "/api/v1/tickets/"+b+"/relations/depends_on/"+a, "")
+	agent.expect(http.StatusForbidden, "POST", "/api/v1/tickets/"+a+"/relations", `{"kind":"depends_on","ticket_id":`+b+`}`)
+	removed := delegate.expect(http.StatusOK, "DELETE", "/api/v1/tickets/"+b+"/relations/depends_on/"+a, "")
+	if got := jsonNumber(removed["relations"]); got != "[]" {
+		t.Fatalf("relations after removal %s", got)
+	}
+	delegate.expect(http.StatusOK, "POST", "/api/v1/tickets/"+a+"/relations", `{"kind":"depends_on","ticket_id":`+b+`}`)
+	delegate.expect(http.StatusForbidden, "POST", "/api/v1/tickets/"+b+"/relations", `{"kind":"depends_on","ticket_id":`+a+`}`)
+	cycle := browser.expect(http.StatusConflict, "POST", "/api/v1/tickets/"+b+"/relations", `{"kind":"depends_on","ticket_id":`+a+`}`)
+	if got := cycle["error"].(map[string]any)["message"].(string); !strings.Contains(got, "#"+b+" -> #"+a+" -> #"+b) {
+		t.Fatalf("cycle error does not give the path: %q", got)
+	}
+	browser.expect(http.StatusOK, "DELETE", "/api/v1/tickets/"+a+"/relations/depends_on/"+b, "")
+}
+
+func TestLinkTicketsToolAddsADependencyShownFromBothEnds(t *testing.T) {
+	browser, _ := signedIn(t)
+	api := jsonNumber(browser.expect(http.StatusCreated, "POST", "/api/v1/repos", `{"full_name":"acme/api"}`)["id"])
+	delegate := browser.asAgent(browser.expect(http.StatusCreated, "POST", "/api/v1/tokens", `{"name":"desktop","is_delegate":true}`)["secret"].(string))
+	tool := func(name, arguments string) string {
+		t.Helper()
+		reply := delegate.expect(http.StatusOK, "POST", "/mcp",
+			`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"`+name+`","arguments":`+arguments+`}}`)
+		result := reply["result"].(map[string]any)
+		text := result["content"].([]any)[0].(map[string]any)["text"].(string)
+		if result["isError"].(bool) {
+			t.Fatalf("%s: %s", name, text)
+		}
+		return text
+	}
+	tool("create_autonomous_ticket", `{"kind":"story","title":"First","spec":"Spec.","repo_id":`+api+`}`)
+	tool("create_autonomous_ticket", `{"kind":"story","title":"Second","spec":"Spec.","repo_id":`+api+`}`)
+	tool("link_tickets", `{"id":2,"kind":"depends_on","other_id":1}`)
+
+	if got := tool("get_ticket", `{"id":2}`); !strings.Contains(got, "depends on #1") {
+		t.Fatalf("the dependant's brief does not show the dependency:\n%s", got)
+	}
+	if got := tool("get_ticket", `{"id":1}`); !strings.Contains(got, "needed by #2") {
+		t.Fatalf("the prerequisite's brief does not show its dependant:\n%s", got)
+	}
+	if got := tool("list_tickets", `{}`); !strings.Contains(got, "waiting on #1") {
+		t.Fatalf("the ticket list does not show what #2 waits on:\n%s", got)
+	}
+}

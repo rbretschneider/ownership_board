@@ -65,6 +65,7 @@ type ticketSummaryDTO struct {
 	PRURL          string        `json:"pr_url"`
 	Branch         string        `json:"branch"`
 	OpenQuestions  int           `json:"open_questions"`
+	WaitingOn      []int64       `json:"waiting_on"`
 	Lease          *domain.Lease `json:"lease"`
 	CreatedAt      time.Time     `json:"created_at"`
 	UpdatedAt      time.Time     `json:"updated_at"`
@@ -183,9 +184,17 @@ func toSummary(summary app.TicketSummary) ticketSummaryDTO {
 		Owner: t.Owner(summary.OpenQuestions), NeedsOwner: t.NeedsOwner(summary.OpenQuestions), BlockedReason: t.BlockedReason,
 		IsAutonomous: t.IsAutonomous,
 		SpecRevision: t.SpecRevision, DesignRevision: t.DesignRevision,
-		PRURL: t.PRURL, Branch: t.Branch, OpenQuestions: summary.OpenQuestions, Lease: activeLease(t),
+		PRURL: t.PRURL, Branch: t.Branch, OpenQuestions: summary.OpenQuestions, WaitingOn: nonNilIDs(summary.WaitingOn), Lease: activeLease(t),
 		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, LaneChangedAt: t.LaneChangedAt,
 	}
+}
+
+// nonNilIDs keeps an empty id list a JSON array rather than null.
+func nonNilIDs(ids []int64) []int64 {
+	if ids == nil {
+		return []int64{}
+	}
+	return ids
 }
 
 // activeLease hides an expired lease, which no longer means anything.

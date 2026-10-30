@@ -63,10 +63,22 @@ func writeTicketLine(b *strings.Builder, summary app.TicketSummary, repo string)
 	if summary.OpenQuestions > 0 {
 		fmt.Fprintf(b, ", %d open questions", summary.OpenQuestions)
 	}
+	if len(summary.WaitingOn) > 0 {
+		fmt.Fprintf(b, ", waiting on %s", ticketRefs(summary.WaitingOn))
+	}
 	if ticket.Lease != nil {
 		fmt.Fprintf(b, ", leased by %s", oneLineText(ticket.Lease.Holder))
 	}
 	fmt.Fprintf(b, ": %s\n", oneLineText(ticket.Title))
+}
+
+// ticketRefs writes ids as "#3, #5".
+func ticketRefs(ids []int64) string {
+	refs := make([]string, len(ids))
+	for i, id := range ids {
+		refs[i] = fmt.Sprintf("#%d", id)
+	}
+	return strings.Join(refs, ", ")
 }
 
 type reportPRState struct{ s Services }
