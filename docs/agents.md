@@ -110,7 +110,9 @@ the whole board each time it runs:
    It never blocks the build. With `--builder codex`, Codex builds with the
    `codex-build` command; Claude QA and security review it (again after any
    fixes); the GPT review is skipped; exit code 10 ends the pass for a later
-   resume; exit code 20 falls back to Claude; Claude opens the PR.
+   resume; exit code 20, any other failure, or a public repo without the
+   opt-in falls back to Claude, which still gets the final Claude review;
+   Claude opens the PR.
 5. Reports work links, the PR and a summary to the board and moves the ticket
    to review.
 
@@ -144,11 +146,13 @@ The default is `claude`. The runner picks the builder (at about 0.75 of the
 five-hour window); the loop never does. The builder is per pass: a ticket
 partly built by the other family resumes from its newest comments and
 `git log`. The orchestrator unsets `GH_TOKEN`, `GITHUB_TOKEN`,
-`CLAUDE_CODE_OAUTH_TOKEN`, `OWNERSHIP_TOKEN` and `ANTHROPIC_API_KEY` before it
-runs `codex-build`. This narrows exposure and is not a boundary: other
+`CLAUDE_CODE_OAUTH_TOKEN`, `OWNERSHIP_TOKEN` and `ANTHROPIC_API_KEY` before
+it runs `codex-build`. This narrows exposure and is not a boundary: other
 credential files of the same user stay readable, so run the runner under a
-dedicated user. On a public repo, Codex building needs the same opt-in as the
-GPT review.
+dedicated user. On a public repo Codex receives board text, so the prompt
+runs `codex-build` only when the runner sets `GPT_REVIEW_PUBLIC=1` (the same
+opt-in as the GPT review, also enforced by `codex-build`); otherwise Claude
+builds.
 
 **Inside an interactive session.** Copy `agent/claude/board-work.md` to
 `.claude/commands/` in the repo (or `~/.claude/commands/` for every repo),
@@ -237,9 +241,9 @@ request, and the PR is your only review.
    autonomous") every time one is filed, so a ticket from a leaked token does
    not go unseen, and at most 10 autonomous tickets can be open before Review.
 4. **What the loop does.** `board-loop` adds a GPT review of the design
-   (`gpt-review --design`) and runs the GPT code review on every tier (except when Codex built). The PR
-   body lists every choice made in your place and every review finding not
-   fixed.
+   (`gpt-review --design`) and runs the GPT code review on every tier
+   (except when Codex built). The PR body lists every choice made in your
+   place and every review finding not fixed.
 5. **Taking it back.** The ticket sheet's **Autonomous** switch is yours
    alone. Turn it off and the repo's checkpoints apply from the next hand-off;
    agents can neither change the flag nor move an autonomous ticket to
