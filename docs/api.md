@@ -102,6 +102,8 @@ questions and no block. Every other `lane` from an agent answers `403`.
 | GET    | `/api/v1/tokens` | | `Token[]` |
 | POST   | `/api/v1/tokens` | `{name, is_delegate?}` | `Token & {secret}` (the secret is shown once). `is_delegate` lets the token file autonomous tickets. |
 | DELETE | `/api/v1/tokens/{id}` | | `204` |
+| GET    | `/api/v1/settings` | | `BoardSettings` |
+| PATCH  | `/api/v1/settings` | `Partial<BoardSettings>` | `BoardSettings`. People only; agents get `403`, a value out of range `400`. |
 
 `checkpoint` is `"spec"` or `"design"`. `revision` is the `spec_revision` or
 `design_revision` the person was shown. The endpoint answers `409` and changes
@@ -110,6 +112,15 @@ changed. Approve moves `spec_review` to `ready` and `design_review` to
 `build`, and records a binding "approved" decision. Request changes needs a
 `comment` and moves the ticket back to `refine` or `design`. Both endpoints
 answer `403` to agents. Unblock answers `409` when the ticket is not blocked.
+
+`depends_on` on `POST /api/v1/tickets` needs `repo_id`, and every id must be a
+ticket in the same repo; otherwise `400` naming the id, and no ticket is
+created. A link that would close a cycle answers `409` with the path, such as
+`#3 -> #5 -> #3`. Changing or clearing `repo_id` with `PATCH` answers `409`
+while it would leave a dependency across repos. Relations
+(`POST` and `DELETE /api/v1/tickets/{id}/relations...`) are described in
+[traceability.md](traceability.md#api), dependencies in
+[agents.md](agents.md#dependencies).
 
 ## Agent only
 
@@ -130,8 +141,18 @@ without a repo.
 
 A claim takes tickets in this order: stage `build`, `design`, `refine`, then
 `ready`. It never returns a ticket with open questions, a blocked ticket, or
-a ticket in `spec_review`, `design_review`, `pr` or `done`. Claiming from
-`ready` moves the ticket to `design`.
+a ticket in `spec_review`, `design_review`, `pr` or `done`, and never a
+ticket whose `waiting_on` is not empty. While as many autonomous tickets as
+`autonomous_in_flight_cap` allows are in `design` or `build`, it takes no
+autonomous ticket from `ready` (other tickets still come through). Claiming
+from `ready` moves the ticket to `design`.
+
+Filing an autonomous ticket answers `409` once the same token has filed 50 in
+the last hour.
+
+When `pr-state` `merged` (or a person's move) brings a ticket to `done`, every
+ticket that waited only on it gets a `dependencies_met` timeline entry by the
+same actor and is claimable from the next claim on.
 
 `pr-state` acts only on a ticket in stage `pr` that has a `pr_url`, otherwise
 `409`. `merged` moves it to `merged` / `done`. `closed` moves it to
@@ -188,6 +209,7 @@ type TicketSummary = {
   spec_revision: number; design_revision: number;
   pr_url: string; branch: string;
   open_questions: number;
+  waiting_on: number[];      // depends_on targets not merged yet; [] when none
   lease: Lease | null;
   created_at: string; updated_at: string; lane_changed_at: string;
 };
@@ -206,6 +228,11 @@ type TicketDetail = TicketSummary & {
 // New tickets start in todo / refine.
 type CreateTicket = {
   repo_id?: number | null; kind: Kind; title: string; body?: string;
+  depends_on?: number[];    // same-repo ticket ids, at most 20
+};
+
+type BoardSettings = {
+  autonomous_in_flight_cap: number;  // 1 to 10, default 1
 };
 type EditTicket = Partial<{
   repo_id: number | null; kind: Kind; title: string; body: string;
@@ -242,13 +269,16 @@ type TimelineEntry = {
 type TimelineType =
   | "created" | "moved" | "comment" | "spec" | "design" | "questions"
   | "answers" | "edited" | "claimed" | "released"
-  | "stage" | "approved" | "changes_requested" | "blocked" | "unblocked";
+  | "stage" | "approved" | "changes_requested" | "blocked" | "unblocked"
+  | "dependencies_met";
 // moved (lane change): data {from, to}; stage: data {from, to} as stage ids;
 // spec/design: data {revision, submitted};
 // approved/changes_requested: data {checkpoint, revision}, body = the comment;
 // blocked: body = the reason; unblocked: body = the optional comment;
 // questions/answers: data {round, count};
-// claimed: data {action}; edited: data {fields: string[]}
+// claimed: data {action}; edited: data {fields: string[]};
+// dependencies_met: data {ticket_id, merged_by_kind}, by the actor that
+// merged ticket_id, the last ticket this one depended on
 
 type Token = {
   id: number; name: string; prefix: string;
