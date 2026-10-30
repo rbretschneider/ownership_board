@@ -73,8 +73,13 @@ func (k RelationKind) Label(isOutgoing bool) string {
 }
 
 // ParseDependencies validates the ids a new ticket depends on and drops
-// repeats, keeping the first-seen order.
+// repeats, keeping the first-seen order. A list longer than MaxDependencies
+// is refused before any other work, repeats included, so an oversized list
+// costs nothing to turn away.
 func ParseDependencies(ids []int64) ([]int64, error) {
+	if len(ids) > MaxDependencies {
+		return nil, Invalidf("depends_on: a ticket can depend on at most %d tickets", MaxDependencies)
+	}
 	unique := make([]int64, 0, len(ids))
 	for _, id := range ids {
 		if id <= 0 {
@@ -83,9 +88,6 @@ func ParseDependencies(ids []int64) ([]int64, error) {
 		if !slices.Contains(unique, id) {
 			unique = append(unique, id)
 		}
-	}
-	if len(unique) > MaxDependencies {
-		return nil, Invalidf("depends_on: a ticket can depend on at most %d tickets", MaxDependencies)
 	}
 	return unique, nil
 }

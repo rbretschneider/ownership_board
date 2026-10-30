@@ -45,6 +45,18 @@ func TestParseDependenciesDropsRepeatsAndRefusesBadIDs(t *testing.T) {
 	}
 }
 
+// A list over the limit is refused even when its repeats would dedupe to one
+// id, which shows the length check runs before any per-id work.
+func TestParseDependenciesRefusesAnOversizedListBeforeDroppingRepeats(t *testing.T) {
+	repeats := make([]int64, domain.MaxDependencies+1)
+	for i := range repeats {
+		repeats[i] = 7
+	}
+	if _, err := domain.ParseDependencies(repeats); domain.KindOf(err) != domain.KindInvalid {
+		t.Fatalf("%d copies of one id: %v, want invalid", len(repeats), err)
+	}
+}
+
 func TestDependencyCycle(t *testing.T) {
 	cases := map[string]struct {
 		edges    map[int64][]int64
