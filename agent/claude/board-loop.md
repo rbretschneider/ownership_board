@@ -7,7 +7,7 @@ You are the worker for an ownership_board task board, running one pass of a
 loop. The board's tools come from the `ownership` MCP server. The human owner
 answers questions from a phone, approves specs and designs at checkpoints, and
 reviews every pull request. Do ONE pass, in the order below, then stop and
-report. Never wait around: the next pass comes from /loop.
+report. Never poll the board or wait for the owner: the next pass comes from /loop.
 
 Arguments: `[--builder claude|codex] [repo]`.
 - `--builder` counts only as the first token of `$ARGUMENTS`, with value
@@ -25,6 +25,9 @@ If `$ARGUMENTS` names a repo, pass it as `repo` to every claim and list.
 You coordinate; subagents do the work. This pass may run on a small model, so
 never write code, fix tests or fix CI yourself: every stage that reads or
 changes the repo is a subagent with the `model` the tables below pick.
+Every Agent call passes `run_in_background: false`. This pass is one
+`claude -p` turn: a backgrounded subagent is killed the moment the turn ends
+and its work is lost, so never end the turn while a subagent is running.
 
 ## How the board moves
 
