@@ -182,10 +182,16 @@
   font-weight: 650;
 }
 
-/* Quiet: waiting is expected, not something for the owner to act on. */
+/*
+ * Quiet: waiting is expected, not something for the owner to act on. It can
+ * list a dozen tickets, so it wraps instead of widening the card.
+ */
 .badge--waiting {
+  min-width: 0;
   background: var(--surface-3);
   color: var(--text-muted);
+  white-space: normal;
+  border-radius: var(--radius-sm);
 }
 
 .stage-chip {
