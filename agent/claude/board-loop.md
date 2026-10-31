@@ -341,15 +341,15 @@ do it now instead of handing it off.
   `git -c core.hooksPath=/dev/null`).** (a) `HEAD` must descend from the
   snapshot `HEAD`; git config, hooks, `core.hooksPath`, credential helper,
   alias, `include` and `url.*.insteadOf` must be unchanged. One expected
-  change is allowed: a new `[branch "<this ticket's branch>"]` section whose
-  only keys are `remote = origin` and `merge = refs/heads/<this ticket's
-  branch>` or `merge = refs/heads/<the repo's default branch>` — the first is
-  the tracking entry the first `git push -u` of the ticket branch writes (and
-  the spec tells the builder to push early); the second is what
-  `git worktree add -b <branch> origin/<default>` writes when branch
-  auto-setup is on, and `push -u` later overwrites it. Verify the section
-  names exactly this ticket's branch and contains nothing else;
-  then it is not a violation. Any other config diff: `add_comment`,
+  change is allowed: new `[branch "<name>"]` tracking sections, because every
+  worktree shares the clone's one config and a sibling ticket's pass may add
+  its own branch mid-pass. A section is harmless exactly when `<name>` is a
+  board ticket branch (`ob/<id>-…`, this ticket's or a sibling's) and its
+  only keys are `remote = origin` and `merge = refs/heads/<name>` or
+  `merge = refs/heads/<the repo's default branch>` — the shapes `git push -u`
+  and `git worktree add -b <branch> origin/<default>` write. Verify every
+  changed section fits that shape and contains nothing else; then it is not
+  a violation. Any other config diff: `add_comment`,
   `mark_blocked` (autonomous) or `ask_questions`; no
   push, end pass. (b) Re-write `FRD.md` and `ADD.md` from the board.
   (c) Files in `git diff --name-only origin/<default>...HEAD` that run in CI
