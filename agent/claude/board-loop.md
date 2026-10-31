@@ -63,7 +63,9 @@ your lease.
 - If you get stuck on something only the owner can decide, use
   `ask_questions`. If you cannot go on and no question would help, use
   `mark_blocked` with a short reason. Never just release a ticket you cannot
-  finish: it would be claimed again next pass and loop forever.
+  finish: it would be claimed again next pass and loop forever. The one
+  exception is a build ticket waiting on healthy CI ("Waiting on CI" below):
+  there, ending the pass with no terminal tool is correct.
 - On an **autonomous** ticket (see below) never ask: decide and record it.
 - When Codex builds, Claude does QA and security review; the GPT review is
   skipped. Run `codex-build` with
@@ -360,6 +362,41 @@ Do not mix paths.
   autonomous and QA failed, else comment and `ask_questions`).
 
 Keep the worktree until the ticket is Merged; the owner may send it back.
+
+## Waiting on CI (build stage)
+
+When a claimed build ticket's work is already pushed and the PR's pending
+checks are the only thing left, a pending check is not a defect and not a
+reason to block. Diagnose before judging: run
+`gh run view <run id> --json status,createdAt,jobs` and classify every
+unfinished job from the JSON you just read — never from an earlier comment
+or from memory. Quote `startedAt` and the current step when you report.
+
+- **Running** — `startedAt` is set and a step is `in_progress`. Healthy
+  while elapsed time is under the job's `timeout-minutes` (hosted default
+  360). Slow is normal: a job cold-building dependencies (for example after
+  a vcpkg cache-key miss) legitimately runs for hours, and the brief or
+  spec often predicts it. Never cancel, re-run or `mark_blocked` over a
+  running job that is inside its timeout.
+- **Queued** — no step has started. Hosted runners usually start within
+  minutes; treat it as stuck only after 20 minutes queued.
+- **Red** — `failure` is ordinary build work: hand the log to `senior_dev`
+  as usual. `cancelled` or `timed_out` without a code cause is self-heal.
+
+**Self-heal (do this yourself; do not ask the owner):** for a run with
+stuck-queued, cancelled or timed-out jobs, `gh run rerun <run id> --failed`
+(or `gh run cancel <run id>` then `gh run rerun <run id>` when jobs never
+started), then `add_comment` saying exactly what you did and the evidence.
+At most two re-runs per head sha. Only when two self-heals have failed may
+you `mark_blocked`, and the reason must quote the per-job evidence (name,
+state, `startedAt` or queued-since) read from `gh` in this pass.
+
+**Comment discipline:** at most one "waiting on CI" ticket comment per head
+sha — the first waiting pass writes it (run id, jobs left, why it is slow
+if known, the timeout bound). Later passes while the run stays healthy
+change nothing and write nothing to the board; they end with only the
+report line, for example
+`#10 waiting on CI run 41159277668 (3 jobs running, 90 min elapsed, timeout 360)`.
 
 ## Report
 
