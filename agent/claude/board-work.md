@@ -41,10 +41,28 @@ stage: you hand a ticket on with the tools below and the board moves it.
    - Open the pull request, then `update_ticket` with `pr_url` and `branch`,
      `add_comment` with what changed and how it was verified, and
      `move_ticket` to `review`. That is the only lane move you may make.
+   - **Waiting on CI.** When the work is pushed and a pending check is all
+     that is left, a pending check is not a defect and not a reason to
+     block. Classify every unfinished job from fresh
+     `gh run view <run id> --json status,createdAt,jobs` output — never from
+     an earlier comment or from memory — and quote `startedAt` and the
+     current step when you report. A job with a step `in_progress` is
+     healthy while inside its `timeout-minutes` (hosted default 360), even
+     for hours (for example a cold dependency build after a cache miss):
+     never cancel, re-run or block on it. A job queued with no step started
+     is stuck only after 20 minutes. A `failure` is ordinary build work; fix
+     it. For stuck-queued, cancelled or timed-out runs without a code cause,
+     self-heal yourself — `gh run rerun <run id> --failed`, or
+     `gh run cancel` then `gh run rerun` when jobs never started — at most
+     twice per head sha, with an `add_comment` saying what you did. Leave at
+     most one "waiting on CI" comment per head sha, then end the pass with
+     just a report line; waiting on healthy CI is the one case where ending
+     without a terminal tool is correct.
 6. If only the human can make a decision, use `ask_questions` instead of
    guessing. If you cannot go on and no question would help, use
-   `mark_blocked` with a short reason. Never just release a ticket you cannot
-   finish.
+   `mark_blocked` with a short reason — but over CI only after two failed
+   self-heals, quoting the per-job evidence read from `gh` in this pass.
+   Never just release a ticket you cannot finish.
 7. Never merge a pull request, push to a default branch, or deploy. The owner
    merges, and deploys happen through the repository's CI/CD. A merged ticket
    reaches Merged when the owner drags it there or a board-loop pass reports
