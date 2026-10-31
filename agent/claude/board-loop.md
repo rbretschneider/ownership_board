@@ -243,7 +243,15 @@ is left. `heartbeat` the ticket between stages.
 | `claude` (or not given) | items 1 to 7 below, exactly as written |
 | `codex` | "Step 5 with `--builder codex`" below, instead of items 1 to 7 |
 
-Do not mix paths.
+Do not mix paths. Mixing means running one path's build or review stages
+over the other's commit history. Finish work is builder-agnostic and never
+counts as mixing: checking CI, the Waiting-on-CI rules, rerunning a failed
+run, updating the PR body, marking the PR ready and moving the ticket to
+review may be done by a pass with either `--builder` whatever path wrote
+the commits. If the ticket's history is the other path's and code changes
+are still needed, leave a comment saying which builder the next pass needs
+and end the pass without claiming progress; if only finish work is left,
+do it now instead of handing it off.
 
 1. `senior_dev`: implements `ADD.md` with tests. Every commit ends with
    `Ownership-Ticket: <ticket id>`.
