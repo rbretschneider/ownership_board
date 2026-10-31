@@ -7,7 +7,10 @@ import (
 
 // Workflow limits.
 const (
-	MaxDesignLength        = 20_000
+	// MaxDesignLength fits a large-tier architecture document; the design is
+	// embedded whole in build briefs, so a bigger design costs brief tokens,
+	// never a block.
+	MaxDesignLength        = 200_000
 	MaxBlockedReasonLength = 1_000
 	closedPRReason         = "The pull request was closed without merging. Decide what happens next: comment and unblock to rebuild, or drag the ticket elsewhere."
 )
