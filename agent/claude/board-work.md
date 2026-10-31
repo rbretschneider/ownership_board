@@ -51,7 +51,11 @@ stage: you hand a ticket on with the tools below and the board moves it.
      for hours (for example a cold dependency build after a cache miss):
      never cancel, re-run or block on it. A job queued with no step started
      is stuck only after 20 minutes. A `failure` is ordinary build work; fix
-     it. For stuck-queued, cancelled or timed-out runs without a code cause,
+     it — unless the jobs failed within seconds with zero steps and a
+     check-run annotation naming the account (billing, spending limit,
+     runner capacity): that is infrastructure, so `mark_blocked` quoting
+     the annotation, and after the owner unblocks, re-run rather than
+     treating it as code. For stuck-queued, cancelled or timed-out runs without a code cause,
      self-heal yourself — `gh run rerun <run id> --failed`, or
      `gh run cancel` then `gh run rerun` when jobs never started — at most
      twice per head sha, with an `add_comment` saying what you did. Leave at

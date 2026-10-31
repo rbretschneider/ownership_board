@@ -382,6 +382,11 @@ or from memory. Quote `startedAt` and the current step when you report.
   minutes; treat it as stuck only after 20 minutes queued.
 - **Red** — `failure` is ordinary build work: hand the log to `senior_dev`
   as usual. `cancelled` or `timed_out` without a code cause is self-heal.
+  Exception: jobs that fail within seconds with zero steps and a check-run
+  annotation naming the account (billing, spending limit, runner capacity)
+  are infrastructure, never build work — `mark_blocked` at once quoting the
+  annotation, and after the owner unblocks, `gh run rerun` instead of
+  sending anything to `senior_dev`.
 
 **Self-heal (do this yourself; do not ask the owner):** for a run with
 stuck-queued, cancelled or timed-out jobs, `gh run rerun <run id> --failed`
