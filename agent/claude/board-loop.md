@@ -313,8 +313,14 @@ Do not mix paths.
 - **Post-run checks (after any exit, before other git or `gh`; inspect with
   `git -c core.hooksPath=/dev/null`).** (a) `HEAD` must descend from the
   snapshot `HEAD`; git config, hooks, `core.hooksPath`, credential helper,
-  alias, `include` and `url.*.insteadOf` must be unchanged. Else
-  `add_comment`, `mark_blocked` (autonomous) or `ask_questions`; no
+  alias, `include` and `url.*.insteadOf` must be unchanged. One expected
+  change is allowed: a new `[branch "<this ticket's branch>"]` section whose
+  only keys are `remote = origin` and `merge = refs/heads/<this ticket's
+  branch>` — that is the tracking entry the first `git push -u` of the
+  ticket branch writes, and the spec tells the builder to push early. Verify
+  the section names exactly this ticket's branch and contains nothing else;
+  then it is not a violation. Any other config diff: `add_comment`,
+  `mark_blocked` (autonomous) or `ask_questions`; no
   push, end pass. (b) Re-write `FRD.md` and `ADD.md` from the board.
   (c) Files in `git diff --name-only origin/<default>...HEAD` that run in CI
   or locally (CI config, scripts, hooks, executables) go in the PR body under
