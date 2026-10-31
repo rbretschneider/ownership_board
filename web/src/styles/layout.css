@@ -115,6 +115,8 @@
  * Four columns that fit a vertical 1080p monitor: 4 × 230px + 3 × 12px gaps +
  * 2 × 16px padding = 988px, below the 1000px desktop breakpoint. These numbers
  * mirror COLUMN_MIN_WIDTH_PX, COLUMN_GAP_PX and COLUMNS_PADDING_PX.
+ * contain: inline-size keeps a column's width out of its cards' hands, so a
+ * long unbreakable badge or title can't push the board past the screen.
  */
 .columns {
   display: flex;
@@ -130,6 +132,7 @@
   flex-direction: column;
   min-width: 230px;
   min-height: 0;
+  contain: inline-size;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
