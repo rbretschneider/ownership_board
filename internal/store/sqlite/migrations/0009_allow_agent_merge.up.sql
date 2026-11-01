@@ -1,0 +1,1 @@
+ALTER TABLE repos ADD COLUMN allow_agent_merge INTEGER NOT NULL DEFAULT 0;

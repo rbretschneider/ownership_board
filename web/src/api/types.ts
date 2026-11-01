@@ -88,6 +88,8 @@ export interface Repo {
   require_spec_approval: boolean;
   /** Agents wait for the owner to approve the design before implementing. */
   require_design_approval: boolean;
+  /** The owner lets agents merge this repo's green, review-clean PRs themselves. */
+  allow_agent_merge: boolean;
 }
 
 /** Whether board content may appear in a repo's commits and PRs. */
@@ -108,6 +110,7 @@ export type RepoEdit = Partial<{
   treat_as_public: boolean;
   require_spec_approval: boolean;
   require_design_approval: boolean;
+  allow_agent_merge: boolean;
 }>;
 
 /** A provider the board can connect to for repo sync. */

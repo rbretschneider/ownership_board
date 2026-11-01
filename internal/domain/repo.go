@@ -29,7 +29,12 @@ type Repo struct {
 	// checkpoints for tickets in this repo.
 	RequireSpecApproval   bool
 	RequireDesignApproval bool
-	CreatedAt             time.Time
+	// AllowAgentMerge is the owner's standing grant for this repo only: an
+	// agent may merge a ticket's pull request itself once every check is
+	// green and no review asks for changes. Off by default; only a person
+	// can turn it on, per repo.
+	AllowAgentMerge bool
+	CreatedAt       time.Time
 }
 
 // Visibility is how agents must treat a repo's contents and history.
@@ -82,6 +87,8 @@ type RepoStyle struct {
 	// RequireSpecApproval and RequireDesignApproval change the checkpoints.
 	RequireSpecApproval   *bool
 	RequireDesignApproval *bool
+	// AllowAgentMerge changes the agent-merge grant.
+	AllowAgentMerge *bool
 }
 
 // Repo field limits.
@@ -183,12 +190,15 @@ func (r *Repo) Restyle(style RepoStyle) error {
 	if style.RequireDesignApproval != nil {
 		r.RequireDesignApproval = *style.RequireDesignApproval
 	}
+	if style.AllowAgentMerge != nil {
+		r.AllowAgentMerge = *style.AllowAgentMerge
+	}
 	return nil
 }
 
 // ChangesGates reports whether style changes a checkpoint setting.
 func (style RepoStyle) ChangesGates() bool {
-	return style.RequireSpecApproval != nil || style.RequireDesignApproval != nil
+	return style.RequireSpecApproval != nil || style.RequireDesignApproval != nil || style.AllowAgentMerge != nil
 }
 
 func parseRepoName(raw string) (string, error) {

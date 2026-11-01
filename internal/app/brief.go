@@ -252,6 +252,9 @@ func (r *briefRenderer) repoFact(repo *domain.Repo, visibility domain.Visibility
 		fmt.Fprintf(&r.b, ", default branch `%s`", oneLine(repo.DefaultBranch))
 	}
 	r.b.WriteString("\n")
+	if repo.AllowAgentMerge {
+		r.b.WriteString("- Merge policy: **the owner lets agents merge in this repo.** Once this ticket's PR is not a draft, every check has passed, and no review requests changes, merge it yourself (a merge commit, no force, no branch deletion) and report it merged. A failing or pending check, a requested change, or any doubt means leave it for the owner as usual.\n")
+	}
 }
 
 func (r *briefRenderer) branchFact(ticket domain.Ticket, visibility domain.Visibility) {
