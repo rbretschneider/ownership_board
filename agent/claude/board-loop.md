@@ -117,7 +117,19 @@ PR right now with `gh pr view <url> --json state,mergedAt,mergeCommit`
 - closed without merging → `closed`, note who closed it and any reason in the
   PR. The ticket goes back to build, **blocked**, until the owner decides
   what happens next. Do not work on it.
-- still open → do nothing (do not call the tool; nothing changes).
+- still open and the ticket's brief or `get_ticket` shows the merge policy
+  "**the owner lets agents merge in this repo**" → check with
+  `gh pr view <url> --json isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup`.
+  Merge it yourself (`gh pr merge <url> --merge`, then `report_pr_state`
+  `merged` with the merge commit) only when ALL hold: not a draft; every
+  check in the rollup is SUCCESS or SKIPPED (none pending, none failed);
+  `reviewDecision` is not `CHANGES_REQUESTED`; `mergeable` is `MERGEABLE`.
+  Anything else — a pending or failing check, a requested change, a
+  conflict, or any doubt — means leave it for the owner, as below. Never
+  force, never delete the branch, never merge a PR whose repo does not show
+  that policy line.
+- still open (no merge policy, or the conditions fail) → do nothing (do not
+  call the tool; nothing changes).
 
 Only report what `gh` showed you in this pass.
 

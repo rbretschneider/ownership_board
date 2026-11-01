@@ -44,9 +44,10 @@ type repoDTO struct {
 	SyncedAt      *time.Time        `json:"synced_at"`
 	MissingSince  *time.Time        `json:"missing_since"`
 	TreatAsPublic bool              `json:"treat_as_public"`
-	RequireSpec   bool              `json:"require_spec_approval"`
-	RequireDesign bool              `json:"require_design_approval"`
-	Visibility    domain.Visibility `json:"visibility"`
+	RequireSpec     bool              `json:"require_spec_approval"`
+	RequireDesign   bool              `json:"require_design_approval"`
+	AllowAgentMerge bool              `json:"allow_agent_merge"`
+	Visibility      domain.Visibility `json:"visibility"`
 }
 
 type ticketSummaryDTO struct {
@@ -161,6 +162,7 @@ func toRepo(repo domain.Repo) repoDTO {
 		IsPrivate: repo.IsPrivate, IsArchived: repo.IsArchived, SyncedAt: repo.SyncedAt, MissingSince: repo.MissingSince,
 		TreatAsPublic: repo.TreatAsPublic, Visibility: repo.Visibility(time.Now()),
 		RequireSpec: repo.RequireSpecApproval, RequireDesign: repo.RequireDesignApproval,
+		AllowAgentMerge: repo.AllowAgentMerge,
 	}
 }
 

@@ -3,11 +3,12 @@ import { useApi } from "../../api/ApiContext";
 import type { Repo } from "../../api/types";
 import { useToast } from "../toast/ToastContext";
 
-type Gate = "require_spec_approval" | "require_design_approval";
+type Gate = "require_spec_approval" | "require_design_approval" | "allow_agent_merge";
 
 const GATES: readonly { field: Gate; label: string }[] = [
   { field: "require_spec_approval", label: "Approve spec" },
   { field: "require_design_approval", label: "Approve design" },
+  { field: "allow_agent_merge", label: "Agent merges green PRs" },
 ];
 
 /**
