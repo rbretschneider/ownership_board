@@ -31,19 +31,19 @@ type oidcDTO struct {
 }
 
 type repoDTO struct {
-	ID            int64             `json:"id"`
-	Provider      domain.Provider   `json:"provider"`
-	FullName      string            `json:"full_name"`
-	Name          string            `json:"name"`
-	URL           string            `json:"url"`
-	Description   string            `json:"description"`
-	Color         string            `json:"color"`
-	DefaultBranch string            `json:"default_branch"`
-	IsPrivate     bool              `json:"is_private"`
-	IsArchived    bool              `json:"is_archived"`
-	SyncedAt      *time.Time        `json:"synced_at"`
-	MissingSince  *time.Time        `json:"missing_since"`
-	TreatAsPublic bool              `json:"treat_as_public"`
+	ID              int64             `json:"id"`
+	Provider        domain.Provider   `json:"provider"`
+	FullName        string            `json:"full_name"`
+	Name            string            `json:"name"`
+	URL             string            `json:"url"`
+	Description     string            `json:"description"`
+	Color           string            `json:"color"`
+	DefaultBranch   string            `json:"default_branch"`
+	IsPrivate       bool              `json:"is_private"`
+	IsArchived      bool              `json:"is_archived"`
+	SyncedAt        *time.Time        `json:"synced_at"`
+	MissingSince    *time.Time        `json:"missing_since"`
+	TreatAsPublic   bool              `json:"treat_as_public"`
 	RequireSpec     bool              `json:"require_spec_approval"`
 	RequireDesign   bool              `json:"require_design_approval"`
 	AllowAgentMerge bool              `json:"allow_agent_merge"`
