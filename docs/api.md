@@ -306,3 +306,15 @@ data: {"cursor": 118, "type": "moved", "ticket_id": 42}
 `type` is a `TimelineType` or `deleted`. Clients refetch what they display; the
 stream is a doorbell, not a replication log. A comment line is sent every 25
 seconds to keep proxies from closing the connection.
+
+
+### GET /api/v1/account-usage
+
+Human authentication required. Returns `{ "accounts": [...] }` from the
+host's optional `DATA_DIR/account_usage.json` cache. No provider request or
+model turn occurs. Each account has `provider` (`codex` or `claude`), nullable
+`observed_at`, and `windows` containing `label`, `used_percent` (0–100 used,
+not remaining), and nullable `resets_at`. Missing/invalid caches return an
+empty account list, never an invented zero. Responses exclude credentials
+and identity details. UI marks old, unknown-age and reset-expired readings
+stale; the sampler refreshes independently every five minutes.

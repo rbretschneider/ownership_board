@@ -1,5 +1,7 @@
 import type { MouseEvent, PointerEvent } from "react";
 import type { Repo, Stage, TicketSummary } from "../../api/types";
+import { useLeaseClock } from "../../hooks/useLeaseClock";
+import { cardTone } from "../../lib/activity";
 import { CARD_ATTR } from "../../lib/dropTargets";
 import { ticketHash } from "../../lib/hashRoute";
 import { TicketCardContent } from "./TicketCardContent";
@@ -18,6 +20,7 @@ export interface TicketCardProps {
 
 /** A board card. It is a link to the ticket so it works with keyboard and middle-click. */
 export function TicketCard({ ticket, stages, repo, isDragSource, onPointerDown, shouldIgnoreClick }: TicketCardProps) {
+  const now = useLeaseClock(ticket.lease?.expires_at);
   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
     if (shouldIgnoreClick()) {
       event.preventDefault();
@@ -26,13 +29,13 @@ export function TicketCard({ ticket, stages, repo, isDragSource, onPointerDown, 
   return (
     <a
       href={ticketHash(ticket.id)}
-      className={`card${isDragSource ? " card--source" : ""}${ticket.needs_owner ? " card--yours" : ""}`}
+      className={`card${isDragSource ? " card--source" : ""}${ticket.needs_owner ? " card--yours" : ""}${cardTone(ticket, now)}`}
       {...{ [CARD_ATTR]: ticket.id }}
       draggable={false}
       onPointerDown={(event) => onPointerDown(event, ticket.id)}
       onClick={onClick}
     >
-      <TicketCardContent ticket={ticket} stages={stages} repo={repo} />
+      <TicketCardContent now={now} ticket={ticket} stages={stages} repo={repo} />
     </a>
   );
 }

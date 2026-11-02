@@ -460,3 +460,8 @@ export interface BoardEvent {
   type: TimelineType | "deleted";
   ticket_id: number;
 }
+
+/** Cached provider status only; collecting this never starts an inference turn. */
+export interface AccountUsage {
+ accounts: { provider: "codex" | "claude"; observed_at: string | null; windows: {label: string; used_percent: number | null; resets_at: string | null}[] }[];
+}

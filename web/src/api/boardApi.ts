@@ -1,5 +1,6 @@
 import type { HttpClient } from "./httpClient";
 import type {
+  AccountUsage,
   Answer,
   ApproveInput,
   AuthStatus,
@@ -40,6 +41,7 @@ export type RepoFilter = { kind: "all" } | { kind: "none" } | { kind: "repo"; id
 
 /** Typed access to every endpoint the web UI uses. */
 export interface BoardApi {
+  accountUsage(): Promise<AccountUsage>;
   authStatus(): Promise<AuthStatus>;
   setup(input: { name: string; email: string; password: string }): Promise<User>;
   login(input: { email: string; password: string }): Promise<User>;
@@ -89,6 +91,7 @@ export interface BoardApi {
 export function createBoardApi(http: HttpClient): BoardApi {
   const t = (id: number): string => `/tickets/${id}`;
   return {
+    accountUsage: () => http.request("GET", "/account-usage"),
     authStatus: () => http.request("GET", "/auth/status"),
     setup: (input) => http.request("POST", "/auth/setup", input),
     login: (input) => http.request("POST", "/auth/login", input),
