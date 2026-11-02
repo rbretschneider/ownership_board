@@ -1,9 +1,11 @@
 package httpapi
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/rbretschneider/ownership_board/internal/auth"
@@ -75,7 +77,22 @@ func (rt *router) identify(r *http.Request) (caller, error) {
 		if err != nil {
 			return caller{}, err
 		}
-		return caller{actor: token.Actor(), isBearer: true}, nil
+		actor := token.Actor()
+		if strings.HasPrefix(actor.Name, "@worker/") {
+			return caller{}, domain.Forbiddenf("reserved worker identity")
+		}
+		if worker := r.Header.Get("X-Worker-ID"); worker != "" {
+			if !workerIDPattern.MatchString(worker) {
+				return caller{}, domain.Invalidf("X-Worker-ID must be 1-48 letters, digits, underscores or hyphens")
+			}
+			// Credential-scoped identities: workers sharing a secret own separate
+			// leases, and another account cannot collide with their names.
+			actor.Name = fmt.Sprintf("@worker/%d/%s", token.ID, worker)
+			// Worker sessions execute tickets, never inherit the owner's
+			// autonomous-filing grant or rotate its per-token filing budget.
+			actor.IsDelegate = false
+		}
+		return caller{actor: actor, isBearer: true}, nil
 	}
 	access := cookieValue(r, accessCookie)
 	if access == "" {
@@ -87,6 +104,8 @@ func (rt *router) identify(r *http.Request) (caller, error) {
 	}
 	return caller{actor: user.Actor(), user: user}, nil
 }
+
+var workerIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,48}$`)
 
 func (rt *router) authorize(r *http.Request, who caller, level access) error {
 	if who.isBearer && isUnsafe(r.Method) {

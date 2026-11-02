@@ -81,7 +81,7 @@ export function TicketSheet({ ticketId, lanes, stages, repos, tickets, refreshSi
   const checkpoint = ticket === null ? null : checkpointFor(ticket.stage);
 
   return (
-    <Overlay variant="panel" label={`Ticket #${ticketId}`} onClose={close}>
+    <Overlay variant="modal" label={`Ticket #${ticketId}`} onClose={close}>
       <div className="sheet ticket">
         <header className="sheet__header">
           <button type="button" className="icon-button" aria-label="Back to board" onClick={close}>

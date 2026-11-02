@@ -8,7 +8,7 @@ type Gate = "require_spec_approval" | "require_design_approval" | "allow_agent_m
 const GATES: readonly { field: Gate; label: string }[] = [
   { field: "require_spec_approval", label: "Approve spec" },
   { field: "require_design_approval", label: "Approve design" },
-  { field: "allow_agent_merge", label: "Agent merges green PRs" },
+  { field: "allow_agent_merge", label: "Auto-merge green PRs" },
 ];
 
 /**
@@ -53,7 +53,7 @@ export function RepoGateToggles({ repo, onUpdated }: { repo: Repo; onUpdated: (r
           <span className="switch__label">{label}</span>
         </label>
       ))}
-      <span id={`${id}-hint`} className="muted small">Agents wait for you before building/after designing</span>
+      <span id={`${id}-hint`} className="visually-hidden">Enabled approval checkpoints wait for you; auto-merge applies only to green PRs.</span>
     </div>
   );
 }

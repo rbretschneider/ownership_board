@@ -899,3 +899,11 @@
   font-size: 0.7rem;
   font-weight: 600;
 }
+
+/* Repository settings are separate cards with a clear heading. */
+.settings .repo-list__items { gap: 12px; padding: 0; border: 0; max-height: 52dvh; }
+.settings .repo-row { border: 1px solid var(--border-strong); background: var(--surface-2); padding: 10px 16px; border-radius: var(--radius); }
+.settings .repo-row__name { font-size: 1rem; font-weight: 650; white-space: normal; overflow-wrap: anywhere; }
+.repo-row__controls { display: flex; align-items: center; flex-wrap: wrap; gap: 0 18px; }
+.settings .repo-gates, .settings .repo-visibility { padding-left: 0; gap: 0 18px; }
+.settings .repo-row__controls .switch { font-size: 0.8125rem; }

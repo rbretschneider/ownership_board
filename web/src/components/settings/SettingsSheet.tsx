@@ -1,4 +1,4 @@
-import { ArrowLeft } from "lucide-react";
+import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { AuthStatus } from "../../api/types";
 import { BOARD_HASH, navigate, SETTINGS_HASH, type Route } from "../../lib/hashRoute";
@@ -39,18 +39,18 @@ export function SettingsSheet({ route, status, onSignedOut, onChanged }: Setting
   const close = () => navigate(BOARD_HASH);
 
   return (
-    <Overlay variant="panel" label="Settings" onClose={close}>
+    <Overlay variant="modal" label="Settings" onClose={close}>
       <div className="sheet settings">
         <header className="sheet__header">
           <button type="button" className="icon-button" aria-label="Back to board" onClick={close}>
-            <ArrowLeft size={20} aria-hidden="true" />
+            <X size={20} aria-hidden="true" />
           </button>
           <h2 className="sheet__title">Settings</h2>
         </header>
         <div className="sheet__body settings__body">
+          <AgentWorkSection />
           <RepositoriesSection onChanged={onChanged} />
           <TokensSection />
-          <AgentWorkSection />
           <AppearanceSection />
           <AlertsSection />
           <AccountSection status={status} onSignedOut={onSignedOut} />

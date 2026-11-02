@@ -47,8 +47,10 @@ export function RepoList({ repos, onUpdated }: { repos: Repo[]; onUpdated: (repo
               {repo.is_archived && <span className="badge">archived</span>}
               {repo.missing_since !== null && <span className="muted small">No longer on {PROVIDER_LABELS[repo.provider]}</span>}
             </div>
-            <RepoVisibilityToggle repo={repo} onUpdated={onUpdated} />
-            <RepoGateToggles repo={repo} onUpdated={onUpdated} />
+            <div className="repo-row__controls">
+              <RepoVisibilityToggle repo={repo} onUpdated={onUpdated} />
+              <RepoGateToggles repo={repo} onUpdated={onUpdated} />
+            </div>
             {editingId === repo.id && (
               <RepoColorPicker
                 repo={repo}

@@ -164,6 +164,9 @@ func (s *Service) CreateAPIToken(ctx context.Context, creator User, name string,
 	if err := domain.RejectHiddenText("name", tokenName); err != nil {
 		return APIToken{}, "", err
 	}
+	if strings.HasPrefix(tokenName, "@worker/") {
+		return APIToken{}, "", domain.Invalidf("name uses the reserved worker identity prefix")
+	}
 	// An agent named like a person would show as that person in decision
 	// logs and briefs.
 	isPerson, err := s.store.IsPersonName(ctx, tokenName)

@@ -33,6 +33,7 @@ type apiClient struct {
 	http   *http.Client
 	token  string
 	origin string
+	worker string
 }
 
 func newServer(t *testing.T) *apiClient {
@@ -91,6 +92,9 @@ func (c *apiClient) do(method, path, body string) (int, map[string]any) {
 		c.t.Fatalf("request: %v", err)
 	}
 	request.Header.Set("Content-Type", "application/json")
+	if c.worker != "" {
+		request.Header.Set("X-Worker-ID", c.worker)
+	}
 	if c.origin != "" {
 		request.Header.Set("Origin", c.origin)
 	}

@@ -63,8 +63,8 @@ export function TokensSection() {
 
   return (
     <section className="settings-section" aria-labelledby="tokens-title">
-      <h3 id="tokens-title" className="settings-section__title">Agent tokens</h3>
-      <p className="muted">Agents (Claude Code, scripts) use these to claim work, ask questions and move cards.</p>
+      <h3 id="tokens-title" className="settings-section__title">Shared agent access</h3>
+      <p className="muted">One board token can serve all workers, or use one per account. Each worker supplies its own identity so ticket claims stay separate. Adding workers does not require more tokens.</p>
       {created !== null && <TokenSecret token={created} onDone={() => setCreated(null)} />}
       {error !== null && <ErrorState message={`Couldn't load tokens: ${error}`} onRetry={() => void load()} />}
       {error === null && tokens === null && <LoadingState label="Loading tokens" />}
@@ -114,7 +114,7 @@ export function TokensSection() {
       {isDelegate && (
         <p className="muted small">
           An autonomous ticket skips every checkpoint and question and goes straight to a pull request. Give this
-          token only to the chat where you agree specs (for example desktop Claude), never to the runner.
+          grant only to the account where you agree specs. Worker identities always have execution-only access.
         </p>
       )}
       {revoking !== null && (

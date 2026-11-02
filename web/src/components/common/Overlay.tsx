@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 export type OverlayVariant =
   /** Centered dialog on desktop, full-height bottom sheet on phones. */
   | "dialog"
+  | "modal"
   /** Right-hand panel on desktop, full screen on phones. */
   | "panel"
   /** Small centered alert on every screen size. */
