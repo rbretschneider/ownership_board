@@ -1,4 +1,4 @@
-import { Bot, CircleAlert, GitPullRequest, Hand, Hourglass, MessageCircleQuestion, Zap } from "lucide-react";
+import { Bot, CircleAlert, GitPullRequest, Hand, Hourglass, MessageCircleQuestion, Server, Zap } from "lucide-react";
 import type { Repo, Stage, TicketSummary } from "../../api/types";
 import { useLeaseClock } from "../../hooks/useLeaseClock";
 import { cardActivity, hasLiveLease } from "../../lib/activity";
@@ -24,11 +24,11 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
         <span className="card__id">#{ticket.id}</span>
         <KindTag kind={ticket.kind} />
         {showActivity && (
-          <span className={`badge card__activity${activity.blocked ? " badge--blocked" : activity.working ? " badge--working" : ticket.is_autonomous ? " badge--autopilot" : ""}`}
-            title={`${ticket.is_autonomous ? "On autopilot · " : ""}${activity.label === "Queued" ? "Waiting for a worker" : activity.label}${ticket.lease ? ` · ${model || ticket.lease.holder}` : ""}`}
+          <span className={`badge card__activity${activity.blocked ? " badge--blocked" : activity.activeBuild ? " badge--build-server" : activity.working ? " badge--working" : ticket.is_autonomous ? " badge--autopilot" : ""}`}
+            title={activity.buildServer ? `Build server · ${activity.label}` : `${ticket.is_autonomous ? "On autopilot · " : ""}${activity.label === "Queued" ? "Waiting for a worker" : activity.label}${ticket.lease ? ` · ${model || ticket.lease.holder}` : ""}`}
             aria-label={`${ticket.is_autonomous ? "Autopilot: " : ""}${activity.label}`}>
-            {ticket.is_autonomous && <Zap className="autopilot-spark" size={12} aria-hidden="true" />}
-            {activity.working && <span className="pixel-loader" aria-hidden="true">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</span>}
+            {activity.buildServer ? <Server size={12} aria-hidden="true" /> : ticket.is_autonomous && <Zap className="autopilot-spark" size={12} aria-hidden="true" />}
+            {(activity.working || activity.activeBuild) && <span className="pixel-loader" aria-hidden="true">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</span>}
             {!activity.working && ticket.lane === "todo" && ticket.is_autonomous && !activity.blocked && !ticket.needs_owner ? "Autopilot" : activity.label}
           </span>
         )}
@@ -36,7 +36,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
       <p className="card__title">{ticket.title}</p>
       {(ticket.stage !== "done" || ticket.needs_owner || isBlocked || isWaiting) && (
         <div className="card__status">
-          {ticket.stage !== "done" && !activity.working && <StageChip stage={ticket.stage} stages={stages} />}
+          {ticket.stage !== "done" && !activity.working && !activity.buildServer && <StageChip stage={ticket.stage} stages={stages} />}
           {ticket.needs_owner && (
             <span className="badge badge--needs">
               <Hand size={13} aria-hidden="true" />
@@ -62,7 +62,8 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
         <span className="badge card__progress" title={`Workflow progress, not a time estimate: ${PROGRESS_STEPS.join(" → ")}. Review and delivery count as complete when delivered; progress may move back for fixes.`}>
           {completedSteps(ticket.stage)} of {PROGRESS_STEPS.length} steps complete
         </span>
-        {liveLease && ticket.stage !== "done" && (
+        {activity.buildServer && <span className="badge card__model"><Server size={12} aria-hidden="true" />Build server</span>}
+        {liveLease && ticket.stage !== "done" && !activity.buildServer && (
           <span className="badge card__model" title={`Working on this: ${ticket.lease?.holder}`}>
             <Bot size={12} aria-hidden="true" />{model || "Agent working"}
           </span>
