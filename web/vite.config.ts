@@ -15,5 +15,5 @@ export default defineConfig({
       "/health": { target: BACKEND, changeOrigin: false },
     },
   },
-  test: { environment: "happy-dom", include: ["src/**/*.test.ts"] },
+  test: { environment: "happy-dom", include: ["src/**/*.test.{ts,tsx}"] },
 });

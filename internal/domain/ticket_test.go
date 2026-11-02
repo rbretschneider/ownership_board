@@ -133,3 +133,17 @@ func TestAutonomousDeliveryStaysWithAgents(t *testing.T) {
 		t.Fatal("manual review no longer needs its owner")
 	}
 }
+
+func TestExpiredClaimDoesNotInheritPreviousWorkersModel(t *testing.T) {
+	ticket := mustTicket(t)
+	if err := ticket.Claim("old", time.Minute, now); err != nil {
+		t.Fatal(err)
+	}
+	ticket.WorkModel = "old-model"
+	if err := ticket.Claim("new", time.Minute, now.Add(2*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if ticket.WorkModel != "" {
+		t.Fatal("new worker inherited a stale model")
+	}
+}

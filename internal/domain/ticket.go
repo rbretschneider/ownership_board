@@ -190,6 +190,9 @@ func (t *Ticket) Claim(holder string, duration time.Duration, now time.Time) err
 	if t.IsLeased(now) && t.Lease.Holder != holder {
 		return Conflictf("ticket %d is leased by %s", t.ID, t.Lease.Holder)
 	}
+	if !t.IsLeased(now) || t.Lease.Holder != holder {
+		t.WorkModel = ""
+	}
 	t.Lease = &Lease{Holder: holder, ExpiresAt: now.Add(duration)}
 	t.UpdatedAt = now
 	return nil
