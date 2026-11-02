@@ -50,3 +50,19 @@ func TestCodexPoolSettingsAreHumanOnlyAndPersistPause(t *testing.T) {
 		t.Fatalf("worker count not persisted: %v", got)
 	}
 }
+
+func TestWindowsRunnerMasterSwitchIsHumanOnly(t *testing.T) {
+	browser, token := signedIn(t)
+	if got := browser.expect(http.StatusOK, "GET", "/api/v1/settings", "")["windows_runner_enabled"]; got != false {
+		t.Fatal("Windows should default off")
+	}
+	browser.asAgent(token).expect(http.StatusForbidden, "PATCH", "/api/v1/settings", `{"windows_runner_enabled":true}`)
+	browser.expect(http.StatusOK, "PATCH", "/api/v1/settings", `{"windows_runner_enabled":true}`)
+	if got := browser.expect(http.StatusOK, "GET", "/api/v1/settings", "")["windows_runner_enabled"]; got != true {
+		t.Fatal("enable not persisted")
+	}
+	browser.expect(http.StatusOK, "PATCH", "/api/v1/settings", `{"windows_runner_enabled":false}`)
+	if got := browser.expect(http.StatusOK, "GET", "/api/v1/settings", "")["windows_runner_enabled"]; got != false {
+		t.Fatal("disable not persisted")
+	}
+}

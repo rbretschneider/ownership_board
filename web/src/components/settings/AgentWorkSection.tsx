@@ -14,6 +14,7 @@ export function AgentWorkSection() {
   const [settings, setSettings] = useState<BoardSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setSaving] = useState(false);
+  const [isWindowsSaving, setWindowsSaving] = useState(false);
   const desired = useRef(0);
   const confirmed = useRef<BoardSettings | null>(null);
   const saving = useRef(false);
@@ -26,6 +27,7 @@ export function AgentWorkSection() {
       desired.current = value.codex_workers;
       setSettings(value);
     } catch (cause) {
+      setSettings(null);
       setError(cause instanceof Error ? cause.message : String(cause));
     }
   }, [api]);
@@ -35,6 +37,7 @@ export function AgentWorkSection() {
   }, [load]);
 
   const changeWorkers = async (value: number) => {
+    if (isWindowsSaving) return;
     const current = confirmed.current;
     if (!current || !Number.isInteger(value)) return;
     desired.current = Math.min(current.codex_worker_limit, Math.max(0, value));
@@ -68,6 +71,20 @@ export function AgentWorkSection() {
     }
   };
 
+  const changeWindows = async (enabled: boolean) => {
+    setWindowsSaving(true);
+    try {
+      const actual = await api.editSettings({windows_runner_enabled: enabled});
+      confirmed.current = actual;
+      setSettings(actual);
+    } catch (cause) {
+      await load();
+      toast.error(`Couldn't change Windows runner: ${cause instanceof Error ? cause.message : String(cause)}`);
+    } finally {
+      setWindowsSaving(false);
+    }
+  };
+
   return (
     <section className="settings-section" aria-labelledby={`${id}-title`}>
       <h3 id={`${id}-title`} className="settings-section__title">Agent work</h3>
@@ -75,11 +92,17 @@ export function AgentWorkSection() {
       {error === null && settings === null && <LoadingState label="Loading settings" />}
       {settings !== null && (
         <div className="field">
+          <label className="switch" htmlFor={`${id}-windows`}>
+            <input id={`${id}-windows`} type="checkbox" role="switch" className="switch__input" checked={settings.windows_runner_enabled} disabled={isSaving || isWindowsSaving} onChange={(e) => void changeWindows(e.target.checked)} />
+            <span className="switch__track" aria-hidden="true" />
+            <span className="switch__label">Enable Windows runner</span>
+          </label>
+          <p className="muted small">Allow Windows checks for every repository on this board. Turning this off stops Windows builds and holds new jobs until you enable it again. Runs hidden at low priority, with at most two build/test jobs.</p>
           <label className="field__label" htmlFor={`${id}-workers`}>Codex workers</label>
           <div className="worker-stepper">
-            <button type="button" className="button button--secondary" aria-label="Fewer Codex workers" disabled={settings.codex_workers === 0} onClick={() => void changeWorkers(desired.current - 1)}><Minus size={18} aria-hidden="true" /></button>
-            <input id={`${id}-workers`} className="input" type="number" min={0} max={settings.codex_worker_limit} step={1} value={settings.codex_workers} onChange={(e) => { if (e.target.value !== "") void changeWorkers(Number(e.target.value)); }} />
-            <button type="button" className="button button--secondary" aria-label="More Codex workers" disabled={settings.codex_workers >= settings.codex_worker_limit} onClick={() => void changeWorkers(desired.current + 1)}><Plus size={18} aria-hidden="true" /></button>
+            <button type="button" className="button button--secondary" aria-label="Fewer Codex workers" disabled={isWindowsSaving || settings.codex_workers === 0} onClick={() => void changeWorkers(desired.current - 1)}><Minus size={18} aria-hidden="true" /></button>
+            <input id={`${id}-workers`} className="input" type="number" disabled={isWindowsSaving} min={0} max={settings.codex_worker_limit} step={1} value={settings.codex_workers} onChange={(e) => { if (e.target.value !== "") void changeWorkers(Number(e.target.value)); }} />
+            <button type="button" className="button button--secondary" aria-label="More Codex workers" disabled={isWindowsSaving || settings.codex_workers >= settings.codex_worker_limit} onClick={() => void changeWorkers(desired.current + 1)}><Plus size={18} aria-hidden="true" /></button>
             <span className="muted small" role="status">{isSaving ? "Saving…" : settings.codex_workers === 0 ? "Paused" : `Up to ${settings.codex_workers} working`} · max {settings.codex_worker_limit}</span>
           </div>
           <p className="muted small">Workers share one account and board token. Each is capped at 2 CPUs and 8 GB memory. More workers start within 30 seconds; scaling down lets current assignments finish. Set 0 to pause new work.</p>
