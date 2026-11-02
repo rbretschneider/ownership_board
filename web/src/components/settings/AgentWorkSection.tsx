@@ -105,7 +105,7 @@ export function AgentWorkSection() {
             <button type="button" className="button button--secondary" aria-label="More Codex workers" disabled={isWindowsSaving || settings.codex_workers >= settings.codex_worker_limit} onClick={() => void changeWorkers(desired.current + 1)}><Plus size={18} aria-hidden="true" /></button>
             <span className="muted small" role="status">{isSaving ? "Saving…" : settings.codex_workers === 0 ? "Paused" : `Up to ${settings.codex_workers} working`} · max {settings.codex_worker_limit}</span>
           </div>
-          <p className="muted small">Workers share one account and board token. Each is capped at 2 CPUs and 8 GB memory. More workers start within 30 seconds; scaling down lets current assignments finish. Set 0 to pause new work.</p>
+          <p className="muted small">Workers share one account and board token. Each is capped at 3 CPUs and 8 GB memory. More workers start within 30 seconds; scaling down lets current assignments finish. Set 0 to pause new work.</p>
         </div>
       )}
     </section>
