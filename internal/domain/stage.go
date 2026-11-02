@@ -26,14 +26,14 @@ type StageInfo struct {
 }
 
 var stageCatalog = []StageInfo{
-	{StageRefine, LaneTodo, "Refining", false},
-	{StageSpecReview, LaneTodo, "Spec ready", true},
-	{StageReady, LaneTodo, "Ready to build", false},
-	{StageDesign, LaneInProgress, "Designing", false},
-	{StageDesignReview, LaneInProgress, "Design ready", true},
-	{StageBuild, LaneInProgress, "Building", false},
-	{StagePR, LaneReview, "PR open", true},
-	{StageDone, LaneMerged, "Merged", false},
+	{StageRefine, LaneTodo, "Shaping the idea", false},
+	{StageSpecReview, LaneTodo, "Approve the plan", true},
+	{StageReady, LaneTodo, "Ready to start", false},
+	{StageDesign, LaneInProgress, "Planning delivery", false},
+	{StageDesignReview, LaneInProgress, "Approve the approach", true},
+	{StageBuild, LaneInProgress, "Making it happen", false},
+	{StagePR, LaneReview, "Delivery checks", true},
+	{StageDone, LaneMerged, "Delivered", false},
 }
 
 // Stages returns every stage in workflow order.

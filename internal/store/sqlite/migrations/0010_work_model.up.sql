@@ -1,0 +1,1 @@
+ALTER TABLE tickets ADD COLUMN work_model TEXT NOT NULL DEFAULT '';

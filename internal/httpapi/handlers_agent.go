@@ -8,6 +8,7 @@ import (
 
 func (s *server) agentRoutes(rt *router) {
 	rt.agentOnly("POST /api/v1/agent/claim", s.claim)
+	rt.agentOnly("POST /api/v1/agent/tickets/{id}/model", s.workModel)
 	rt.agentOnly("POST /api/v1/agent/tickets/{id}/heartbeat", s.heartbeat)
 	rt.agentOnly("POST /api/v1/agent/tickets/{id}/release", s.release)
 	rt.agentOnly("GET /api/v1/agent/tickets/{id}/brief", s.brief)
@@ -103,5 +104,20 @@ func (s *server) reportPRState(w http.ResponseWriter, r *http.Request, who calle
 		return err
 	}
 	detail, err := s.deps.Board.ReportPullRequest(r.Context(), who.actor, id, app.PullRequestState(body.State), body.Note)
+	return respondDetail(w, http.StatusOK, detail, err)
+}
+
+func (s *server) workModel(w http.ResponseWriter, r *http.Request, who caller) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	var body struct {
+		Model string `json:"model"`
+	}
+	if err := decodeOptionalJSON(w, r, &body); err != nil {
+		return err
+	}
+	detail, err := s.deps.Agents.SetWorkModel(r.Context(), who.actor, id, body.Model)
 	return respondDetail(w, http.StatusOK, detail, err)
 }

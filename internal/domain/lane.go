@@ -21,10 +21,10 @@ type LaneInfo struct {
 }
 
 var laneCatalog = []LaneInfo{
-	{LaneTodo, "Todo", "Not started: being refined, or refined and waiting to be built."},
-	{LaneInProgress, "In Progress", "Being designed or built by an agent."},
-	{LaneReview, "Review", "A pull request is open for the owner to review."},
-	{LaneMerged, "Merged", "The pull request merged; the repo's own CI/CD deploys it."},
+	{LaneTodo, "Ideas & plans", "Capture an idea, agree the outcome, and queue it for delivery."},
+	{LaneInProgress, "In progress", "Agents are planning, building or repairing the work."},
+	{LaneReview, "Delivery", "Checks, feedback and integration. Autopilot work stays with agents."},
+	{LaneMerged, "Delivered", "Integrated into the project; deployment follows the project’s release process."},
 }
 
 // Lanes returns every lane in board order.

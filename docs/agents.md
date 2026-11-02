@@ -316,3 +316,24 @@ merging does not satisfy a dependency.
 
 Everything the MCP tools do is also in the REST API ([api.md](api.md)) with
 the same token as a bearer token, for agents that do not speak MCP.
+
+
+## Delivery ownership and working models
+
+Autonomous stories stay with agents through delivery checks. An open PR alone
+never sets `needs_owner` or sends an owner-review notification. Explicit blocks,
+open questions on older records and deliberately closed, unmerged PRs still need
+a person. Repository permission to merge remains separate from autonomy.
+
+Agents report current provider evidence with `report_pr_state` state `repair`
+(or the REST `pr-state` endpoint) for conflicts, failed checks and requested
+changes. This moves Review back to Build without a blocker, preserving the PR
+and branch. A worker must claim the story before changing code or its record.
+Healthy pending checks and unknown mergeability do not trigger repairs.
+
+After claiming and at each author/reviewer handoff, call `set_work_model` with
+`id` and the actual resolved model name. REST clients use
+`POST /api/v1/agent/tickets/{id}/model` with `{"model":"actual-model-name"}`.
+Only the current lease holder can update it. Heartbeats preserve it; release
+and stage handoffs clear it. Active cards show the model, with an honest
+"Agent working" fallback for clients that have not reported it yet.

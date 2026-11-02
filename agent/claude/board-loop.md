@@ -124,12 +124,21 @@ PR right now with `gh pr view <url> --json state,mergedAt,mergeCommit`
   `merged` with the merge commit) only when ALL hold: not a draft; every
   check in the rollup is SUCCESS or SKIPPED (none pending, none failed);
   `reviewDecision` is not `CHANGES_REQUESTED`; `mergeable` is `MERGEABLE`.
-  Anything else — a pending or failing check, a requested change, a
-  conflict, or any doubt — means leave it for the owner, as below. Never
+  A healthy pending check stays in Delivery. A conflict, failed check or
+  requested change returns to agents with `report_pr_state state: "repair"`
+  and current evidence. Repair does not grant merge permission. Never
   force, never delete the branch, never merge a PR whose repo does not show
   that policy line.
-- still open (no merge policy, or the conditions fail) → do nothing (do not
-  call the tool; nothing changes).
+- still open with healthy pending checks, or green without merge permission →
+  leave in Delivery. Repairs follow the rule below.
+
+For **every** open PR, including repos without agent merge permission, read
+`mergeable,reviewDecision,statusCheckRollup` from GitHub in this pass.
+Conflicts, failed checks and requested changes are agent work: report
+`state: "repair"` with evidence. Do not leave routine repairs for the owner.
+Do not return healthy pending checks to build. UNKNOWN mergeability is not
+proof of a conflict. A deliberately closed, unmerged PR still stops for the
+owner; never reopen a rejected PR on your own.
 
 Only report what `gh` showed you in this pass.
 
@@ -142,6 +151,14 @@ with open questions, blocked tickets and tickets waiting for the owner's
 approval are never handed out.
 
 If there is no work, report "Board idle" and stop.
+
+After claiming, call `set_work_model` with the ticket id and the actual
+resolved model doing the work. Update it before each author, QA or security
+handoff and whenever the model changes. Read Codex's configured model from
+its config or startup output (or explicit model argument); never guess a
+model from the runner token or report the coordinator as the worker. If the
+model is unavailable, use "Codex (model unavailable)" rather than inventing
+one. For Claude use the exact model supplied to the foreground Agent call.
 
 Read the whole brief. Do exactly what its "What to do now" says, using step 3
 for `refine`, step 4 for `design` and step 5 for `implement`.
@@ -410,6 +427,19 @@ do it now instead of handing it off.
   autonomous and QA failed, else comment and `ask_questions`).
 
 Keep the worktree until the ticket is Merged; the owner may send it back.
+
+## Repairing an existing delivery
+
+When an implement brief already has an open PR, resume its existing branch
+and worktree. Fetch the current base, merge it, resolve conflicts preserving
+both stories, run the required checks, commit and push normally. Never
+force-push. Read requested reviews and failed job logs and repair the cause;
+do not remove tests, bypass security gates or weaken required checks.
+Use the selected builder and independent reviewers, just as for a new build.
+Return the same PR to Review once repairs are pushed and checks pass.
+Healthy pending checks follow the waiting rules below. Record what changed
+in plain product language. Escalate only an actual owner decision, missing
+access, or an exhausted documented recovery path with concrete evidence.
 
 ## Waiting on CI (build stage)
 

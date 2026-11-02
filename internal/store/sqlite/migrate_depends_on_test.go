@@ -84,7 +84,7 @@ func TestDependsOnMigrationLeavesExistingRowsAlone(t *testing.T) {
 	}
 	tickets, relations := dumpTable(t, db, "tickets"), dumpTable(t, db, "relations")
 
-	if err := migrator.Up(); err != nil {
+	if err := migrator.Migrate(8); err != nil {
 		t.Fatalf("migrate up: %v", err)
 	}
 	if got := dumpTable(t, db, "tickets"); !slices.Equal(got, tickets) {
@@ -118,7 +118,7 @@ func TestDependsOnMigrationLeavesExistingRowsAlone(t *testing.T) {
 		t.Fatal("going down left the settings table or the index behind")
 	}
 
-	if err := migrator.Up(); err != nil {
+	if err := migrator.Migrate(8); err != nil {
 		t.Fatalf("migrate up again: %v", err)
 	}
 	if got := storedCap(t, db); got != "1" {

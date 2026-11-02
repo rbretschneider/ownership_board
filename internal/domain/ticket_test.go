@@ -117,3 +117,33 @@ func TestApplyRejectsScriptURLAndLeavesTicketUntouched(t *testing.T) {
 		t.Fatalf("title changed to %q despite the failed edit", ticket.Title)
 	}
 }
+
+func TestAutonomousDeliveryStaysWithAgents(t *testing.T) {
+	ticket := mustTicket(t)
+	ticket.Stage, ticket.Lane, ticket.IsAutonomous = domain.StagePR, domain.LaneReview, true
+	if ticket.NeedsOwner(0) || ticket.Owner(0) != domain.OwnerAgent {
+		t.Fatal("autonomous delivery asked for its owner")
+	}
+	ticket.BlockedReason = "Owner must supply credentials"
+	if !ticket.NeedsOwner(0) {
+		t.Fatal("a real owner blocker was hidden")
+	}
+	ticket.BlockedReason, ticket.IsAutonomous = "", false
+	if !ticket.NeedsOwner(0) {
+		t.Fatal("manual review no longer needs its owner")
+	}
+}
+
+func TestExpiredClaimDoesNotInheritPreviousWorkersModel(t *testing.T) {
+	ticket := mustTicket(t)
+	if err := ticket.Claim("old", time.Minute, now); err != nil {
+		t.Fatal(err)
+	}
+	ticket.WorkModel = "old-model"
+	if err := ticket.Claim("new", time.Minute, now.Add(2*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if ticket.WorkModel != "" {
+		t.Fatal("new worker inherited a stale model")
+	}
+}

@@ -282,3 +282,26 @@ func requireHolder(ticket domain.Ticket, actor domain.Actor, now time.Time) erro
 	}
 	return nil
 }
+
+// SetWorkModel records the actual worker model, independently of the coordinator token.
+func (s *AgentService) SetWorkModel(ctx context.Context, actor domain.Actor, id int64, model string) (TicketDetail, error) {
+	text, err := domain.RequireText("model", model, 120)
+	if err != nil {
+		return TicketDetail{}, err
+	}
+	if err := rejectHiddenFromAgent(actor, map[string]string{"model": text}); err != nil {
+		return TicketDetail{}, err
+	}
+	return s.writer.change(ctx, actor, id, func(_ context.Context, _ Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
+		if err := requireHolder(*ticket, actor, s.clock.Now()); err != nil {
+			return nil, err
+		}
+		if ticket.WorkModel == text {
+			return nil, nil
+		}
+		ticket.WorkModel = text
+		ticket.UpdatedAt = s.clock.Now()
+		entry := domain.NewEntry(ticket.ID, domain.TimelineEdited, actor, ticket.UpdatedAt).With("fields", []string{"working model"}).With("model", text)
+		return []domain.TimelineEntry{entry}, nil
+	})
+}

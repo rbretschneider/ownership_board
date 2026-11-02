@@ -433,3 +433,42 @@ func TestPullRequestReportsOnlyApplyToReviewTickets(t *testing.T) {
 	_, err = f.board.ReportPullRequest(f.ctx, owner, review, app.PullRequestMerged, "")
 	requireErrorKind(t, err, domain.KindForbidden)
 }
+
+func TestPullRequestRepairRequeuesWithoutOwnerBlock(t *testing.T) {
+	f := newFixture(t)
+	id := f.inReview("repair a delivery")
+	_, err := f.board.ReportPullRequest(f.ctx, agent, id, app.PullRequestRepair, "")
+	requireErrorKind(t, err, domain.KindInvalid)
+	if _, err := f.board.ReportPullRequest(f.ctx, agent, id, app.PullRequestRepair, "GitHub mergeable=CONFLICTING"); err != nil {
+		t.Fatal(err)
+	}
+	f.requireStage(id, domain.StageBuild)
+	if detail := f.detail(id); detail.Ticket.IsBlocked() {
+		t.Fatal("routine repair blocked on owner")
+	}
+	work, claimed := f.claim(agent, app.ClaimInput{})
+	if !claimed || work.Ticket.Ticket.ID != id {
+		t.Fatal("repair was not claimable")
+	}
+	if _, err := f.agents.SetWorkModel(f.ctx, agent, id, "gpt-6.1-sol"); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.detail(id).Ticket.WorkModel; got != "gpt-6.1-sol" {
+		t.Fatalf("persisted model = %q", got)
+	}
+	if _, err := f.agents.SetWorkModel(f.ctx, other, id, "fake"); err == nil {
+		t.Fatal("non-holder changed model")
+	}
+	if _, err := f.agents.Heartbeat(f.ctx, agent, id, 30); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.detail(id).Ticket.WorkModel; got != "gpt-6.1-sol" {
+		t.Fatal("heartbeat lost model")
+	}
+	if _, err := f.agents.Release(f.ctx, agent, id); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.detail(id).Ticket.WorkModel; got != "" {
+		t.Fatal("released work retained active model")
+	}
+}

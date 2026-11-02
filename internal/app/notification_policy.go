@@ -39,7 +39,7 @@ func DefaultNotificationRules() []NotificationRule {
 		ownerRule{matches: isStageEntry(domain.StageSpecReview), what: "spec to approve", message: "A spec is ready for your approval.", priority: PriorityHigh, tag: "memo"},
 		ownerRule{matches: isStageEntry(domain.StageDesignReview), what: "design to approve", message: "A design is ready for your approval.", priority: PriorityHigh, tag: "triangular_ruler"},
 		ownerRule{matches: isType(domain.TimelineBlocked), what: "blocked", message: "Work stopped and needs your decision.", priority: PriorityHigh, tag: "warning"},
-		ownerRule{matches: isStageEntry(domain.StagePR), what: "ready for review", message: "A pull request is ready for your review.", priority: PriorityDefault, tag: "eyes"},
+		ownerRule{matches: func(e Event) bool { return !e.IsAutonomous && isStageEntry(domain.StagePR)(e) }, what: "ready for review", message: "A pull request is ready for your review.", priority: PriorityDefault, tag: "eyes"},
 		ownerRule{matches: isStageEntry(domain.StageDone), what: "merged", message: "The pull request was merged.", priority: PriorityLow, tag: "white_check_mark"},
 	}
 }

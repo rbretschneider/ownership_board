@@ -28,7 +28,7 @@ func BoardTools(services Services) []Tool {
 		saveSpec{services}, saveDesign{services}, markBlocked{services}, moveTicket{services}, addComment{services}, updateTicket{services},
 		heartbeat{services}, releaseTicket{services}, createTicket{services}, createAutonomousTicket{services},
 		addWorkLink{services}, recordDecision{services}, linkTickets{services}, findTicketsForWork{services},
-		listTickets{services}, reportPRState{services},
+		listTickets{services}, reportPRState{services}, setWorkModel{services},
 	}
 }
 
@@ -467,4 +467,21 @@ func outcome(detail app.TicketDetail, what string, err error) (string, error) {
 	}
 	ticket := detail.Ticket
 	return fmt.Sprintf("Ticket #%d (%s) is in %s: %s", ticket.ID, ticket.Title, ticket.Lane.Label(), what), nil
+}
+
+type setWorkModel struct{ s Services }
+
+func (setWorkModel) Definition() Definition {
+	return Definition{Name: "set_work_model", Description: "Show the actual model currently working on your claimed story. Update before each author or reviewer handoff; use the resolved model name, never the coordinator token name.", InputSchema: object(map[string]any{"id": ticketIDProp(), "model": prop("string", "Actual model name, e.g. gpt-6.1-sol or Claude Sonnet 4.6.")}, "id", "model")}
+}
+func (t setWorkModel) Call(ctx context.Context, actor domain.Actor, raw json.RawMessage) (string, error) {
+	var args struct {
+		ID    int64  `json:"id"`
+		Model string `json:"model"`
+	}
+	if err := decodeArguments(raw, &args); err != nil {
+		return "", err
+	}
+	detail, err := t.s.Agents.SetWorkModel(ctx, actor, args.ID, args.Model)
+	return outcome(detail, "Working model updated.", err)
 }

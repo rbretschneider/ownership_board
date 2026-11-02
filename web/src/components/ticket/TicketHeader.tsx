@@ -63,7 +63,7 @@ export function TicketHeader({ ticket, lanes, stages, repos, run }: TicketHeader
         <p className="lease" role="status">
           <span className="pulse" aria-hidden="true" />
           <Bot size={16} aria-hidden="true" />
-          {ticket.lease.holder} is working on this
+          {ticket.work_model || "An agent"} is working on this
         </p>
       )}
       <div className="ticket-header__controls">
@@ -97,11 +97,11 @@ export function TicketHeader({ ticket, lanes, stages, repos, run }: TicketHeader
           aria-describedby="ticket-autonomous-hint"
         />
         <span className="switch__track" aria-hidden="true" />
-        <span className="switch__label">Autonomous</span>
+        <span className="switch__label">On autopilot</span>
       </label>
       <p id="ticket-autonomous-hint" className="muted small">
         {ticket.is_autonomous
-          ? "No checkpoints or questions: agents decide and you review the pull request."
+          ? "Agents handle decisions, checks and repairs. Merging follows this project’s permission. You are only notified when a decision or access is needed."
           : mayTurnAutonomous
             ? "Agents stop at this repo's checkpoints and ask when unsure."
             : "Agents stop at this repo's checkpoints and ask when unsure. Autonomy can be turned on once the spec is approved."}
