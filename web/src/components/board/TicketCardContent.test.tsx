@@ -48,8 +48,8 @@ it("does not label delivered stories as awaiting delivery checks", () => {
 it("shows the build server instead of an agent model during offload", () => {
  const dom = document.createElement("div");
  dom.innerHTML = render({stage: "build", work_model: "gpt-6.1-sol · build-server:building:Windows x64 · awaiting Windows"});
- expect(dom.querySelector(".card__activity")?.textContent).toBe("Building · Windows x64");
- expect(dom.querySelector(".card__model")?.textContent).toBe("Build server");
+ expect(dom.querySelector(".card__activity")?.textContent).toBe("Building");
+ expect(dom.querySelector(".card__model")?.textContent).toBe("Build server · Windows x64");
  expect(dom.querySelectorAll(".pixel-loader i")).toHaveLength(9);
  dom.innerHTML = render({stage: "build", work_model: "gpt-6.1-sol · build-server:queued:Windows x64 · awaiting Windows"});
  expect(dom.querySelector(".pixel-loader")).toBeNull();

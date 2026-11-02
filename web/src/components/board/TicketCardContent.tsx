@@ -24,12 +24,12 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
         <span className="card__id">#{ticket.id}</span>
         <KindTag kind={ticket.kind} />
         {showActivity && (
-          <span className={`badge card__activity${activity.blocked ? " badge--blocked" : activity.activeBuild ? " badge--build-server" : activity.working ? " badge--working" : ticket.is_autonomous ? " badge--autopilot" : ""}`}
+          <span className={`badge card__activity${activity.buildServer ? " badge--build-target" : ""}${activity.blocked ? " badge--blocked" : activity.activeBuild ? " badge--build-server" : activity.working ? " badge--working" : ticket.is_autonomous ? " badge--autopilot" : ""}`}
             title={activity.buildServer ? `Build server · ${activity.label}` : `${ticket.is_autonomous ? "On autopilot · " : ""}${activity.label === "Queued" ? "Waiting for a worker" : activity.label}${ticket.lease ? ` · ${model || ticket.lease.holder}` : ""}`}
             aria-label={`${ticket.is_autonomous ? "Autopilot: " : ""}${activity.label}`}>
             {activity.buildServer ? <Server size={12} aria-hidden="true" /> : ticket.is_autonomous && <Zap className="autopilot-spark" size={12} aria-hidden="true" />}
             {(activity.working || activity.activeBuild) && <span className="pixel-loader" aria-hidden="true">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</span>}
-            {!activity.working && ticket.lane === "todo" && ticket.is_autonomous && !activity.blocked && !ticket.needs_owner ? "Autopilot" : activity.label}
+            <span className="card__activity-label">{activity.buildServer ? activity.label.split(" · ")[0] : !activity.working && ticket.lane === "todo" && ticket.is_autonomous && !activity.blocked && !ticket.needs_owner ? "Autopilot" : activity.label}</span>
           </span>
         )}
       </div>
@@ -62,7 +62,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
         <span className="badge card__progress" title={`Workflow progress, not a time estimate: ${PROGRESS_STEPS.join(" → ")}. Review and delivery count as complete when delivered; progress may move back for fixes.`}>
           {completedSteps(ticket.stage)} of {PROGRESS_STEPS.length} steps complete
         </span>
-        {activity.buildServer && <span className="badge card__model"><Server size={12} aria-hidden="true" />Build server</span>}
+        {activity.buildServer && <span className="badge card__model"><Server size={12} aria-hidden="true" />Build server · {activity.target}</span>}
         {liveLease && ticket.stage !== "done" && !activity.buildServer && (
           <span className="badge card__model" title={`Working on this: ${ticket.lease?.holder}`}>
             <Bot size={12} aria-hidden="true" />{model || "Agent working"}
