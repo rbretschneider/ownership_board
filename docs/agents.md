@@ -115,6 +115,14 @@ the whole board each time it runs:
    `senior_dev` finishes the build from the existing commits, then QA,
    security, the GPT review (by tier) and the final Claude review run. Claude
    opens the PR.
+   `--builder codex` also hands refining and designing to Codex, through the
+   `codex-author` command, which reads the repo read-only and returns a spec
+   or questions, or a design. Claude reviews each: a Sonnet analyst checks
+   the spec, and the security reviewer checks the design (one Codex revision
+   on REVISE). The GPT design review is skipped because the designer is
+   already GPT. If `codex-author` is missing or fails, the Claude subagents
+   do the step. So a runner can hand a whole pass to Codex whenever Claude's
+   usage is spent.
 5. Reports work links, the PR and a summary to the board and moves the ticket
    to review.
 

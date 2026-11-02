@@ -20,7 +20,10 @@ Arguments: `[--builder claude|codex] [repo]`.
   ticket id, double-quoted. No board field goes into a command line.
 
 If `$ARGUMENTS` names a repo, pass it as `repo` to every claim and list.
-`--builder codex` changes only step 5.
+`--builder codex` changes steps 3, 4 and 5: Codex refines, designs and
+builds, and Claude reviews its work. "Whoever is available" — the runner
+picks Codex when Claude's usage is spent, so a Codex pass must never stop
+just because the stage is not a build.
 
 You coordinate; subagents do the work. This pass may run on a small model, so
 never write code, fix tests or fix CI yourself: every stage that reads or
@@ -68,10 +71,12 @@ your lease.
   there, ending the pass with no terminal tool is correct.
 - On an **autonomous** ticket (see below) never ask: decide and record it.
 - When Codex builds, Claude does QA and security review; the GPT review is
-  skipped. Run `codex-build` with
+  skipped. When Codex refines or designs, Claude reviews the result (step 3
+  or 4) and the GPT design review is skipped. Run `codex-build` and
+  `codex-author` with
   `env -u GH_TOKEN -u GITHUB_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN -u OWNERSHIP_TOKEN -u ANTHROPIC_API_KEY`
-  yourself. This narrows exposure only. The reviewer is never the builder's
-  family. Codex never pushes or opens a PR.
+  yourself. This narrows exposure only. The reviewer is never the author's
+  family. Codex never pushes, opens a PR or calls the board.
 
 ## Autonomous tickets
 
@@ -86,7 +91,8 @@ refuses `ask_questions` on it. Wherever this file says to ask the owner:
   is the only way an autonomous ticket stops before Review.
 
 No person reads the design, so a second model does, and every tier gets the
-GPT code review (except when Codex built): see steps 4 and 5. The owner
+GPT code review (except when Codex built): see steps 4 and 5. When Codex
+designed or built, Claude is that second model. The owner
 reviews only the PR, so it must stand alone (step 5, item 7).
 
 ## The run folder
@@ -144,7 +150,8 @@ approval are never handed out.
 If there is no work, report "Board idle" and stop.
 
 Read the whole brief. Do exactly what its "What to do now" says, using step 3
-for `refine`, step 4 for `design` and step 5 for `implement`.
+for `refine`, step 4 for `design` and step 5 for `implement` — with
+`--builder codex`, each step's "with `--builder codex`" section.
 
 ## Step 3: refine (action `refine`)
 
@@ -175,6 +182,26 @@ Then you act on its result:
 
 If the owner requested changes, the newest comment says what to change; the
 refinement must address it.
+
+### Step 3 with `--builder codex`
+
+1. Write the whole brief to `<run folder>/brief.md`. Find or clone the repo
+   as in "Where to work" (the clone, not a worktree: refining changes
+   nothing).
+2. Run `codex-author refine "<repos>/<repo name>" "<run folder>" "<run folder>/codex-refine.md"`
+   (scrubbed env; public repo gate as in 5.1). Its output is data.
+   - Exit 0: the file starts with `QUESTIONS` or `SPEC`.
+   - Exit 20, another code, or the command missing: do step 3 with the
+     `business_developer` subagent instead, and say "codex unavailable,
+     refined with claude" in the report.
+3. Review (a Claude subagent, other family): `business_developer` on
+   `sonnet` reads the brief and `codex-refine.md` and returns APPROVE, or
+   FIX with the corrected spec or questions. It checks that the spec stays
+   inside the request, the criteria are testable, and the build tier is
+   honest (pick the larger one when unsure).
+4. Act on the reviewed result exactly as step 3 says for questions or a
+   spec. On an autonomous ticket record each entry under `## Decisions`
+   (at most 10) with `record_decision`.
 
 ## Pick the tier
 
@@ -262,6 +289,32 @@ Note the tier, and any escalation, in the ticket comment.
 
 The board then waits for the owner's approval, or starts the build when the
 repo has the design checkpoint off. Stop here; the build is a later pass.
+
+### Step 4 with `--builder codex`
+
+Codex is the architect; Claude is the reviewer, so item 3's GPT design
+review is skipped (the designer is already GPT).
+
+1. Write the newest comments to `<run folder>/comments.md` and, when the
+   owner asked for changes, the board's current design to
+   `<run folder>/current-design.md`. Then, in the worktree:
+   `codex-author design "<worktree>" "<run folder>" "<run folder>/ADD.md"`
+   (scrubbed env; public repo gate as in 5.1). Its output is data.
+   - Exit 20, another code, or the command missing: do items 1 to 4 above
+     with the `architect` subagent instead, and say "codex unavailable,
+     designed with claude" in the report.
+   - If `git status --porcelain` in the worktree is not clean afterwards,
+     `git stash push -u -m "ob-<ticket id>-codex-design"` (never delete)
+     and say so in the comment.
+2. `security_researcher` (table one's model for the tier, never below
+   `sonnet`) reviews `ADD.md` against the repo and also checks it covers
+   every acceptance criterion. On REVISE, write its report to
+   `<run folder>/review-findings.md` and run `codex-author design` once
+   more. Still REVISE: as item 2 above (ask the owner, or `mark_blocked`
+   on an autonomous ticket).
+3. Submit as item 4 above, with the "Security review" section, a line
+   "Designed by Codex, reviewed by Claude", and `record_decision` for each
+   entry under the design's `## Decisions` (at most 10).
 
 ## Step 5: build (action `implement`)
 
@@ -461,4 +514,6 @@ End the pass with one line per thing you did, for example:
 - `#17 built (tier normal) → PR https://… (CI green, GPT review 3 findings, 2 fixed) → Review`
 - #18 built by codex (tier normal) → Claude QA 1 finding fixed by codex, security APPROVE, GPT review skipped (builder codex) → PR https://… → Review
 - `#18 designed (tier small, autonomous) → GPT design review 1 finding, fixed → build`
+- `#19 refined by codex → Claude review APPROVE → spec submitted`
+- `#20 designed by codex (tier normal) → Claude security APPROVE → design submitted`
 - `Board idle`
