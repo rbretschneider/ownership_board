@@ -215,6 +215,7 @@ export interface TicketSummary {
   open_questions: number;
   /** Tickets this one depends on that are not merged yet; agents cannot claim it until this is empty. */
   waiting_on: number[];
+  work_model?: string;
   lease: Lease | null;
   created_at: string;
   updated_at: string;

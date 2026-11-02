@@ -15,10 +15,10 @@ export function TicketCardContent({ ticket, stages, repo }: { ticket: TicketSumm
         <span className="card__id">#{ticket.id}</span>
         <KindTag kind={ticket.kind} />
         {ticket.lease !== null && (
-          <span className="badge badge--agent" title={`Claimed by ${ticket.lease.holder}`}>
+          <span className="badge badge--agent" title={`Working on this: ${ticket.work_model || ticket.lease.holder}`}>
             <span className="pulse" aria-hidden="true" />
             <Bot size={13} aria-hidden="true" />
-            AI working
+            {ticket.work_model || "Agent working"}
           </span>
         )}
       </div>
@@ -27,9 +27,9 @@ export function TicketCardContent({ ticket, stages, repo }: { ticket: TicketSumm
         <div className="card__status">
           {ticket.stage !== "done" && <StageChip stage={ticket.stage} stages={stages} />}
           {ticket.is_autonomous && ticket.stage !== "done" && (
-            <span className="badge badge--agent" title="Runs to a pull request with no checkpoints or questions">
+            <span className="badge badge--agent" title="Agents handle delivery and repair without routine approvals">
               <Zap size={13} aria-hidden="true" />
-              Autonomous
+              On autopilot
             </span>
           )}
           {ticket.needs_owner && (
@@ -63,7 +63,7 @@ export function TicketCardContent({ ticket, stages, repo }: { ticket: TicketSumm
         {ticket.pr_url !== "" && (
           <span className="badge" title={ticket.pr_url}>
             <GitPullRequest size={13} aria-hidden="true" />
-            PR
+            Delivery checks
           </span>
         )}
       </div>

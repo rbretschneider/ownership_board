@@ -117,3 +117,19 @@ func TestApplyRejectsScriptURLAndLeavesTicketUntouched(t *testing.T) {
 		t.Fatalf("title changed to %q despite the failed edit", ticket.Title)
 	}
 }
+
+func TestAutonomousDeliveryStaysWithAgents(t *testing.T) {
+	ticket := mustTicket(t)
+	ticket.Stage, ticket.Lane, ticket.IsAutonomous = domain.StagePR, domain.LaneReview, true
+	if ticket.NeedsOwner(0) || ticket.Owner(0) != domain.OwnerAgent {
+		t.Fatal("autonomous delivery asked for its owner")
+	}
+	ticket.BlockedReason = "Owner must supply credentials"
+	if !ticket.NeedsOwner(0) {
+		t.Fatal("a real owner blocker was hidden")
+	}
+	ticket.BlockedReason, ticket.IsAutonomous = "", false
+	if !ticket.NeedsOwner(0) {
+		t.Fatal("manual review no longer needs its owner")
+	}
+}

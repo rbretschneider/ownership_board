@@ -33,18 +33,18 @@ export const DEFAULT_LANE: LaneId = "todo";
 
 /** Short lane names for the mobile lane strip. */
 export const LANE_SHORT_LABELS: Record<LaneId, string> = {
-  todo: "Todo",
+  todo: "Ideas",
   in_progress: "Doing",
-  review: "Review",
-  merged: "Merged",
+  review: "Delivery",
+  merged: "Delivered",
 };
 
 /** One-line hints shown in empty lanes. */
 export const LANE_EMPTY_HINTS: Record<LaneId, string> = {
   todo: "Drop an idea here — the AI will refine it.",
   in_progress: "Nothing being designed or built right now.",
-  review: "No pull requests waiting for review.",
-  merged: "Merged work lands here.",
+  review: "Nothing awaiting delivery checks.",
+  merged: "Completed work lands here.",
 };
 
 /** Text labels for ticket owners, so ownership is never conveyed by color alone. */
@@ -56,7 +56,7 @@ export const OWNER_LABELS: Record<Owner, string> = {
 
 /** Owner line in the ticket sheet. */
 export const OWNER_MOVE_LABELS: Record<Owner, string> = {
-  agent: "AI's move",
+  agent: "With your agents",
   human: "Your move",
   nobody: "Done",
 };

@@ -15,15 +15,12 @@ const (
 	PullRequestMerged PullRequestState = "merged"
 	PullRequestClosed PullRequestState = "closed"
 	PullRequestOpen   PullRequestState = "open"
+	PullRequestRepair PullRequestState = "repair"
 )
 
-// ReportPullRequest lets an agent close the loop on a ticket in review: a
-// merged PR moves it to Merged, a PR closed without merging sends it back to
-// building, blocked, so a person decides what happens next. It is the one
-// agent write that needs no lease, because review tickets are the owner's and
-// cannot be claimed; it is narrow on purpose: it only ever acts on a ticket in
-// review that has a PR, and only moves it along those two edges. An open PR
-// changes nothing.
+// ReportPullRequest reconciles provider state without a lease on a review
+// ticket. Repairs return to build for a leased worker; only a deliberately
+// closed, unmerged PR blocks for an owner decision. An open PR is unchanged.
 func (s *BoardService) ReportPullRequest(ctx context.Context, actor domain.Actor, id int64, state PullRequestState, note string) (TicketDetail, error) {
 	isChange, err := checkReportedState(actor, state)
 	if err != nil {
@@ -45,6 +42,9 @@ func (s *BoardService) ReportPullRequest(ctx context.Context, actor domain.Actor
 		}
 		if ticket.Stage != domain.StagePR || ticket.PRURL == "" {
 			return domain.Conflictf("ticket %d is not in review with a pull request", id)
+		}
+		if state == PullRequestRepair && text == "" {
+			return domain.Invalidf("repair needs evidence of a conflict, failed check or requested change")
 		}
 		if !isChange {
 			detail, err = loadDetail(ctx, repos, ticket)
@@ -71,6 +71,10 @@ func (s *BoardService) reviewOutcome(actor domain.Actor, state PullRequestState,
 			moved, err := changeStage(ctx, repos, ticket, domain.StageDone, actor, s.clock)
 			return append([]domain.TimelineEntry{comment}, moved...), err
 		}
+		if state == PullRequestRepair {
+			moved, err := changeStage(ctx, repos, ticket, domain.StageBuild, actor, s.clock)
+			return append([]domain.TimelineEntry{comment}, moved...), err
+		}
 		rank, err := rankFor(ctx, repos.Tickets(), domain.LaneInProgress, ticket.ID, atTop)
 		if err != nil {
 			return nil, err
@@ -90,11 +94,11 @@ func checkReportedState(actor domain.Actor, state PullRequestState) (bool, error
 		return false, domain.Forbiddenf("people move review tickets by dragging them")
 	}
 	switch state {
-	case PullRequestMerged, PullRequestClosed:
+	case PullRequestMerged, PullRequestClosed, PullRequestRepair:
 		return true, nil
 	case PullRequestOpen:
 		return false, nil
 	default:
-		return false, domain.Invalidf("state must be merged, closed or open")
+		return false, domain.Invalidf("state must be merged, closed, open or repair")
 	}
 }

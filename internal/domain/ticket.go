@@ -24,6 +24,7 @@ type Ticket struct {
 	PRURL         string
 	Branch        string
 	Lease         *Lease
+	WorkModel     string
 	BlockedReason string
 	// Revisions count saves of the spec and design; approvals record which
 	// revision the owner signed off, so a later edit needs a new approval.
@@ -142,7 +143,7 @@ func (t *Ticket) IsBlocked() bool {
 // NeedsOwner reports whether the ball is with the owner: questions to answer,
 // a block to resolve, or a checkpoint or PR to review.
 func (t *Ticket) NeedsOwner(openQuestions int) bool {
-	return openQuestions > 0 || t.IsBlocked() || t.Stage.IsOwnerReview()
+	return openQuestions > 0 || t.IsBlocked() || (!t.IsAutonomous && t.Stage.IsOwnerReview())
 }
 
 // Owner says who acts next.
@@ -176,6 +177,7 @@ func (t *Ticket) setStage(stage Stage, rank float64, now time.Time) bool {
 	isLaneChange := t.Lane != stage.Lane()
 	t.Stage, t.Lane, t.Rank = stage, stage.Lane(), rank
 	t.Lease = nil
+	t.WorkModel = ""
 	t.UpdatedAt = now
 	if isLaneChange {
 		t.LaneChangedAt = now
@@ -196,6 +198,7 @@ func (t *Ticket) Claim(holder string, duration time.Duration, now time.Time) err
 // Release drops the lease so another agent may claim the ticket.
 func (t *Ticket) Release(now time.Time) {
 	t.Lease = nil
+	t.WorkModel = ""
 	t.UpdatedAt = now
 }
 

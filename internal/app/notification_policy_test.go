@@ -62,3 +62,14 @@ func TestFilingAnAutonomousTicketNotifiesTheOwner(t *testing.T) {
 		t.Fatal("an ordinary agent-filed ticket notified")
 	}
 }
+
+func TestAutonomousPRDoesNotAskOwnerToReview(t *testing.T) {
+	event := app.Event{Type: domain.TimelineStage, Stage: domain.StagePR, Actor: agent, IsAutonomous: true}
+	if _, wanted := policy().Evaluate(event); wanted {
+		t.Fatal("autonomous PR interrupted the owner")
+	}
+	event.Type = domain.TimelineBlocked
+	if _, wanted := policy().Evaluate(event); !wanted {
+		t.Fatal("real autonomous blocker was hidden")
+	}
+}
