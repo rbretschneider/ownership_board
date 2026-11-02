@@ -150,6 +150,10 @@ func filterClause(filter app.TicketFilter) (string, []any) {
 	if filter.ExcludeAutonomous {
 		clause += " AND is_autonomous = 0"
 	}
+	if filter.ExcludeWindowsWaiting {
+		clause += " AND work_model NOT LIKE ?"
+		args = append(args, "% · awaiting Windows")
+	}
 	return clause, args
 }
 

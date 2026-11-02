@@ -201,7 +201,11 @@ func (t *Ticket) Claim(holder string, duration time.Duration, now time.Time) err
 // Release drops the lease so another agent may claim the ticket.
 func (t *Ticket) Release(now time.Time) {
 	t.Lease = nil
-	t.WorkModel = ""
+	// Preserve the queued Windows marker so disabling desktop work can skip
+	// it without blocking the owner or repeatedly spending model calls.
+	if t.Stage != StageBuild || !strings.HasSuffix(t.WorkModel, " · awaiting Windows") {
+		t.WorkModel = ""
+	}
 	t.UpdatedAt = now
 }
 

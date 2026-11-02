@@ -37,7 +37,8 @@ type TicketFilter struct {
 	RepoIDs           []int64
 	IncludeUnassigned bool
 	// ExcludeAutonomous leaves out autonomous tickets, whatever the scope.
-	ExcludeAutonomous bool
+	ExcludeAutonomous     bool
+	ExcludeWindowsWaiting bool
 }
 
 // TicketRepository persists tickets.

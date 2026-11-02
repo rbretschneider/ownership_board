@@ -400,6 +400,7 @@ export interface CreateTicket {
 
 /** Board-wide settings (GET and PATCH /settings; only people change them). */
 export interface BoardSettings {
+  windows_runner_enabled: boolean;
   codex_workers: number;
   codex_worker_limit: number;
   /** How many autonomous tickets may be in design or build at once (1–10). */

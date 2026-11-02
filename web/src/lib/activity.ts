@@ -2,6 +2,7 @@ import type { TicketSummary } from "../api/types";
 export function cardActivity(t: TicketSummary, now = Date.now()): { label: string; working: boolean; blocked: boolean } {
   if (t.blocked_reason || t.waiting_on.length) return { label: t.blocked_reason ? "Blocked" : "Waiting", working: false, blocked: true };
   if (t.stage === "done") return { label: "Delivered", working: false, blocked: false };
+  if (t.stage === "build" && t.work_model?.endsWith(" · awaiting Windows")) return { label: "Awaiting Windows", working: false, blocked: false };
   if (t.needs_owner) return { label: t.open_questions ? "Needs you" : "Awaiting review", working: false, blocked: false };
   if (hasLiveLease(t, now)) {
     const signal = t.work_model?.toLowerCase() ?? "";

@@ -192,8 +192,13 @@ func (s *AgentService) tryClaim(ctx context.Context, actor domain.Actor, request
 // nextClaimable runs inside the claim's write transaction, so the in-flight
 // count and the claim cannot race another claim.
 func (s *AgentService) nextClaimable(ctx context.Context, repos Repos, request claimRequest) (domain.Ticket, bool, error) {
+	settings, err := repos.Settings().Get(ctx)
+	if err != nil {
+		return domain.Ticket{}, false, err
+	}
 	for _, stage := range domain.ClaimOrder {
 		filter := request.filterFor(stage)
+		filter.ExcludeWindowsWaiting = !settings.WindowsRunnerEnabled && stage == domain.StageBuild
 		if stage == domain.StageReady {
 			isFull, err := autonomousSlotsFull(ctx, repos)
 			if err != nil {
