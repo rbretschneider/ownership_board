@@ -29,9 +29,11 @@ type MCPHandler interface {
 
 // Deps is everything the HTTP layer needs.
 type Deps struct {
-	Board  *app.BoardService
-	Agents *app.AgentService
-	Repos  *app.RepoService
+	// UsageFile contains sanitized, externally sampled account usage; never credentials.
+	UsageFile string
+	Board     *app.BoardService
+	Agents    *app.AgentService
+	Repos     *app.RepoService
 	// Connections manages provider accounts in Settings.
 	Connections *connections.Service
 	Auth        *auth.Service
@@ -76,6 +78,7 @@ func (s *server) routes(rt *router) {
 	s.traceRoutes(rt)
 	s.agentRoutes(rt)
 	s.settingsRoutes(rt)
+	rt.human("GET /api/v1/account-usage", s.accountUsage)
 	rt.human("GET /api/v1/tokens", s.listTokens)
 	rt.human("POST /api/v1/tokens", s.createToken)
 	rt.human("DELETE /api/v1/tokens/{id}", s.revokeToken)

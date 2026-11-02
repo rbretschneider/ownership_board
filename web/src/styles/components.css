@@ -1106,3 +1106,36 @@
   gap: 8px;
   padding: 0 8px 12px;
 }
+
+/* Quiet activity colors preserve the existing light/dark surfaces. */
+.card.card--working { background: color-mix(in srgb, var(--success) 7%, var(--surface-2)); border-color: color-mix(in srgb, var(--success) 22%, var(--border)); }
+.card.card--blocked { background: color-mix(in srgb, var(--danger) 9%, var(--surface-2)); border-color: color-mix(in srgb, var(--danger) 28%, var(--border)); }
+.badge--autopilot { color: var(--human); background: var(--human-soft); }
+.badge--working { color: var(--success); background: color-mix(in srgb, var(--success) 9%, transparent); }
+.card__activity { flex-shrink: 0; gap: 4px; font-size: 0.6875rem; }
+.autopilot-spark { color: var(--human); flex-shrink: 0; }
+.card__model { color: var(--text-muted); min-width: 0; overflow-wrap: anywhere; }
+.lane-list__more { width: 100%; margin: 4px 0 8px; justify-content: center; }
+.pixel-loader { display: inline-grid; grid-template-columns: repeat(3, 3px); gap: 1px; flex-shrink: 0; }
+.pixel-loader i { width: 3px; height: 3px; background: currentColor; opacity: 0.25; animation: pixel-build 1.35s steps(1) infinite; }
+.pixel-loader i:nth-child(2n) { animation-delay: -0.3s; }
+.pixel-loader i:nth-child(3n) { animation-delay: -0.6s; }
+.pixel-loader i:nth-child(4n) { animation-delay: -0.9s; }
+@keyframes pixel-build { 0%, 70% { opacity: 0.22; } 25%, 55% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pixel-loader i { animation: none; opacity: 0.65; } }
+
+.card.card--idle { background: color-mix(in srgb, var(--human) 7%, var(--surface-2)); border-color: color-mix(in srgb, var(--human) 22%, var(--border)); }
+
+.usage-bars { display: flex; gap: 14px; flex-shrink: 0; }
+.usage-meter { width: 144px; }
+.usage-meter__label { white-space: nowrap; display: flex; justify-content: space-between; gap: 6px; color: var(--text-muted); font-size: 0.6875rem; margin-bottom: 4px; }
+.usage-meter__track { height: 4px; overflow: hidden; background: var(--surface-3); border-radius: 4px; }
+.usage-meter__track > span { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width 0.3s; }
+.usage-meter--stale .usage-meter__track > span { background: var(--text-faint); }
+.usage-meter--full .usage-meter__track > span { background: var(--human); }
+@media (max-width: 899px) {
+ .app--mobile { --topbar-h: 92px; }
+ .topbar { flex-wrap: wrap; padding-bottom: 8px; }
+ .usage-bars { order: 10; width: 100%; justify-content: flex-end; }
+ .usage-meter { flex: 1; max-width: 180px; }
+}

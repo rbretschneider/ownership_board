@@ -2,6 +2,7 @@ import { CloudOff, Plus, Settings } from "lucide-react";
 import type { RepoFilter } from "../../api/boardApi";
 import type { Repo } from "../../api/types";
 import { SETTINGS_HASH } from "../../lib/hashRoute";
+import { UsageBars } from "./UsageBars";
 import { BrandMark } from "../common/BrandMark";
 import { RepoCombobox } from "../repos/RepoCombobox";
 
@@ -47,6 +48,7 @@ export function TopBar(props: TopBarProps) {
         Your move <span className="chip__count">{yourMoveCount}</span>
       </button>
       <span className="topbar__spacer" />
+      <UsageBars />
       {!props.isConnected && (
         <span className="offline" role="status" title="Live updates paused; reconnecting">
           <CloudOff size={16} aria-hidden="true" />

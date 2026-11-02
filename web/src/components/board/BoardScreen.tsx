@@ -13,6 +13,7 @@ import { laneCardIds, type DropTarget } from "../../lib/dropTargets";
 import type { Route } from "../../lib/hashRoute";
 import { afterIdFor, groupByLane } from "../../lib/position";
 import { decodeRepoFilter, encodeRepoFilter } from "../../lib/repos";
+import { cardTone } from "../../lib/activity";
 import { needsOwner } from "../../lib/stages";
 import { preferences, STORAGE_KEYS } from "../../lib/storage";
 import { ErrorState } from "../common/ErrorState";
@@ -153,7 +154,7 @@ export function BoardScreen({ route, status, onSignedOut, onStatusChanged }: Boa
       )}
       {drag.session !== null && draggedTicket !== undefined && (
         <div ref={drag.ghostRef} className="drag-ghost" style={{ width: drag.session.width }} aria-hidden="true">
-          <div className="card card--ghost">
+          <div className={`card card--ghost${draggedTicket ? cardTone(draggedTicket) : ""}`}>
             <TicketCardContent ticket={draggedTicket} stages={stages} repo={draggedTicket.repo_id === null ? undefined : reposById.get(draggedTicket.repo_id)} />
           </div>
         </div>

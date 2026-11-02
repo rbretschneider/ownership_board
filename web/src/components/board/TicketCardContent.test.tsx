@@ -31,3 +31,17 @@ describe("owner-facing story status", () => {
   expect(render({lease: null})).not.toContain("gpt-6.1-sol");
  });
 });
+
+it("places autopilot on the kind row and animates only active work", () => {
+ const dom = document.createElement("div");
+ dom.innerHTML = render({stage: "ready", lane: "todo", lease: null});
+ expect(dom.querySelector(".card__top .card__activity")?.textContent).toBe("Autopilot");
+ expect(dom.querySelector(".pixel-loader")).toBeNull();
+ dom.innerHTML = render({stage: "build", lane: "in_progress", work_model: "gpt-6.1-sol · adversarial review"});
+ expect(dom.querySelector(".card__top .card__activity")?.textContent).toBe("Reviewing");
+ expect(dom.querySelectorAll(".pixel-loader i")).toHaveLength(9);
+ expect(dom.querySelector(".card__model")?.textContent).toBe("gpt-6.1-sol");
+});
+it("does not label delivered stories as awaiting delivery checks", () => {
+ expect(render({stage: "done", lane: "merged", lease: null})).not.toContain("Delivery checks");
+});
