@@ -1127,7 +1127,7 @@
 .card.card--idle { background: color-mix(in srgb, var(--human) 7%, var(--surface-2)); border-color: color-mix(in srgb, var(--human) 22%, var(--border)); }
 
 .usage-bars { display: flex; gap: 14px; flex-shrink: 0; }
-.usage-meter { width: 144px; }
+.usage-meter { width: 300px; }
 .usage-meter__label { white-space: nowrap; display: flex; justify-content: space-between; gap: 6px; color: var(--text-muted); font-size: 0.6875rem; margin-bottom: 4px; }
 .usage-meter__track { height: 4px; overflow: hidden; background: var(--surface-3); border-radius: 4px; }
 .usage-meter__track > span { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width 0.3s; }
@@ -1137,5 +1137,31 @@
  .app--mobile { --topbar-h: 92px; }
  .topbar { flex-wrap: wrap; padding-bottom: 8px; }
  .usage-bars { order: 10; width: 100%; justify-content: flex-end; }
- .usage-meter { flex: 1; max-width: 180px; }
+ .usage-meter { flex: 1; min-width: 0; max-width: 360px; }
+ .usage-meter__label { flex-wrap: wrap; white-space: normal; row-gap: 0; }
+}
+
+/* Spacious centered settings, keeping the existing focus trap and backdrop. */
+.overlay__surface--modal {
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(1080px, calc(100vw - 32px)); height: min(88dvh, 1000px);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  animation: pop-in 0.18s var(--ease);
+}
+.overlay__surface--modal .sheet__header { padding-top: 0; }
+.worker-stepper { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.worker-stepper .input { width: 80px; text-align: center; }
+@media (max-width: 599px) {
+  .overlay__surface--modal { width: calc(100vw - 16px); height: 94dvh; }
+}
+/* Keep the wider account meters on their own row on narrower desktops too. */
+@media (min-width: 900px) and (max-width: 1450px) {
+  .app { --topbar-h: 92px; }
+  .topbar { flex-wrap: wrap; min-height: 92px; padding-bottom: 8px; }
+  .usage-bars { order: 10; width: 100%; justify-content: flex-end; }
+}
+
+@media (max-width: 599px) {
+  .app--mobile { --topbar-h: 120px; }
+  .usage-meter__label { flex-direction: column; }
 }

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useApi } from "../../api/ApiContext";
 import type { BoardSettings } from "../../api/types";
-import { IN_FLIGHT_CAP_CHOICES } from "../../lib/settings";
+import { Minus, Plus } from "lucide-react";
 import { ErrorState } from "../common/ErrorState";
 import { LoadingState } from "../common/LoadingState";
 import { useToast } from "../toast/ToastContext";
@@ -14,11 +14,17 @@ export function AgentWorkSection() {
   const [settings, setSettings] = useState<BoardSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setSaving] = useState(false);
+  const desired = useRef(0);
+  const confirmed = useRef<BoardSettings | null>(null);
+  const saving = useRef(false);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      setSettings(await api.settings());
+      const value = await api.settings();
+      confirmed.current = value;
+      desired.current = value.codex_workers;
+      setSettings(value);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
@@ -28,14 +34,36 @@ export function AgentWorkSection() {
     void load();
   }, [load]);
 
-  const changeCap = async (value: number) => {
+  const changeWorkers = async (value: number) => {
+    const current = confirmed.current;
+    if (!current || !Number.isInteger(value)) return;
+    desired.current = Math.min(current.codex_worker_limit, Math.max(0, value));
+    setSettings({...current, codex_workers: desired.current});
+    if (saving.current) return;
+    saving.current = true;
     setSaving(true);
     try {
-      setSettings(await api.editSettings({ autonomous_in_flight_cap: value }));
-      toast.success(value === 1 ? "One autonomous ticket at a time" : `Up to ${value} autonomous tickets at a time`);
+      while (desired.current !== confirmed.current!.codex_workers) {
+        const target = desired.current;
+        const result = await api.editSettings({codex_workers: target, autonomous_in_flight_cap: Math.max(1, target)});
+        confirmed.current = result;
+        setSettings({...result, codex_workers: desired.current});
+      }
     } catch (cause) {
-      toast.error(`Couldn't change the limit: ${cause instanceof Error ? cause.message : String(cause)}`);
+      // A dropped response can follow a committed PATCH. Read the server
+      // instead of showing the old count as if it were still authoritative.
+      try {
+        const actual = await api.settings();
+        confirmed.current = actual;
+        desired.current = actual.codex_workers;
+        setSettings(actual);
+      } catch {
+        setSettings(null);
+        setError("Worker count is unconfirmed. Reload to see the current setting.");
+      }
+      toast.error(`Couldn't change workers: ${cause instanceof Error ? cause.message : String(cause)}`);
     } finally {
+      saving.current = false;
       setSaving(false);
     }
   };
@@ -47,22 +75,14 @@ export function AgentWorkSection() {
       {error === null && settings === null && <LoadingState label="Loading settings" />}
       {settings !== null && (
         <div className="field">
-          <label className="field__label" htmlFor={`${id}-cap`}>Autonomous tickets in progress at once</label>
-          <select
-            id={`${id}-cap`}
-            className="select"
-            value={settings.autonomous_in_flight_cap}
-            disabled={isSaving}
-            onChange={(e) => void changeCap(Number(e.target.value))}
-          >
-            {IN_FLIGHT_CAP_CHOICES.map((value) => (
-              <option key={value} value={value}>{value}</option>
-            ))}
-          </select>
-          <p className="muted small">
-            While this many autonomous tickets are in design or build, agents start no other autonomous ticket from
-            Ready. Other work still flows, and the queue itself has no limit.
-          </p>
+          <label className="field__label" htmlFor={`${id}-workers`}>Codex workers</label>
+          <div className="worker-stepper">
+            <button type="button" className="button button--secondary" aria-label="Fewer Codex workers" disabled={settings.codex_workers === 0} onClick={() => void changeWorkers(desired.current - 1)}><Minus size={18} aria-hidden="true" /></button>
+            <input id={`${id}-workers`} className="input" type="number" min={0} max={settings.codex_worker_limit} step={1} value={settings.codex_workers} onChange={(e) => { if (e.target.value !== "") void changeWorkers(Number(e.target.value)); }} />
+            <button type="button" className="button button--secondary" aria-label="More Codex workers" disabled={settings.codex_workers >= settings.codex_worker_limit} onClick={() => void changeWorkers(desired.current + 1)}><Plus size={18} aria-hidden="true" /></button>
+            <span className="muted small" role="status">{isSaving ? "Saving…" : settings.codex_workers === 0 ? "Paused" : `Up to ${settings.codex_workers} working`} · max {settings.codex_worker_limit}</span>
+          </div>
+          <p className="muted small">Workers share one account and board token. Each is capped at 2 CPUs and 8 GB memory. More workers start within 30 seconds; scaling down lets current assignments finish. Set 0 to pause new work.</p>
         </div>
       )}
     </section>

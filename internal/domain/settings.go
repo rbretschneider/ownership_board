@@ -9,6 +9,9 @@ import (
 // BoardSettings.AutonomousInFlightCap.
 const SettingAutonomousInFlightCap = "autonomous_in_flight_cap"
 
+const SettingCodexWorkers = "codex_workers"
+const MaxCodexWorkers = 6
+
 // Bounds of the in-flight cap. Zero is not allowed: a cap that stops every
 // autonomous ticket would leave the queue waiting with no visible reason.
 const (
@@ -19,6 +22,7 @@ const (
 
 // BoardSettings are the board-wide settings people change in Settings.
 type BoardSettings struct {
+	CodexWorkers int
 	// AutonomousInFlightCap is how many autonomous tickets may be in design
 	// or build at once. While that many are, agents claim no further
 	// autonomous ticket from Ready; other work still flows.
@@ -27,17 +31,24 @@ type BoardSettings struct {
 
 // SettingsEdit lists the settings to change; nil leaves a setting as it is.
 type SettingsEdit struct {
+	CodexWorkers          *int
 	AutonomousInFlightCap *int
 }
 
 // DefaultBoardSettings are the settings of a new board.
 func DefaultBoardSettings() BoardSettings {
-	return BoardSettings{AutonomousInFlightCap: DefaultAutonomousInFlightCap}
+	return BoardSettings{AutonomousInFlightCap: DefaultAutonomousInFlightCap, CodexWorkers: 3}
 }
 
 // Apply validates edit and returns the settings with it applied.
 func (s BoardSettings) Apply(edit SettingsEdit) (BoardSettings, error) {
 	next := s
+	if edit.CodexWorkers != nil {
+		if *edit.CodexWorkers < 0 || *edit.CodexWorkers > MaxCodexWorkers {
+			return BoardSettings{}, Invalidf("codex_workers must be between 0 and %d", MaxCodexWorkers)
+		}
+		next.CodexWorkers = *edit.CodexWorkers
+	}
 	if edit.AutonomousInFlightCap != nil {
 		value := *edit.AutonomousInFlightCap
 		if value < MinAutonomousInFlightCap || value > MaxAutonomousInFlightCap {

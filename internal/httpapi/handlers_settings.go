@@ -7,6 +7,8 @@ import (
 )
 
 type settingsDTO struct {
+	CodexWorkers          int `json:"codex_workers"`
+	CodexWorkerLimit      int `json:"codex_worker_limit"`
 	AutonomousInFlightCap int `json:"autonomous_in_flight_cap"`
 }
 
@@ -27,12 +29,13 @@ func (s *server) settings(w http.ResponseWriter, r *http.Request, _ caller) erro
 
 func (s *server) editSettings(w http.ResponseWriter, r *http.Request, who caller) error {
 	var body struct {
+		CodexWorkers          *int `json:"codex_workers"`
 		AutonomousInFlightCap *int `json:"autonomous_in_flight_cap"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
 	}
-	settings, err := s.deps.Board.UpdateSettings(r.Context(), who.actor, domain.SettingsEdit{AutonomousInFlightCap: body.AutonomousInFlightCap})
+	settings, err := s.deps.Board.UpdateSettings(r.Context(), who.actor, domain.SettingsEdit{AutonomousInFlightCap: body.AutonomousInFlightCap, CodexWorkers: body.CodexWorkers})
 	if err != nil {
 		return err
 	}
@@ -41,5 +44,5 @@ func (s *server) editSettings(w http.ResponseWriter, r *http.Request, who caller
 }
 
 func toSettings(settings domain.BoardSettings) settingsDTO {
-	return settingsDTO{AutonomousInFlightCap: settings.AutonomousInFlightCap}
+	return settingsDTO{AutonomousInFlightCap: settings.AutonomousInFlightCap, CodexWorkers: settings.CodexWorkers, CodexWorkerLimit: domain.MaxCodexWorkers}
 }
