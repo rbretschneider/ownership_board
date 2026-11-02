@@ -1,7 +1,15 @@
 import type { TicketSummary } from "../api/types";
-export function cardActivity(t: TicketSummary, now = Date.now()): { label: string; working: boolean; blocked: boolean } {
+export function cardActivity(t: TicketSummary, now = Date.now()): { label: string; working: boolean; blocked: boolean; buildServer?: boolean; activeBuild?: boolean; target?: string } {
   if (t.blocked_reason || t.waiting_on.length) return { label: t.blocked_reason ? "Blocked" : "Waiting", working: false, blocked: true };
   if (t.stage === "done") return { label: "Delivered", working: false, blocked: false };
+  const build = t.stage === "build" && t.work_model?.match(/ · build-server:(queued|paused|preparing|building|testing|verifying):([^·]+) · awaiting Windows$/);
+  if (build && build[1] && build[2] && !t.needs_owner) {
+    const phase = hasLiveLease(t, now) || ["queued", "paused"].includes(build[1]) ? build[1] : "queued";
+    const labels: Record<string, string> = { queued: "Queued", paused: "Paused", preparing: "Preparing", building: "Building", testing: "Testing", verifying: "Checking" };
+    const target = build[2].trim();
+    return { label: `${labels[phase]} · ${target}`, working: false, blocked: false, buildServer: true, activeBuild: !["queued", "paused"].includes(phase), target };
+  }
+  if (t.stage === "build" && t.work_model?.endsWith(" · awaiting verification")) return { label: "Verification needed", working: false, blocked: false };
   if (t.stage === "build" && t.work_model?.endsWith(" · awaiting Windows")) return { label: "Awaiting Windows", working: false, blocked: false };
   if (t.needs_owner) return { label: t.open_questions ? "Needs you" : "Awaiting review", working: false, blocked: false };
   if (hasLiveLease(t, now)) {
@@ -18,5 +26,5 @@ export function hasLiveLease(t: TicketSummary, now = Date.now()): boolean {
 }
 export function cardTone(t: TicketSummary, now = Date.now()): string {
   const a = cardActivity(t, now);
-  return a.blocked ? " card--blocked" : a.working ? " card--working" : t.stage !== "done" && t.lane !== "todo" ? " card--idle" : "";
+  return a.blocked ? " card--blocked" : a.activeBuild ? " card--build-server" : a.working ? " card--working" : t.stage !== "done" && t.lane !== "todo" ? " card--idle" : "";
 }

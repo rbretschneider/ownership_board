@@ -29,6 +29,7 @@
   --danger: #f2877a;
   --danger-soft: rgba(242, 135, 122, 0.12);
   --success: #3cc7a8;
+  --build: #e5a16b;
 
   --focus: #b4bcff;
   --backdrop: rgba(4, 5, 8, 0.62);
@@ -49,6 +50,7 @@
 
 :root[data-theme="light"] {
   color-scheme: light;
+  --build: #a4531a;
 
   --bg: #f6f7f9;
   --surface: #ffffff;

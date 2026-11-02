@@ -1109,6 +1109,8 @@
 
 /* Quiet activity colors preserve the existing light/dark surfaces. */
 .card.card--working { background: color-mix(in srgb, var(--success) 7%, var(--surface-2)); border-color: color-mix(in srgb, var(--success) 22%, var(--border)); }
+.card.card--build-server { background: color-mix(in srgb, var(--build) 9%, var(--surface-2)); border-color: color-mix(in srgb, var(--build) 28%, var(--border)); }
+.badge--build-server { color: var(--build); background: color-mix(in srgb, var(--build) 12%, transparent); }
 .card.card--blocked { background: color-mix(in srgb, var(--danger) 9%, var(--surface-2)); border-color: color-mix(in srgb, var(--danger) 28%, var(--border)); }
 .badge--autopilot { color: var(--human); background: var(--human-soft); }
 .badge--working { color: var(--success); background: color-mix(in srgb, var(--success) 9%, transparent); }
