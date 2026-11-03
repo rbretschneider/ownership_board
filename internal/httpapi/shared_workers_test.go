@@ -80,3 +80,19 @@ func TestAccountWeeklyCeilingsAndClaudePool(t *testing.T) {
 	}
 	browser.expect(http.StatusOK, "PATCH", "/api/v1/settings", `{"codex_weekly_limit":0,"claude_workers":0}`)
 }
+
+func TestWindowsParallelBuildSettings(t *testing.T) {
+	browser, token := signedIn(t)
+	if got := browser.expect(http.StatusOK, "GET", "/api/v1/settings", "")["windows_parallel_builds"]; got != float64(3) {
+		t.Fatalf("default parallelism %v", got)
+	}
+	browser.asAgent(token).expect(http.StatusForbidden, "PATCH", "/api/v1/settings", `{"windows_parallel_builds":6}`)
+	for _, body := range []string{`{"windows_parallel_builds":0}`, `{"windows_parallel_builds":7}`, `{"windows_parallel_builds":1.5}`} {
+		browser.expect(http.StatusBadRequest, "PATCH", "/api/v1/settings", body)
+	}
+	browser.expect(http.StatusOK, "PATCH", "/api/v1/settings", `{"windows_parallel_builds":6}`)
+	got := browser.expect(http.StatusOK, "GET", "/api/v1/settings", "")
+	if got["windows_parallel_builds"] != float64(6) || got["windows_runner_enabled"] != false {
+		t.Fatalf("Windows scaling changed unrelated switch: %v", got)
+	}
+}
