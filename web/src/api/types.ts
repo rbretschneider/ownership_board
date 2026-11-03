@@ -401,6 +401,8 @@ export interface CreateTicket {
 /** Board-wide settings (GET and PATCH /settings; only people change them). */
 export interface BoardSettings {
   windows_runner_enabled: boolean;
+  windows_parallel_builds: number;
+  windows_parallel_build_limit: number;
   codex_workers: number;
   codex_worker_limit: number;
   claude_workers: number;

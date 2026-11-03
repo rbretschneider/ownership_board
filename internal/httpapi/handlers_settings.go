@@ -7,14 +7,16 @@ import (
 )
 
 type settingsDTO struct {
-	WindowsRunnerEnabled  bool `json:"windows_runner_enabled"`
-	CodexWorkers          int  `json:"codex_workers"`
-	CodexWorkerLimit      int  `json:"codex_worker_limit"`
-	ClaudeWorkers         int  `json:"claude_workers"`
-	ClaudeWorkerLimit     int  `json:"claude_worker_limit"`
-	CodexWeeklyLimit      int  `json:"codex_weekly_limit"`
-	ClaudeWeeklyLimit     int  `json:"claude_weekly_limit"`
-	AutonomousInFlightCap int  `json:"autonomous_in_flight_cap"`
+	WindowsParallelBuilds     int  `json:"windows_parallel_builds"`
+	WindowsParallelBuildLimit int  `json:"windows_parallel_build_limit"`
+	WindowsRunnerEnabled      bool `json:"windows_runner_enabled"`
+	CodexWorkers              int  `json:"codex_workers"`
+	CodexWorkerLimit          int  `json:"codex_worker_limit"`
+	ClaudeWorkers             int  `json:"claude_workers"`
+	ClaudeWorkerLimit         int  `json:"claude_worker_limit"`
+	CodexWeeklyLimit          int  `json:"codex_weekly_limit"`
+	ClaudeWeeklyLimit         int  `json:"claude_weekly_limit"`
+	AutonomousInFlightCap     int  `json:"autonomous_in_flight_cap"`
 }
 
 func (s *server) settingsRoutes(rt *router) {
@@ -34,6 +36,7 @@ func (s *server) settings(w http.ResponseWriter, r *http.Request, _ caller) erro
 
 func (s *server) editSettings(w http.ResponseWriter, r *http.Request, who caller) error {
 	var body struct {
+		WindowsParallelBuilds *int  `json:"windows_parallel_builds"`
 		WindowsRunnerEnabled  *bool `json:"windows_runner_enabled"`
 		CodexWorkers          *int  `json:"codex_workers"`
 		ClaudeWorkers         *int  `json:"claude_workers"`
@@ -44,7 +47,7 @@ func (s *server) editSettings(w http.ResponseWriter, r *http.Request, who caller
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
 	}
-	settings, err := s.deps.Board.UpdateSettings(r.Context(), who.actor, domain.SettingsEdit{AutonomousInFlightCap: body.AutonomousInFlightCap, CodexWorkers: body.CodexWorkers, ClaudeWorkers: body.ClaudeWorkers, CodexWeeklyLimit: body.CodexWeeklyLimit, ClaudeWeeklyLimit: body.ClaudeWeeklyLimit, WindowsRunnerEnabled: body.WindowsRunnerEnabled})
+	settings, err := s.deps.Board.UpdateSettings(r.Context(), who.actor, domain.SettingsEdit{WindowsParallelBuilds: body.WindowsParallelBuilds, AutonomousInFlightCap: body.AutonomousInFlightCap, CodexWorkers: body.CodexWorkers, ClaudeWorkers: body.ClaudeWorkers, CodexWeeklyLimit: body.CodexWeeklyLimit, ClaudeWeeklyLimit: body.ClaudeWeeklyLimit, WindowsRunnerEnabled: body.WindowsRunnerEnabled})
 	if err != nil {
 		return err
 	}
@@ -53,5 +56,5 @@ func (s *server) editSettings(w http.ResponseWriter, r *http.Request, who caller
 }
 
 func toSettings(settings domain.BoardSettings) settingsDTO {
-	return settingsDTO{AutonomousInFlightCap: settings.AutonomousInFlightCap, CodexWorkers: settings.CodexWorkers, ClaudeWorkers: settings.ClaudeWorkers, ClaudeWorkerLimit: domain.MaxClaudeWorkers, CodexWeeklyLimit: settings.CodexWeeklyLimit, ClaudeWeeklyLimit: settings.ClaudeWeeklyLimit, CodexWorkerLimit: domain.MaxCodexWorkers, WindowsRunnerEnabled: settings.WindowsRunnerEnabled}
+	return settingsDTO{WindowsParallelBuilds: settings.WindowsParallelBuilds, WindowsParallelBuildLimit: domain.MaxWindowsParallelBuilds, AutonomousInFlightCap: settings.AutonomousInFlightCap, CodexWorkers: settings.CodexWorkers, ClaudeWorkers: settings.ClaudeWorkers, ClaudeWorkerLimit: domain.MaxClaudeWorkers, CodexWeeklyLimit: settings.CodexWeeklyLimit, ClaudeWeeklyLimit: settings.ClaudeWeeklyLimit, CodexWorkerLimit: domain.MaxCodexWorkers, WindowsRunnerEnabled: settings.WindowsRunnerEnabled}
 }
