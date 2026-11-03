@@ -14,6 +14,7 @@ export function cardActivity(t: TicketSummary, now = Date.now()): { label: strin
   if (t.needs_owner) return { label: t.open_questions ? "Needs you" : "Awaiting review", working: false, blocked: false };
   if (hasLiveLease(t, now)) {
     const signal = t.work_model?.toLowerCase() ?? "";
+    if (signal.includes("preparing workspace")) return { label: "Preparing", working: true, blocked: false };
     if (signal.includes("awaiting review")) return { label: "Awaiting review", working: false, blocked: false };
     if (signal.includes("adversarial review")) return { label: "Reviewing", working: true, blocked: false };
     const labels = { refine: "Refining", ready: "Starting", design: "Designing", build: "Building", spec_review: "Reviewing", design_review: "Reviewing", pr: "Reviewing" };

@@ -63,8 +63,8 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
           {completedSteps(ticket.stage)} of {PROGRESS_STEPS.length} steps complete
         </span>
         {activity.buildServer && <span className="badge card__model"><Server size={12} aria-hidden="true" />Build server · {activity.target}</span>}
-        {liveLease && ticket.stage !== "done" && !activity.buildServer && (
-          <span className="badge card__model" title={`Working on this: ${ticket.lease?.holder}`}>
+        {ticket.stage !== "done" && (liveLease || (activity.buildServer && model)) && (
+          <span className="badge card__model" title={liveLease ? `Assigned model for ${ticket.lease?.holder}` : "Last reported model"}>
             <Bot size={12} aria-hidden="true" />{model || "Agent working"}
           </span>
         )}
