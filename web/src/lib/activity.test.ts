@@ -16,6 +16,7 @@ describe("card activity", () => {
     expect(cardTone({...offload("building"), blocked_reason: "Missing access"})).toBe(" card--blocked");
   });
   it("shows actual work and explicit fresh review activity", () => {
+    expect(cardActivity({...ticket, work_model:"gpt-6.1-sol preparing workspace"})).toMatchObject({label:"Preparing",working:true});
     expect(cardActivity(ticket)).toMatchObject({label: "Building", working: true});
     expect(cardActivity({...ticket, stage: "refine"}).label).toBe("Refining");
     expect(cardActivity({...ticket, work_model: "gpt-6.1-sol � adversarial review"}).label).toBe("Reviewing");
