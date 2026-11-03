@@ -66,3 +66,17 @@ func TestWindowsRunnerMasterSwitchIsHumanOnly(t *testing.T) {
 		t.Fatal("disable not persisted")
 	}
 }
+
+func TestAccountWeeklyCeilingsAndClaudePool(t *testing.T) {
+	browser, token := signedIn(t)
+	browser.asAgent(token).expect(http.StatusForbidden, "PATCH", "/api/v1/settings", `{"claude_workers":2,"codex_weekly_limit":50}`)
+	for _, body := range []string{`{"claude_workers":7}`, `{"claude_weekly_limit":101}`, `{"codex_weekly_limit":-1}`, `{"codex_weekly_limit":50.5}`} {
+		browser.expect(http.StatusBadRequest, "PATCH", "/api/v1/settings", body)
+	}
+	browser.expect(http.StatusOK, "PATCH", "/api/v1/settings", `{"claude_workers":2,"codex_weekly_limit":50,"claude_weekly_limit":100}`)
+	got := browser.expect(http.StatusOK, "GET", "/api/v1/settings", "")
+	if got["claude_workers"] != float64(2) || got["codex_weekly_limit"] != float64(50) || got["claude_weekly_limit"] != float64(100) {
+		t.Fatalf("account settings not persisted: %v", got)
+	}
+	browser.expect(http.StatusOK, "PATCH", "/api/v1/settings", `{"codex_weekly_limit":0,"claude_workers":0}`)
+}

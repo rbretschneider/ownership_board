@@ -12,6 +12,10 @@ const SettingAutonomousInFlightCap = "autonomous_in_flight_cap"
 const SettingCodexWorkers = "codex_workers"
 const SettingWindowsRunnerEnabled = "windows_runner_enabled"
 const MaxCodexWorkers = 6
+const MaxClaudeWorkers = 6
+const SettingClaudeWorkers = "claude_workers"
+const SettingCodexWeeklyLimit = "codex_weekly_limit"
+const SettingClaudeWeeklyLimit = "claude_weekly_limit"
 
 // Bounds of the in-flight cap. Zero is not allowed: a cap that stops every
 // autonomous ticket would leave the queue waiting with no visible reason.
@@ -25,6 +29,9 @@ const (
 type BoardSettings struct {
 	WindowsRunnerEnabled bool
 	CodexWorkers         int
+	ClaudeWorkers        int
+	CodexWeeklyLimit     int
+	ClaudeWeeklyLimit    int
 	// AutonomousInFlightCap is how many autonomous tickets may be in design
 	// or build at once. While that many are, agents claim no further
 	// autonomous ticket from Ready; other work still flows.
@@ -35,12 +42,15 @@ type BoardSettings struct {
 type SettingsEdit struct {
 	WindowsRunnerEnabled  *bool
 	CodexWorkers          *int
+	ClaudeWorkers         *int
+	CodexWeeklyLimit      *int
+	ClaudeWeeklyLimit     *int
 	AutonomousInFlightCap *int
 }
 
 // DefaultBoardSettings are the settings of a new board.
 func DefaultBoardSettings() BoardSettings {
-	return BoardSettings{AutonomousInFlightCap: DefaultAutonomousInFlightCap, CodexWorkers: 3}
+	return BoardSettings{AutonomousInFlightCap: DefaultAutonomousInFlightCap, CodexWorkers: 3, CodexWeeklyLimit: 100, ClaudeWeeklyLimit: 100}
 }
 
 // Apply validates edit and returns the settings with it applied.
@@ -54,6 +64,23 @@ func (s BoardSettings) Apply(edit SettingsEdit) (BoardSettings, error) {
 			return BoardSettings{}, Invalidf("codex_workers must be between 0 and %d", MaxCodexWorkers)
 		}
 		next.CodexWorkers = *edit.CodexWorkers
+	}
+	for _, field := range []struct {
+		name   string
+		value  *int
+		target *int
+		max    int
+	}{
+		{SettingClaudeWorkers, edit.ClaudeWorkers, &next.ClaudeWorkers, MaxClaudeWorkers},
+		{SettingCodexWeeklyLimit, edit.CodexWeeklyLimit, &next.CodexWeeklyLimit, 100},
+		{SettingClaudeWeeklyLimit, edit.ClaudeWeeklyLimit, &next.ClaudeWeeklyLimit, 100},
+	} {
+		if field.value != nil {
+			if *field.value < 0 || *field.value > field.max {
+				return BoardSettings{}, Invalidf("%s must be between 0 and %d", field.name, field.max)
+			}
+			*field.target = *field.value
+		}
 	}
 	if edit.AutonomousInFlightCap != nil {
 		value := *edit.AutonomousInFlightCap
