@@ -1168,3 +1168,8 @@
   .app--mobile { --topbar-h: 120px; }
   .usage-meter__label { flex-direction: column; }
 }
+
+.account-work { display:grid; grid-template-columns: minmax(290px,1fr) minmax(230px,1fr); gap:24px; padding:18px 0; border-bottom:1px solid var(--border); }
+.account-work__cap input[type=range] {width:100%; accent-color:var(--accent);}
+.account-work__cap .field__label {display:flex;justify-content:space-between;gap:12px;}
+@media(max-width:650px) {.account-work {grid-template-columns:1fr;gap:12px;}}
