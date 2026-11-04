@@ -51,8 +51,11 @@ it("replaces the step count with a stage stepper showing retries", () => {
  expect(steps.map((s) => s.getAttribute("aria-label")?.split(":")[0])).toEqual(["Refine and design", "Build", "Windows verification", "Fresh-context adversarial review", "Pull request and checks"]);
  expect(dom.querySelector('[aria-current="step"]')?.getAttribute("aria-label")).toBe("Windows verification: current step · 5 Windows runs, 4 failed");
  expect(dom.querySelectorAll(".stepper__step--done")).toHaveLength(2);
- expect(dom.querySelector(".stepper__summary")?.textContent).toBe("Build4Test5");
- expect(dom.querySelector(".stepper__item--current .stepper__label")?.textContent).toBe("Test");
+ expect(steps.map((s) => s.textContent)).toEqual(["Refine", "Build4", "Test5", "Review", "PR"]);
+ expect(dom.querySelector('[aria-current="step"] .stepper__label')?.textContent).toBe("Test");
+ expect(dom.querySelectorAll(".stepper__step--retried")).toHaveLength(2);
+ // Chevrons close the card: the stepper is its last element.
+ expect(dom.lastElementChild?.className).toBe("stepper");
 });
 it("does not label delivered stories as awaiting delivery checks", () => {
  expect(render({stage: "done", lane: "merged", lease: null})).not.toContain("Delivery checks");

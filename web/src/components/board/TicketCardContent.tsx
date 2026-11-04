@@ -57,7 +57,6 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
           )}
         </div>
       )}
-      <StageStepper ticket={ticket} />
       <div className="card__meta">
         <RepoChip repo={repo} />
         {activity.buildServer && <span className="badge card__model"><Server size={12} aria-hidden="true" />Build server · {activity.target}</span>}
@@ -79,6 +78,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
           </span>
         )}
       </div>
+      <StageStepper ticket={ticket} />
     </>
   );
 }
