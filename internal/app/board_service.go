@@ -27,6 +27,9 @@ type MoveInput struct {
 type AskInput struct {
 	Summary   string
 	Questions []domain.QuestionDraft
+	// Escalation marks a retry-limit escalation, which autonomous tickets
+	// accept (see Ticket.HandOffForQuestions).
+	Escalation bool
 }
 
 // NewBoardService wires the service to its dependencies.
@@ -335,7 +338,7 @@ func (s *BoardService) Ask(ctx context.Context, actor domain.Actor, id int64, in
 		return TicketDetail{}, err
 	}
 	return s.writer.change(ctx, actor, id, func(ctx context.Context, repos Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
-		if err := ticket.HandOffForQuestions(s.clock.Now()); err != nil {
+		if err := ticket.HandOffForQuestions(s.clock.Now(), input.Escalation); err != nil {
 			return nil, err
 		}
 		round, err := s.insertRound(ctx, repos, ticket.ID, input.Questions, actor)
@@ -344,6 +347,9 @@ func (s *BoardService) Ask(ctx context.Context, actor domain.Actor, id int64, in
 		}
 		asked := domain.NewEntry(ticket.ID, domain.TimelineQuestions, actor, ticket.UpdatedAt).
 			WithBody(summary).With("round", round).With("count", len(input.Questions))
+		if input.Escalation {
+			asked = asked.With("escalation", true)
+		}
 		return []domain.TimelineEntry{asked}, nil
 	})
 }

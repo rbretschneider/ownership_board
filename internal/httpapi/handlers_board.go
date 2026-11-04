@@ -237,8 +237,9 @@ func (s *server) unblock(w http.ResponseWriter, r *http.Request, who caller) err
 }
 
 type askBody struct {
-	Summary   string `json:"summary"`
-	Questions []struct {
+	Summary    string `json:"summary"`
+	Escalation bool   `json:"escalation"`
+	Questions  []struct {
 		Prompt      string   `json:"prompt"`
 		Options     []string `json:"options"`
 		Recommended *int     `json:"recommended"`
@@ -246,7 +247,7 @@ type askBody struct {
 }
 
 func (b askBody) input() app.AskInput {
-	input := app.AskInput{Summary: b.Summary}
+	input := app.AskInput{Summary: b.Summary, Escalation: b.Escalation}
 	for _, question := range b.Questions {
 		input.Questions = append(input.Questions, domain.QuestionDraft{
 			Prompt: question.Prompt, Options: question.Options, Recommended: question.Recommended,

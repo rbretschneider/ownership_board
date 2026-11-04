@@ -29,6 +29,21 @@ func TestSubmittedSpecWaitsForOwnerWhenGated(t *testing.T) {
 	}
 }
 
+func TestAutonomousTicketTakesEscalationsButNotClarifyingQuestions(t *testing.T) {
+	autonomous := refinedTicket(t)
+	autonomous.Stage, autonomous.IsAutonomous = domain.StageBuild, true
+	requireKind(t, autonomous.HandOffForQuestions(now, false), domain.KindConflict)
+	if err := autonomous.HandOffForQuestions(now, true); err != nil {
+		t.Fatalf("escalation on an autonomous ticket: %v", err)
+	}
+	if autonomous.Lease != nil {
+		t.Fatalf("an escalation must release the lease")
+	}
+	finished := refinedTicket(t)
+	finished.Stage, finished.IsAutonomous = domain.StageDone, true
+	requireKind(t, finished.HandOffForQuestions(now, true), domain.KindConflict)
+}
+
 func TestSpecSubmitNeedsRepoNoQuestionsAndNoBlock(t *testing.T) {
 	noRepo := mustTicket(t)
 	_, err := noRepo.SaveSpec("Do X", true, bothGates, 0, now)
