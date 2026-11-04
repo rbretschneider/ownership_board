@@ -8,6 +8,7 @@ import { SetupForm } from "./components/auth/SetupForm";
 import { BoardScreen } from "./components/board/BoardScreen";
 import { ErrorState } from "./components/common/ErrorState";
 import { LoadingState } from "./components/common/LoadingState";
+import { FlowPage } from "./components/flow/FlowPage";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { StatsPage } from "./components/stats/StatsPage";
 import { useHashRoute } from "./hooks/useHashRoute";
@@ -81,6 +82,9 @@ export function App() {
     }
     if (route.name === "stats") {
       return <StatsPage route={route} />;
+    }
+    if (route.name === "flow") {
+      return <FlowPage />;
     }
     return <BoardScreen route={route} />;
   }
