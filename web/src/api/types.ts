@@ -474,3 +474,57 @@ export interface BoardEvent {
 export interface AccountUsage {
  accounts: { provider: "codex" | "claude"; observed_at: string | null; windows: {label: string; used_percent: number | null; resets_at: string | null}[] }[];
 }
+
+/** Durations in hours; with `count` 0 the other fields mean "no data". */
+export interface Distribution {
+  count: number;
+  median_hours: number;
+  p90_hours: number;
+}
+
+/** A tally for one name, such as a model or an action. */
+export interface NamedCount {
+  name: string;
+  count: number;
+}
+
+/** Delivery metrics for one group of tickets (GET /stats). */
+export interface StatsSegment {
+  /** Reached done in the last 24 hours, whatever the window. */
+  merged_24h: number;
+  merged: number;
+  prs_opened: number;
+  created: number;
+  daily: { date: string; merged: number }[];
+  lead_time: Distribution;
+  cycle_time: Distribution;
+  stage_times: (Distribution & { stage: StageId })[];
+  /** Open tickets per stage now. */
+  wip: { stage: StageId; lane: LaneId; count: number }[];
+  blocked: number;
+  needs_owner: number;
+  repair_rounds: number;
+  repaired_tickets: number;
+  changes_requested: number;
+  models: NamedCount[];
+  claims: NamedCount[];
+  agents: NamedCount[];
+}
+
+/** One repo's delivery for one group of tickets. */
+export interface RepoDelivery {
+  merged: number;
+  prs_opened: number;
+  open: number;
+}
+
+/** Result of GET /stats: autonomous tickets versus the owner's own. */
+export interface StatsReport {
+  generated_at: string;
+  window_days: number;
+  since: string;
+  all: StatsSegment;
+  autonomous: StatsSegment;
+  owner: StatsSegment;
+  repos: { repo_id: number; name: string; autonomous: RepoDelivery; owner: RepoDelivery }[];
+}

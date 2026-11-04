@@ -8,6 +8,8 @@ import { SetupForm } from "./components/auth/SetupForm";
 import { BoardScreen } from "./components/board/BoardScreen";
 import { ErrorState } from "./components/common/ErrorState";
 import { LoadingState } from "./components/common/LoadingState";
+import { SettingsPage } from "./components/settings/SettingsPage";
+import { StatsPage } from "./components/stats/StatsPage";
 import { useHashRoute } from "./hooks/useHashRoute";
 import { BOARD_HASH, navigate } from "./lib/hashRoute";
 
@@ -64,16 +66,22 @@ export function App() {
       const ssoError = route.name === "login" ? route.params.get("error") : null;
       return <LoginForm status={status} ssoError={ssoError} onSignedIn={() => void loadStatus()} />;
     }
-    return (
-      <BoardScreen
-        route={route}
-        status={status}
-        onSignedOut={() => {
-          setStatus({ ...status, user: null });
-          navigate(BOARD_HASH);
-        }}
-        onStatusChanged={() => void loadStatus()}
-      />
-    );
+    if (route.name === "settings") {
+      return (
+        <SettingsPage
+          route={route}
+          status={status}
+          onSignedOut={() => {
+            setStatus({ ...status, user: null });
+            navigate(BOARD_HASH);
+          }}
+          onChanged={() => void loadStatus()}
+        />
+      );
+    }
+    if (route.name === "stats") {
+      return <StatsPage route={route} />;
+    }
+    return <BoardScreen route={route} />;
   }
 }

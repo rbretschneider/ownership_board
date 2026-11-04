@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RepoFilter } from "../../api/boardApi";
-import type { AuthStatus, BoardEvent, Kind, Lane, LaneId, TicketSummary } from "../../api/types";
+import type { BoardEvent, Kind, Lane, LaneId, TicketSummary } from "../../api/types";
 import { useBoard } from "../../hooks/useBoard";
 import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 import { useDragDrop } from "../../hooks/useDragDrop";
@@ -19,7 +19,6 @@ import { preferences, STORAGE_KEYS } from "../../lib/storage";
 import { ErrorState } from "../common/ErrorState";
 import { LoadingState } from "../common/LoadingState";
 import { CreateTicketDialog } from "../create/CreateTicketDialog";
-import { SettingsSheet } from "../settings/SettingsSheet";
 import { TicketSheet } from "../ticket/TicketSheet";
 import { useToast } from "../toast/ToastContext";
 import { DesktopBoard } from "./DesktopBoard";
@@ -30,13 +29,10 @@ import { TopBar } from "./TopBar";
 /** Props for {@link BoardScreen}. */
 export interface BoardScreenProps {
   route: Route;
-  status: AuthStatus;
-  onSignedOut: () => void;
-  onStatusChanged: () => void;
 }
 
-/** The signed-in app: board, create dialog, ticket sheet and settings. */
-export function BoardScreen({ route, status, onSignedOut, onStatusChanged }: BoardScreenProps) {
+/** The board: lanes, create dialog and ticket sheet. Settings and stats are their own pages. */
+export function BoardScreen({ route }: BoardScreenProps) {
   const toast = useToast();
   const isDesktop = useMediaQuery(DESKTOP_MEDIA_QUERY);
   const [repoFilter, setRepoFilter] = useState<RepoFilter>(() => decodeRepoFilter(preferences.read(STORAGE_KEYS.repoFilter, "")));
@@ -181,17 +177,6 @@ export function BoardScreen({ route, status, onSignedOut, onStatusChanged }: Boa
           tickets={board?.tickets ?? []}
           refreshSignal={ticketSignal}
           onChanged={refetch}
-        />
-      )}
-      {route.name === "settings" && (
-        <SettingsSheet
-          route={route}
-          status={status}
-          onSignedOut={onSignedOut}
-          onChanged={() => {
-            refetch();
-            onStatusChanged();
-          }}
         />
       )}
     </div>

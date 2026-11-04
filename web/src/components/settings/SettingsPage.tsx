@@ -1,8 +1,7 @@
-import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { AuthStatus } from "../../api/types";
-import { BOARD_HASH, navigate, SETTINGS_HASH, type Route } from "../../lib/hashRoute";
-import { Overlay } from "../common/Overlay";
+import { SETTINGS_HASH, type Route } from "../../lib/hashRoute";
+import { PageShell } from "../common/PageShell";
 import { useToast } from "../toast/ToastContext";
 import { AccountSection } from "./AccountSection";
 import { AgentWorkSection } from "./AgentWorkSection";
@@ -11,8 +10,8 @@ import { AppearanceSection } from "./AppearanceSection";
 import { RepositoriesSection } from "./RepositoriesSection";
 import { TokensSection } from "./TokensSection";
 
-/** Props for {@link SettingsSheet}. */
-export interface SettingsSheetProps {
+/** Props for {@link SettingsPage}. */
+export interface SettingsPageProps {
   route: Route;
   status: AuthStatus;
   onSignedOut: () => void;
@@ -20,8 +19,8 @@ export interface SettingsSheetProps {
   onChanged: () => void;
 }
 
-/** Settings (#/settings): repositories, agent tokens, agent work, appearance, account. */
-export function SettingsSheet({ route, status, onSignedOut, onChanged }: SettingsSheetProps) {
+/** Settings (#/settings): agent work, repositories, agent tokens, appearance, alerts, account. */
+export function SettingsPage({ route, status, onSignedOut, onChanged }: SettingsPageProps) {
   const toast = useToast();
   const isJustLinked = route.params.get("linked") === "1";
   const hasReportedLink = useRef(false);
@@ -36,26 +35,16 @@ export function SettingsSheet({ route, status, onSignedOut, onChanged }: Setting
     }
   }, [isJustLinked, toast, status.oidc.label, onChanged]);
 
-  const close = () => navigate(BOARD_HASH);
-
   return (
-    <Overlay variant="modal" label="Settings" onClose={close}>
-      <div className="sheet settings">
-        <header className="sheet__header">
-          <button type="button" className="icon-button" aria-label="Back to board" onClick={close}>
-            <X size={20} aria-hidden="true" />
-          </button>
-          <h2 className="sheet__title">Settings</h2>
-        </header>
-        <div className="sheet__body settings__body">
-          <AgentWorkSection />
-          <RepositoriesSection onChanged={onChanged} />
-          <TokensSection />
-          <AppearanceSection />
-          <AlertsSection />
-          <AccountSection status={status} onSignedOut={onSignedOut} />
-        </div>
+    <PageShell page="settings" title="Settings">
+      <div className="settings settings__body">
+        <AgentWorkSection />
+        <RepositoriesSection onChanged={onChanged} />
+        <TokensSection />
+        <AppearanceSection />
+        <AlertsSection />
+        <AccountSection status={status} onSignedOut={onSignedOut} />
       </div>
-    </Overlay>
+    </PageShell>
   );
 }

@@ -63,7 +63,7 @@ export function TokensSection() {
 
   return (
     <section className="settings-section" aria-labelledby="tokens-title">
-      <h3 id="tokens-title" className="settings-section__title">Shared agent access</h3>
+      <h2 id="tokens-title" className="settings-section__title">Shared agent access</h2>
       <p className="muted">One board token can serve all workers, or use one per account. Each worker supplies its own identity so ticket claims stay separate. Adding workers does not require more tokens.</p>
       {created !== null && <TokenSecret token={created} onDone={() => setCreated(null)} />}
       {error !== null && <ErrorState message={`Couldn't load tokens: ${error}`} onRetry={() => void load()} />}

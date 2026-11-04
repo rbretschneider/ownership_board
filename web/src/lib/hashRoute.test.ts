@@ -15,6 +15,9 @@ describe("parseHash", () => {
     expect(route.name).toBe("settings");
     expect(route.params.get("linked")).toBe("1");
   });
+  it("parses the stats page", () => {
+    expect(parseHash("#/stats")).toMatchObject({ name: "stats", ticketId: null });
+  });
   it("parses a login error", () => {
     expect(parseHash("#/login?error=sso_not_linked").params.get("error")).toBe("sso_not_linked");
   });

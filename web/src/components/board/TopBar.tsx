@@ -1,7 +1,8 @@
-import { CloudOff, Plus, Settings } from "lucide-react";
+import { CloudOff, Plus } from "lucide-react";
 import type { RepoFilter } from "../../api/boardApi";
 import type { Repo } from "../../api/types";
-import { SETTINGS_HASH } from "../../lib/hashRoute";
+import { AppNav } from "../common/AppNav";
+import { StatsSummary } from "./StatsSummary";
 import { UsageBars } from "./UsageBars";
 import { BrandMark } from "../common/BrandMark";
 import { RepoCombobox } from "../repos/RepoCombobox";
@@ -20,7 +21,7 @@ export interface TopBarProps {
   onNew: () => void;
 }
 
-/** App header: brand, repo filter, "your move" filter, settings. */
+/** Board header: brand, repo filter, "your move" filter, delivery summary, usage, page links. */
 export function TopBar(props: TopBarProps) {
   const { yourMoveCount, isYourMoveOnly } = props;
   return (
@@ -48,7 +49,10 @@ export function TopBar(props: TopBarProps) {
         Your move <span className="chip__count">{yourMoveCount}</span>
       </button>
       <span className="topbar__spacer" />
-      <UsageBars />
+      <div className="topbar__metrics">
+        <StatsSummary />
+        <UsageBars />
+      </div>
       {!props.isConnected && (
         <span className="offline" role="status" title="Live updates paused; reconnecting">
           <CloudOff size={16} aria-hidden="true" />
@@ -61,9 +65,7 @@ export function TopBar(props: TopBarProps) {
           New
         </button>
       )}
-      <a href={SETTINGS_HASH} className="icon-button" aria-label="Settings">
-        <Settings size={20} aria-hidden="true" />
-      </a>
+      <AppNav current="board" isCompact />
     </header>
   );
 }

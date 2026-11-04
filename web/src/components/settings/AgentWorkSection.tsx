@@ -49,7 +49,7 @@ export function AgentWorkSection() {
   void change(patch);
  };
  return <section className="settings-section" aria-labelledby={`${id}-title`}>
-  <h3 id={`${id}-title`} className="settings-section__title">Agent work</h3>
+  <h2 id={`${id}-title`} className="settings-section__title">Agent work</h2>
   {error&&<ErrorState message={error} onRetry={()=>window.location.reload()}/>}
   {settings&&<div className="field">
    <label className="switch"><input type="checkbox" role="switch" className="switch__input" checked={settings.windows_runner_enabled} disabled={busy} onChange={e=>void change({windows_runner_enabled:e.target.checked})}/><span className="switch__track" aria-hidden="true"/><span className="switch__label">Enable Windows runner</span></label>
