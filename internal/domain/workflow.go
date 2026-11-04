@@ -148,12 +148,15 @@ func (t *Ticket) Unblock(now time.Time) error {
 }
 
 // HandOffForQuestions drops the lease when an agent asks: the ticket now waits
-// for the owner and must not stay held.
-func (t *Ticket) HandOffForQuestions(now time.Time) error {
+// for the owner and must not stay held. An autonomous ticket takes no
+// clarifying questions, but an escalation is allowed: the agent has hit a
+// retry limit it cannot decide past (e.g. the same Windows failure three
+// times) and offers the owner concrete options instead of looping.
+func (t *Ticket) HandOffForQuestions(now time.Time, escalation bool) error {
 	if !t.Stage.IsAgentStage() {
 		return Conflictf("questions can only be asked while an agent works on ticket %d", t.ID)
 	}
-	if t.IsAutonomous {
+	if t.IsAutonomous && !escalation {
 		return Conflictf("ticket %d is autonomous: the owner is not answering questions on it. Make the call, record it with record_decision, and carry on; call mark_blocked only if you cannot go on at all", t.ID)
 	}
 	t.Lease, t.UpdatedAt = nil, now
