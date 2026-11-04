@@ -5,6 +5,7 @@ import type { RepoFilter } from "../../api/boardApi";
 import type { Lane, LaneId, Repo, Stage, TicketDetail } from "../../api/types";
 import { NO_REPO_LABEL, OWNER_MOVE_LABELS } from "../../lib/constants";
 import { relativeTime } from "../../lib/relativeTime";
+import { parseWorkModel } from "../../lib/workModel";
 import { KindTag } from "../common/KindTag";
 import { OwnerBadge } from "../common/OwnerBadge";
 import { StageChip } from "../common/StageChip";
@@ -28,6 +29,7 @@ export function TicketHeader({ ticket, lanes, stages, repos, run }: TicketHeader
   const api = useApi();
   const repoValue: RepoFilter = ticket.repo_id === null ? { kind: "none" } : { kind: "repo", id: ticket.repo_id };
   const laneLabel = (id: LaneId) => lanes.find((l) => l.id === id)?.label ?? id;
+  const workModel = parseWorkModel(ticket.work_model);
 
   const moveTo = (lane: LaneId) => {
     void run(() => api.moveTicket(ticket.id, lane, null), `Moved to ${laneLabel(lane)}`);
@@ -63,7 +65,8 @@ export function TicketHeader({ ticket, lanes, stages, repos, run }: TicketHeader
         <p className="lease" role="status">
           <span className="pulse" aria-hidden="true" />
           <Bot size={16} aria-hidden="true" />
-          {ticket.work_model || "An agent"} is working on this
+          {workModel?.name ?? "An agent"} is working on this
+          {workModel?.escalatedAfter !== undefined && ` (escalated after ${workModel.escalatedAfter} rejected code passes)`}
         </p>
       )}
       <div className="ticket-header__controls">
