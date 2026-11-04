@@ -429,7 +429,13 @@
   font-variant-numeric: tabular-nums;
 }
 
-.card__top .badge {
+/* Right side of the top row: model, then one status pill. The model name
+   truncates first so the status always stays readable. */
+.card__top-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
   margin-left: auto;
 }
 
@@ -1210,7 +1216,14 @@
 .badge--working { color: var(--success); background: color-mix(in srgb, var(--success) 9%, transparent); }
 .card__activity { flex-shrink: 0; gap: 4px; font-size: 0.6875rem; }
 .autopilot-spark { color: var(--human); flex-shrink: 0; }
-.card__model { color: var(--text-muted); min-width: 0; overflow-wrap: anywhere; }
+.badge--build-target { color: var(--build); background: color-mix(in srgb, var(--build) 7%, transparent); }
+.card__activity-target { color: var(--text-faint); font-weight: 500; }
+.card__activity-target::before { content: "·"; margin-right: 4px; }
+.card__model { display: inline-flex; align-items: center; gap: 4px; min-width: 0; color: var(--text-muted); font-size: 0.6875rem; font-weight: 500; }
+.card__model-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card__model > svg { flex-shrink: 0; }
+/* Escalated after repeated code rejections: orange, with rank chevrons. */
+.card__model--escalated { color: var(--veteran); font-weight: 650; }
 .lane-list__more { width: 100%; margin: 4px 0 8px; justify-content: center; }
 .pixel-loader { display: inline-grid; grid-template-columns: repeat(3, 3px); gap: 1px; flex-shrink: 0; }
 .pixel-loader i { width: 3px; height: 3px; background: currentColor; opacity: 0.25; animation: pixel-build 1.35s steps(1) infinite; }
