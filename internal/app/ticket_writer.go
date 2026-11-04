@@ -97,7 +97,7 @@ func loadDetail(ctx context.Context, repos Repos, ticket domain.Ticket) (TicketD
 		return TicketDetail{}, err
 	}
 	detail := TicketDetail{
-		TicketSummary: TicketSummary{Ticket: ticket, OpenQuestions: countOpen(questions), WaitingOn: waitingOn},
+		TicketSummary: TicketSummary{Ticket: ticket, OpenQuestions: countOpen(questions), WaitingOn: waitingOn, Attempts: domain.CountStageAttempts(timeline)},
 		Questions:     questions, Timeline: timeline,
 	}
 	if detail.Repo, err = repoOf(ctx, repos, ticket.RepoID); err != nil {

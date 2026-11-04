@@ -72,6 +72,7 @@ type ticketSummaryDTO struct {
 	CreatedAt      time.Time     `json:"created_at"`
 	UpdatedAt      time.Time     `json:"updated_at"`
 	LaneChangedAt  time.Time     `json:"lane_changed_at"`
+	Attempts       attemptsDTO   `json:"attempts"`
 }
 
 type ticketDetailDTO struct {
@@ -189,6 +190,7 @@ func toSummary(summary app.TicketSummary) ticketSummaryDTO {
 		SpecRevision: t.SpecRevision, DesignRevision: t.DesignRevision,
 		PRURL: t.PRURL, Branch: t.Branch, OpenQuestions: summary.OpenQuestions, WaitingOn: nonNilIDs(summary.WaitingOn), Lease: activeLease(t),
 		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, LaneChangedAt: t.LaneChangedAt,
+		Attempts: attemptsDTO(summary.Attempts),
 	}
 }
 
@@ -272,4 +274,16 @@ type gatesDTO struct {
 
 func toGates(gates domain.Gates) gatesDTO {
 	return gatesDTO{Spec: gates.Spec, Design: gates.Design}
+}
+
+// attemptsDTO counts passes through each delivery step, derived from the
+// ticket's recorded stage moves and work-model reports.
+type attemptsDTO struct {
+	Build        int `json:"build"`
+	Test         int `json:"test"`
+	TestFailures int `json:"test_failures"`
+	Review       int `json:"review"`
+	ReviewFixes  int `json:"review_fixes"`
+	PR           int `json:"pr"`
+	PRRepairs    int `json:"pr_repairs"`
 }

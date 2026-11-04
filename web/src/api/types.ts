@@ -220,6 +220,24 @@ export interface TicketSummary {
   created_at: string;
   updated_at: string;
   lane_changed_at: string;
+  /** Passes through each delivery step, derived from the ticket's history. Absent from older servers. */
+  attempts?: StageAttempts;
+}
+
+/** Read-only step counts the board derives from stage moves and work-model reports. 0 = never started. */
+export interface StageAttempts {
+  /** Entries into build plus returns after a failed Windows run or review. */
+  build: number;
+  /** Windows verification runs, one per commit sent. */
+  test: number;
+  test_failures: number;
+  /** Fresh-context adversarial review rounds. */
+  review: number;
+  review_fixes: number;
+  /** Entries into the review lane. */
+  pr: number;
+  /** Returns from an open PR to build. */
+  pr_repairs: number;
 }
 
 /** An answer recorded against a question. */

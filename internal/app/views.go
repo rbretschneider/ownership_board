@@ -13,6 +13,9 @@ type TicketSummary struct {
 	// WaitingOn lists the tickets this one depends on that are not merged
 	// yet; agents cannot claim it while any are.
 	WaitingOn []int64
+	// Attempts counts passes through build, test, review and PR, derived
+	// from the recorded history.
+	Attempts domain.StageAttempts
 }
 
 // TicketDetail is a ticket with everything needed to work on it.

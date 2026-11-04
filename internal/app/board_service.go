@@ -511,9 +511,20 @@ func loadBoard(ctx context.Context, repos Repos, filter TicketFilter) (Board, er
 	if err != nil {
 		return Board{}, err
 	}
+	signals, err := repos.Timeline().StageSignals(ctx)
+	if err != nil {
+		return Board{}, err
+	}
+	byTicket := make(map[int64][]domain.TimelineEntry)
+	for _, entry := range signals {
+		byTicket[entry.TicketID] = append(byTicket[entry.TicketID], entry)
+	}
 	summaries := make([]TicketSummary, 0, len(tickets))
 	for _, ticket := range tickets {
-		summaries = append(summaries, TicketSummary{Ticket: ticket, OpenQuestions: openCounts[ticket.ID], WaitingOn: waiting[ticket.ID]})
+		summaries = append(summaries, TicketSummary{
+			Ticket: ticket, OpenQuestions: openCounts[ticket.ID], WaitingOn: waiting[ticket.ID],
+			Attempts: domain.CountStageAttempts(byTicket[ticket.ID]),
+		})
 	}
 	return Board{Lanes: domain.Lanes(), Stages: domain.Stages(), Repos: codeRepos, Tickets: summaries}, nil
 }

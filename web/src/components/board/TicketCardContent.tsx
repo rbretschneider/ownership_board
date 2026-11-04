@@ -3,10 +3,10 @@ import type { Repo, Stage, TicketSummary } from "../../api/types";
 import { useLeaseClock } from "../../hooks/useLeaseClock";
 import { cardActivity, hasLiveLease } from "../../lib/activity";
 import { ticketRefs } from "../../lib/relations";
-import { completedSteps, PROGRESS_STEPS } from "../../lib/progress";
 import { KindTag } from "../common/KindTag";
 import { StageChip } from "../common/StageChip";
 import { RepoChip } from "../repos/RepoChip";
+import { StageStepper } from "./StageStepper";
 
 /** The visual body of a card, shared by the card and its drag ghost. */
 export function TicketCardContent({ ticket, stages, repo, now }: { ticket: TicketSummary; stages: Stage[]; repo: Repo | undefined; now?: number }) {
@@ -57,11 +57,9 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
           )}
         </div>
       )}
+      <StageStepper ticket={ticket} />
       <div className="card__meta">
         <RepoChip repo={repo} />
-        <span className="badge card__progress" title={`Workflow progress, not a time estimate: ${PROGRESS_STEPS.join(" → ")}. Review and delivery count as complete when delivered; progress may move back for fixes.`}>
-          {completedSteps(ticket.stage)} of {PROGRESS_STEPS.length} steps complete
-        </span>
         {activity.buildServer && <span className="badge card__model"><Server size={12} aria-hidden="true" />Build server · {activity.target}</span>}
         {ticket.stage !== "done" && (liveLease || (activity.buildServer && model)) && (
           <span className="badge card__model" title={liveLease ? `Assigned model for ${ticket.lease?.holder}` : "Last reported model"}>
