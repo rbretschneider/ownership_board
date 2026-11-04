@@ -4,6 +4,12 @@ import { useLeaseClock } from "../../hooks/useLeaseClock";
 import { cardActivity, hasLiveLease } from "../../lib/activity";
 import { ticketRefs } from "../../lib/relations";
 import { parseWorkModel, shortTarget } from "../../lib/workModel";
+import { useRunners } from "../../hooks/useRunners";
+import { slotStep, slotTone, ticketRun } from "../../lib/runners";
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 import { KindTag } from "../common/KindTag";
 import { StageChip } from "../common/StageChip";
 import { RepoChip } from "../repos/RepoChip";
@@ -36,12 +42,25 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
   const showModel = ticket.stage !== "done" && (liveLease || (activity.buildServer === true && model !== undefined));
   const isBlocked = ticket.blocked_reason !== "";
   const isWaiting = ticket.waiting_on.length > 0;
-  const phase = activity.buildServer ? activity.label.split(" · ")[0] : activity.label;
+  // The build host's live view beats the worker's coarse signal: it knows the
+  // pass and step, a lock wait, and the ticket's place in line.
+  const runners = useRunners();
+  const run = activity.buildServer ? ticketRun(runners.snapshot, ticket.id, runners.now) : undefined;
+  const runTone = run?.kind === "running" ? slotTone(run.slot) : undefined;
+  const livePhase = run === undefined ? undefined
+    : run.kind === "queued" ? `Queued #${run.entry.position}`
+    : run.kind === "orphan" ? "Old run stopping"
+    : capitalize(slotStep(run.slot));
+  const activeBuild = run === undefined ? activity.activeBuild : runTone === "building" || runTone === "testing";
+  const phase = livePhase ?? (activity.buildServer ? activity.label.split(" · ")[0] : activity.label);
   const label = activity.buildServer ? phase
     : isWaiting && !isBlocked ? `Waiting on ${ticketRefs(ticket.waiting_on)}`
     : !activity.working && ticket.lane === "todo" && ticket.is_autonomous && !activity.blocked && !ticket.needs_owner ? "Autopilot"
     : activity.label;
-  const statusTitle = activity.buildServer ? `Build server · ${phase} · ${activity.target}`
+  const statusTitle = run?.kind === "running" ? `Build server slot ${run.slot.slot} · ${phase} · ${activity.target} · commit ${run.slot.sha.slice(0, 8)}`
+    : run?.kind === "queued" ? `Build server · number ${run.entry.position} in line · ${activity.target} · commit ${run.entry.sha.slice(0, 8)}`
+    : run?.kind === "orphan" ? `Build server slot ${run.slot.slot} is still finishing an older commit of this ticket; the host stops it`
+    : activity.buildServer ? `Build server · ${phase} · ${activity.target}`
     : isBlocked ? `Blocked: ${ticket.blocked_reason}`
     : isWaiting ? "Agents cannot claim this until these tickets are merged"
     : `${ticket.is_autonomous ? "On autopilot · " : ""}${activity.label === "Queued" ? "Waiting for a worker" : activity.label}`;
@@ -61,13 +80,13 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
               </span>
             )}
             {showActivity && (
-              <span className={`badge card__activity${activity.blocked ? " badge--blocked" : activity.activeBuild ? " badge--build-server" : activity.buildServer ? " badge--build-target" : activity.working ? " badge--working" : ticket.is_autonomous ? " badge--autopilot" : ""}`}
+              <span className={`badge card__activity${activity.blocked ? " badge--blocked" : run?.kind === "orphan" ? " badge--blocked" : activeBuild ? " badge--build-server" : activity.buildServer ? " badge--build-target" : activity.working ? " badge--working" : ticket.is_autonomous ? " badge--autopilot" : ""}`}
                 title={statusTitle} aria-label={`${ticket.is_autonomous ? "Autopilot: " : ""}${activity.buildServer ? `${phase} on ${activity.target}` : label}`}>
                 {activity.buildServer ? <Server size={12} aria-hidden="true" />
                   : isBlocked ? <CircleAlert size={12} aria-hidden="true" />
                   : isWaiting ? <Hourglass size={12} aria-hidden="true" />
                   : ticket.is_autonomous && <Zap className="autopilot-spark" size={12} aria-hidden="true" />}
-                {(activity.working || activity.activeBuild) && <span className="pixel-loader" aria-hidden="true">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</span>}
+                {(activity.working || activeBuild) && <span className="pixel-loader" aria-hidden="true">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</span>}
                 <span className="card__activity-label">{label}</span>
                 {activity.buildServer && activity.target && <span className="card__activity-target">{shortTarget(activity.target)}</span>}
               </span>

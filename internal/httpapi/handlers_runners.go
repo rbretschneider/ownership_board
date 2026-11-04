@@ -1,0 +1,184 @@
+package httpapi
+
+import (
+	"encoding/json"
+	"io"
+	"math"
+	"net/http"
+	"os"
+	"regexp"
+	"strings"
+	"time"
+)
+
+// The Windows build host's live state, written by the verification queue on
+// the server as a small sanitized file (like account usage). The board only
+// reads it; nothing here can start, stop or change a build.
+
+type runnerSlot struct {
+	Slot      int        `json:"slot"`
+	TicketID  *int64     `json:"ticket_id"`
+	Repo      string     `json:"repo"`
+	SHA       string     `json:"sha"`
+	Preset    string     `json:"preset"`
+	Phase     string     `json:"phase"`
+	Detail    string     `json:"detail"`
+	Since     *time.Time `json:"since"`
+	UpdatedAt *time.Time `json:"updated_at"`
+	// Orphan: a newer commit of the same ticket replaced this run; the host stops it.
+	Orphan bool `json:"orphan"`
+}
+
+type runnerQueued struct {
+	Position      int        `json:"position"`
+	TicketID      *int64     `json:"ticket_id"`
+	Repo          string     `json:"repo"`
+	SHA           string     `json:"sha"`
+	Preset        string     `json:"preset"`
+	QueuedAt      *time.Time `json:"queued_at"`
+	DeferredUntil *time.Time `json:"deferred_until"`
+}
+
+type runnersSnapshot struct {
+	ObservedAt     *time.Time     `json:"observed_at"`
+	Host           string         `json:"host"`
+	Enabled        bool           `json:"enabled"`
+	ParallelBuilds int            `json:"parallel_builds"`
+	Slots          []runnerSlot   `json:"slots"`
+	Queue          []runnerQueued `json:"queue"`
+}
+
+// The file's own shape: epoch seconds, as the queue writes them.
+type runnersFile struct {
+	At             float64 `json:"at"`
+	Host           string  `json:"host"`
+	Enabled        bool    `json:"enabled"`
+	ParallelBuilds int     `json:"parallel_builds"`
+	Slots          []struct {
+		Slot    int     `json:"slot"`
+		Ticket  *int64  `json:"ticket"`
+		Repo    string  `json:"repo"`
+		SHA     string  `json:"sha"`
+		Preset  string  `json:"preset"`
+		Phase   string  `json:"phase"`
+		Detail  string  `json:"detail"`
+		Since   float64 `json:"since"`
+		Updated float64 `json:"updated"`
+		Orphan  bool    `json:"orphan"`
+	} `json:"slots"`
+	Queue []struct {
+		Ticket     *int64  `json:"ticket"`
+		Repo       string  `json:"repo"`
+		SHA        string  `json:"sha"`
+		Preset     string  `json:"preset"`
+		Queued     float64 `json:"queued"`
+		RetryAfter float64 `json:"retry_after"`
+	} `json:"queue"`
+}
+
+const (
+	maxRunnerSlots  = 8
+	maxRunnerQueue  = 40
+	maxRunnerDetail = 60
+)
+
+var (
+	runnerRepoPattern   = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+	runnerSHAPattern    = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+	runnerHostPattern   = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,64}$`)
+	runnerDetailPattern = regexp.MustCompile(`^[A-Za-z0-9 .·:()/#+-]*$`)
+	runnerPhases        = map[string]bool{"queued": true, "preparing": true, "building": true, "testing": true, "verifying": true}
+	runnerPresets       = map[string]bool{"dotnet": true, "cmake": true, "script": true}
+)
+
+// Only reads a small sanitized cache written by the build queue.
+func (s *server) windowsRunners(w http.ResponseWriter, _ *http.Request, _ caller) error {
+	writeJSON(w, http.StatusOK, readRunnersSnapshot(s.deps.RunnersFile))
+	return nil
+}
+
+func readRunnersSnapshot(path string) runnersSnapshot {
+	empty := runnersSnapshot{Slots: []runnerSlot{}, Queue: []runnerQueued{}}
+	if path == "" {
+		return empty
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return empty
+	}
+	defer file.Close()
+	var raw runnersFile
+	decoder := json.NewDecoder(io.LimitReader(file, 65537))
+	if err := decoder.Decode(&raw); err != nil {
+		return empty
+	}
+	var extra any
+	if decoder.Decode(&extra) != io.EOF {
+		return empty
+	}
+	clean := empty
+	clean.ObservedAt = epoch(raw.At)
+	if clean.ObservedAt == nil {
+		return empty
+	}
+	if runnerHostPattern.MatchString(raw.Host) {
+		clean.Host = raw.Host
+	}
+	clean.Enabled = raw.Enabled
+	if raw.ParallelBuilds >= 0 && raw.ParallelBuilds <= maxRunnerSlots {
+		clean.ParallelBuilds = raw.ParallelBuilds
+	}
+	seen := map[int]bool{}
+	for _, slot := range raw.Slots {
+		if len(clean.Slots) == maxRunnerSlots {
+			break
+		}
+		if slot.Slot < 1 || slot.Slot > maxRunnerSlots || seen[slot.Slot] || !runnerRepoPattern.MatchString(slot.Repo) ||
+			!runnerSHAPattern.MatchString(slot.SHA) || !runnerPresets[slot.Preset] || !runnerPhases[slot.Phase] {
+			continue
+		}
+		seen[slot.Slot] = true
+		clean.Slots = append(clean.Slots, runnerSlot{
+			Slot: slot.Slot, TicketID: positiveID(slot.Ticket), Repo: slot.Repo, SHA: slot.SHA[:min(len(slot.SHA), 12)],
+			Preset: slot.Preset, Phase: slot.Phase, Detail: cleanDetail(slot.Detail),
+			Since: epoch(slot.Since), UpdatedAt: epoch(slot.Updated), Orphan: slot.Orphan,
+		})
+	}
+	for _, queued := range raw.Queue {
+		if len(clean.Queue) == maxRunnerQueue {
+			break
+		}
+		if !runnerRepoPattern.MatchString(queued.Repo) || !runnerSHAPattern.MatchString(queued.SHA) || !runnerPresets[queued.Preset] {
+			continue
+		}
+		clean.Queue = append(clean.Queue, runnerQueued{
+			Position: len(clean.Queue) + 1, TicketID: positiveID(queued.Ticket), Repo: queued.Repo,
+			SHA: queued.SHA[:min(len(queued.SHA), 12)], Preset: queued.Preset,
+			QueuedAt: epoch(queued.Queued), DeferredUntil: epoch(queued.RetryAfter),
+		})
+	}
+	return clean
+}
+
+func epoch(seconds float64) *time.Time {
+	if seconds <= 0 || math.IsNaN(seconds) || math.IsInf(seconds, 0) || seconds > 1e11 {
+		return nil
+	}
+	at := time.Unix(0, int64(seconds*1e9)).UTC()
+	return &at
+}
+
+func positiveID(id *int64) *int64 {
+	if id == nil || *id <= 0 {
+		return nil
+	}
+	return id
+}
+
+func cleanDetail(detail string) string {
+	detail = strings.TrimSpace(detail)
+	if len([]rune(detail)) > maxRunnerDetail || !runnerDetailPattern.MatchString(detail) {
+		return ""
+	}
+	return detail
+}

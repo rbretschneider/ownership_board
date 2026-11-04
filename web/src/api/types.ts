@@ -493,6 +493,46 @@ export interface AccountUsage {
  accounts: { provider: "codex" | "claude"; observed_at: string | null; windows: {label: string; used_percent: number | null; resets_at: string | null}[] }[];
 }
 
+export type RunnerPhase = "queued" | "preparing" | "building" | "testing" | "verifying";
+export type RunnerPreset = "dotnet" | "cmake" | "script";
+
+/** One Windows build slot and the job it is running. */
+export interface RunnerSlot {
+ slot: number;
+ ticket_id: number | null;
+ repo: string;
+ sha: string;
+ preset: RunnerPreset;
+ phase: RunnerPhase;
+ /** The current step, e.g. "ASan · testing" or "waiting for desktop"; may be empty. */
+ detail: string;
+ since: string | null;
+ updated_at: string | null;
+ /** A newer commit of the same ticket replaced this run; the host stops it. */
+ orphan: boolean;
+}
+
+/** A job waiting for a free slot, in claim order. */
+export interface RunnerQueued {
+ position: number;
+ ticket_id: number | null;
+ repo: string;
+ sha: string;
+ preset: RunnerPreset;
+ queued_at: string | null;
+ deferred_until: string | null;
+}
+
+/** The Windows build host's live state; observed_at is null when unknown. */
+export interface RunnersSnapshot {
+ observed_at: string | null;
+ host: string;
+ enabled: boolean;
+ parallel_builds: number;
+ slots: RunnerSlot[];
+ queue: RunnerQueued[];
+}
+
 /** Durations in hours; with `count` 0 the other fields mean "no data". */
 export interface Distribution {
   count: number;
