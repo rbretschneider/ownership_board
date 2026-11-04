@@ -31,9 +31,11 @@ type MCPHandler interface {
 type Deps struct {
 	// UsageFile contains sanitized, externally sampled account usage; never credentials.
 	UsageFile string
-	Board     *app.BoardService
-	Agents    *app.AgentService
-	Repos     *app.RepoService
+	// RunnersFile is the Windows build host's sanitized live state, written by the build queue.
+	RunnersFile string
+	Board       *app.BoardService
+	Agents      *app.AgentService
+	Repos       *app.RepoService
 	// Connections manages provider accounts in Settings.
 	Connections *connections.Service
 	Auth        *auth.Service
@@ -80,6 +82,7 @@ func (s *server) routes(rt *router) {
 	s.settingsRoutes(rt)
 	s.statsRoutes(rt)
 	rt.human("GET /api/v1/account-usage", s.accountUsage)
+	rt.human("GET /api/v1/runners", s.windowsRunners)
 	rt.human("GET /api/v1/tokens", s.listTokens)
 	rt.human("POST /api/v1/tokens", s.createToken)
 	rt.human("DELETE /api/v1/tokens/{id}", s.revokeToken)

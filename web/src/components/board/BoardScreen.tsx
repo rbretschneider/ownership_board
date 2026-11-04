@@ -8,6 +8,7 @@ import { useDragDrop } from "../../hooks/useDragDrop";
 import { useEventStream } from "../../hooks/useEventStream";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useOwnerAlerts } from "../../hooks/useOwnerAlerts";
+import { RunnersContext, useRunnersPolling } from "../../hooks/useRunners";
 import { DEFAULT_LANE, DESKTOP_MEDIA_QUERY, REFETCH_DEBOUNCE_MS } from "../../lib/constants";
 import { laneCardIds, type DropTarget } from "../../lib/dropTargets";
 import type { Route } from "../../lib/hashRoute";
@@ -23,6 +24,7 @@ import { TicketSheet } from "../ticket/TicketSheet";
 import { useToast } from "../toast/ToastContext";
 import { DesktopBoard } from "./DesktopBoard";
 import { MobileBoard } from "./MobileBoard";
+import { RunnersStrip } from "./RunnersStrip";
 import { TicketCardContent } from "./TicketCardContent";
 import { TopBar } from "./TopBar";
 
@@ -102,6 +104,8 @@ export function BoardScreen({ route }: BoardScreenProps) {
     }
   }, [board, repoFilter, changeRepoFilter]);
 
+  const runners = useRunnersPolling();
+
   const viewProps = {
     lanes,
     stages,
@@ -115,6 +119,7 @@ export function BoardScreen({ route }: BoardScreenProps) {
   };
 
   return (
+    <RunnersContext.Provider value={runners}>
     <div className={`app${isDesktop ? " app--desktop" : " app--mobile"}`}>
       <TopBar
         repos={repos}
@@ -127,6 +132,7 @@ export function BoardScreen({ route }: BoardScreenProps) {
         showNewButton={isDesktop}
         onNew={() => setCreateRequest({})}
       />
+      <RunnersStrip />
       <main className="board" aria-busy={isLoading}>
         {board === null && isLoading && <LoadingState label="Loading board" />}
         {board === null && !isLoading && error !== null && (
@@ -180,6 +186,7 @@ export function BoardScreen({ route }: BoardScreenProps) {
         />
       )}
     </div>
+    </RunnersContext.Provider>
   );
 }
 
