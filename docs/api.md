@@ -212,6 +212,20 @@ type TicketSummary = {
   waiting_on: number[];      // depends_on targets not merged yet; [] when none
   lease: Lease | null;
   created_at: string; updated_at: string; lane_changed_at: string;
+  attempts: StageAttempts;
+};
+
+// Read-only counts derived from stage moves and work-model reports
+// ("· build-server:…", "· awaiting repair", "· awaiting review",
+// "· adversarial review"). 0 means the step never started.
+type StageAttempts = {
+  build: number;          // entries into build, plus returns after a failed Windows run or review
+  test: number;           // finished Windows verification runs, plus one in flight
+  test_failures: number;  // Windows runs that failed ("· awaiting repair")
+  review: number;         // fresh-context adversarial review rounds
+  review_fixes: number;   // review rounds after which the author resumed work
+  pr: number;             // entries into the review lane
+  pr_repairs: number;     // returns from an open PR to build
 };
 
 type TicketDetail = TicketSummary & {

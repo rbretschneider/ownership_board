@@ -42,6 +42,18 @@ it("places autopilot on the kind row and animates only active work", () => {
  expect(dom.querySelectorAll(".pixel-loader i")).toHaveLength(9);
  expect(dom.querySelector(".card__model")?.textContent).toBe("gpt-6.1-sol");
 });
+it("replaces the step count with a stage stepper showing retries", () => {
+ const dom = document.createElement("div");
+ dom.innerHTML = render({stage: "build", lane: "in_progress", work_model: "gpt-6.1-sol · build-server:testing:Windows x64 · awaiting Windows",
+  attempts: {build: 4, test: 5, test_failures: 4, review: 0, review_fixes: 0, pr: 0, pr_repairs: 0}});
+ expect(dom.textContent).not.toContain("steps complete");
+ const steps = [...dom.querySelectorAll(".stepper__step")];
+ expect(steps.map((s) => s.getAttribute("aria-label")?.split(":")[0])).toEqual(["Refine and design", "Build", "Windows verification", "Fresh-context adversarial review", "Pull request and checks"]);
+ expect(dom.querySelector('[aria-current="step"]')?.getAttribute("aria-label")).toBe("Windows verification: current step · 5 Windows runs, 4 failed");
+ expect(dom.querySelectorAll(".stepper__step--done")).toHaveLength(2);
+ expect(dom.querySelector(".stepper__summary")?.textContent).toBe("Build4Test5");
+ expect(dom.querySelector(".stepper__item--current .stepper__label")?.textContent).toBe("Test");
+});
 it("does not label delivered stories as awaiting delivery checks", () => {
  expect(render({stage: "done", lane: "merged", lease: null})).not.toContain("Delivery checks");
 });

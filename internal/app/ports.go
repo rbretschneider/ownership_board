@@ -94,6 +94,10 @@ type TimelineRepository interface {
 	// OfTypes returns every entry of the given types, ordered by ticket and
 	// then by when it was recorded.
 	OfTypes(ctx context.Context, types []domain.TimelineType) ([]domain.TimelineEntry, error)
+	// StageSignals returns every stage move, work-model report and agent
+	// "Windows verification queued" comment, ordered by ticket and then by
+	// when it was recorded; enough to count stage attempts.
+	StageSignals(ctx context.Context) ([]domain.TimelineEntry, error)
 }
 
 // RepoRepository persists code repos.

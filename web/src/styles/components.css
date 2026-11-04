@@ -455,6 +455,92 @@
   min-height: 20px;
 }
 
+/* Refine → Build → Test → Review → PR: five segments, then one line naming
+   the current step and any step that repeated. Never wraps or overflows. */
+.stepper {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.stepper__track {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stepper__step {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-3);
+}
+
+.stepper__step--done {
+  background: var(--done);
+}
+
+.stepper__step--current {
+  background: var(--accent);
+}
+
+.stepper__step--skipped {
+  background: repeating-linear-gradient(90deg, var(--border-strong) 0 3px, transparent 3px 6px);
+}
+
+/* Whole items wrap to a second line rather than hide a count. */
+.stepper__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 2px;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 560;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.stepper__item {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+}
+
+.stepper__item + .stepper__item::before {
+  content: "→";
+  margin: 0 4px;
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+.stepper__item--current {
+  color: var(--accent-strong);
+  font-weight: 650;
+}
+
+.stepper__count {
+  flex: none;
+  min-width: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  text-align: center;
+}
+
+.stepper__item--retried .stepper__count {
+  background: var(--human-soft);
+  color: var(--human);
+}
+
 .drop-line {
   position: relative;
   height: 0;

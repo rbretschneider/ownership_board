@@ -58,6 +58,20 @@ func (r timelineRepo) OfTypes(ctx context.Context, types []domain.TimelineType) 
 	return scanEntries(rows)
 }
 
+func (r timelineRepo) StageSignals(ctx context.Context) ([]domain.TimelineEntry, error) {
+	rows, err := r.q.QueryContext(ctx,
+		`SELECT `+timelineColumns+` FROM timeline
+		 WHERE type = ?
+		    OR (type = ? AND json_extract(data, '$.model') IS NOT NULL)
+		    OR (type = ? AND actor_kind = ? AND body LIKE 'Windows verification queued for commit %')
+		 ORDER BY ticket_id, id`,
+		string(domain.TimelineStage), string(domain.TimelineEdited), string(domain.TimelineComment), string(domain.ActorAgent))
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: stage signals: %w", err)
+	}
+	return scanEntries(rows)
+}
+
 func scanEntries(rows *sql.Rows) ([]domain.TimelineEntry, error) {
 	defer rows.Close()
 	var entries []domain.TimelineEntry
