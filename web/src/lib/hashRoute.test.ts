@@ -18,6 +18,9 @@ describe("parseHash", () => {
   it("parses the stats page", () => {
     expect(parseHash("#/stats")).toMatchObject({ name: "stats", ticketId: null });
   });
+  it("parses the flow view", () => {
+    expect(parseHash("#/flow")).toMatchObject({ name: "flow", ticketId: null });
+  });
   it("parses a login error", () => {
     expect(parseHash("#/login?error=sso_not_linked").params.get("error")).toBe("sso_not_linked");
   });

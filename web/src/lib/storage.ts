@@ -6,6 +6,10 @@ export const STORAGE_KEYS = {
   repoFilter: "ob.repoFilter",
   alertSound: "ob.alertSound",
   alertNotify: "ob.alertNotify",
+  /** Flow view: comma-separated hidden lane keys. */
+  flowHidden: "ob.flowHidden",
+  /** Flow view: "1" when the in-progress stages are split out. */
+  flowDetailed: "ob.flowDetailed",
 } as const;
 
 /**

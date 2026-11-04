@@ -1,11 +1,12 @@
-import { ChartColumn, LayoutGrid, Settings, type LucideIcon } from "lucide-react";
-import { BOARD_HASH, SETTINGS_HASH, STATS_HASH, type RouteName } from "../../lib/hashRoute";
+import { ChartColumn, LayoutGrid, Settings, Waypoints, type LucideIcon } from "lucide-react";
+import { BOARD_HASH, FLOW_HASH, SETTINGS_HASH, STATS_HASH, type RouteName } from "../../lib/hashRoute";
 
 /** The top-level screens the nav links to. */
-export type AppPage = Extract<RouteName, "board" | "stats" | "settings">;
+export type AppPage = Extract<RouteName, "board" | "flow" | "stats" | "settings">;
 
 const PAGES: { page: AppPage; label: string; href: string; Icon: LucideIcon }[] = [
   { page: "board", label: "Board", href: BOARD_HASH, Icon: LayoutGrid },
+  { page: "flow", label: "Flow", href: FLOW_HASH, Icon: Waypoints },
   { page: "stats", label: "Stats", href: STATS_HASH, Icon: ChartColumn },
   { page: "settings", label: "Settings", href: SETTINGS_HASH, Icon: Settings },
 ];
