@@ -11,7 +11,7 @@ export function AppearanceSection() {
   const [theme, setTheme] = useTheme();
   return (
     <section className="settings-section" aria-labelledby="appearance-title">
-      <h3 id="appearance-title" className="settings-section__title">Appearance</h3>
+      <h2 id="appearance-title" className="settings-section__title">Appearance</h2>
       <fieldset className="segmented">
         <legend className="visually-hidden">Theme</legend>
         {THEMES.map(({ value, label, Icon }) => (

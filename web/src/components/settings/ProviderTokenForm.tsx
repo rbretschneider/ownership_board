@@ -65,7 +65,7 @@ export function ProviderTokenForm(props: ProviderTokenFormProps) {
 
   return (
     <form className="inline-form" onSubmit={(e) => void submit(e)} noValidate aria-labelledby={`${idPrefix}-title`}>
-      <h4 id={`${idPrefix}-title`} className="provider-form__title">{props.title}</h4>
+      <h3 id={`${idPrefix}-title`} className="provider-form__title">{props.title}</h3>
       <div className="field">
         <label className="field__label" htmlFor={accountId}>
           {field.label}{field.isRequired ? "" : " (optional)"}

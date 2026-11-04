@@ -1139,7 +1139,7 @@
 @media (max-width: 899px) {
  .app--mobile { --topbar-h: 92px; }
  .topbar { flex-wrap: wrap; padding-bottom: 8px; }
- .usage-bars { order: 10; width: 100%; justify-content: flex-end; }
+ .topbar__metrics { order: 10; width: 100%; justify-content: flex-end; }
  .usage-meter { flex: 1; min-width: 0; max-width: 360px; }
  .usage-meter__label { flex-wrap: wrap; white-space: normal; row-gap: 0; }
 }
@@ -1161,7 +1161,7 @@
 @media (min-width: 900px) and (max-width: 1450px) {
   .app { --topbar-h: 92px; }
   .topbar { flex-wrap: wrap; min-height: 92px; padding-bottom: 8px; }
-  .usage-bars { order: 10; width: 100%; justify-content: flex-end; }
+  .topbar__metrics { order: 10; width: 100%; justify-content: flex-end; }
 }
 
 @media (max-width: 599px) {

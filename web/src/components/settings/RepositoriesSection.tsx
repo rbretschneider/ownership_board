@@ -75,7 +75,7 @@ export function RepositoriesSection({ onChanged }: { onChanged: () => void }) {
 
   return (
     <section className="settings-section" aria-labelledby="repos-title">
-      <h3 id="repos-title" className="settings-section__title">Repositories</h3>
+      <h2 id="repos-title" className="settings-section__title">Repositories</h2>
       {error !== null && <ErrorState message={`Couldn't load repositories: ${error}`} onRetry={() => void load()} />}
       {isLoading && <LoadingState label="Loading repositories" />}
       {connections !== null && needsGitHubSetup(connections) && <GitHubSetupCard />}

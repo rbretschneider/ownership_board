@@ -38,7 +38,7 @@ export function AlertsSection() {
 
   return (
     <section className="settings-section" aria-labelledby="alerts-title">
-      <h3 id="alerts-title" className="settings-section__title">Alerts</h3>
+      <h2 id="alerts-title" className="settings-section__title">Alerts</h2>
       <p className="muted small">The tab title shows how many tickets wait for you, for example "(2) ownership".</p>
       <label className="switch" htmlFor="alert-sound">
         <input

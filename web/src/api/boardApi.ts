@@ -25,6 +25,7 @@ import type {
   RequestChangesInput,
   TicketDetail,
   TicketSummary,
+  StatsReport,
   Token,
   User,
   WorkLinkInput,
@@ -42,6 +43,8 @@ export type RepoFilter = { kind: "all" } | { kind: "none" } | { kind: "repo"; id
 /** Typed access to every endpoint the web UI uses. */
 export interface BoardApi {
   accountUsage(): Promise<AccountUsage>;
+  /** Delivery metrics over the last `days` local days (1–365). */
+  stats(days: number): Promise<StatsReport>;
   authStatus(): Promise<AuthStatus>;
   setup(input: { name: string; email: string; password: string }): Promise<User>;
   login(input: { email: string; password: string }): Promise<User>;
@@ -92,6 +95,7 @@ export function createBoardApi(http: HttpClient): BoardApi {
   const t = (id: number): string => `/tickets/${id}`;
   return {
     accountUsage: () => http.request("GET", "/account-usage"),
+    stats: (days) => http.request("GET", statsQuery(days, new Date())),
     authStatus: () => http.request("GET", "/auth/status"),
     setup: (input) => http.request("POST", "/auth/setup", input),
     login: (input) => http.request("POST", "/auth/login", input),
@@ -144,6 +148,11 @@ export function boardQuery(filter: RepoFilter): string {
     case "repo":
       return `?repo=${filter.id}`;
   }
+}
+
+/** Path for GET /stats; the browser's UTC offset makes days end at local midnight. */
+export function statsQuery(days: number, at: Date): string {
+  return `/stats?days=${days}&tz_offset=${-at.getTimezoneOffset()}`;
 }
 
 /** Query string for GET /work-links. */

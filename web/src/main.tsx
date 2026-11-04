@@ -9,6 +9,7 @@ import "./styles/layout.css";
 import "./styles/components.css";
 import "./styles/ticket.css";
 import "./styles/trace.css";
+import "./styles/stats.css";
 
 const SERVICE_WORKER_URL = "/sw.js";
 

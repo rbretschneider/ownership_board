@@ -26,7 +26,7 @@ export function AccountSection({ status, onSignedOut }: { status: AuthStatus; on
 
   return (
     <section className="settings-section" aria-labelledby="account-title">
-      <h3 id="account-title" className="settings-section__title">Account</h3>
+      <h2 id="account-title" className="settings-section__title">Account</h2>
       {user !== null && (
         <p>
           Signed in as <strong>{user.name}</strong> <span className="muted">({user.email})</span>

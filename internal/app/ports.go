@@ -91,6 +91,9 @@ type QuestionRepository interface {
 type TimelineRepository interface {
 	Append(ctx context.Context, entry *domain.TimelineEntry) error
 	ForTicket(ctx context.Context, ticketID int64) ([]domain.TimelineEntry, error)
+	// OfTypes returns every entry of the given types, ordered by ticket and
+	// then by when it was recorded.
+	OfTypes(ctx context.Context, types []domain.TimelineType) ([]domain.TimelineEntry, error)
 }
 
 // RepoRepository persists code repos.
