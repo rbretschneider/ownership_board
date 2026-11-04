@@ -368,11 +368,14 @@
 }
 
 .card {
+  /* The stepper reads these to sit edge to edge on the card's bottom. */
+  --card-pad-y: 12px;
+  --card-pad-x: 14px;
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin-bottom: 8px;
-  padding: 12px 14px;
+  padding: var(--card-pad-y) var(--card-pad-x);
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -391,8 +394,9 @@
 }
 
 .mobile-lane .card {
+  --card-pad-y: 14px;
+  --card-pad-x: 16px;
   background: var(--surface);
-  padding: 14px 16px;
 }
 
 .card:hover {
@@ -455,90 +459,93 @@
   min-height: 20px;
 }
 
-/* Refine → Build → Test → Review → PR: five segments, then one line naming
-   the current step and any step that repeated. Never wraps or overflows. */
+/* Refine › Build › Test › Review › PR as chevrons along the card's bottom
+   edge, edge to edge. Steps share the width; the current one never shrinks,
+   and other labels truncate before anything overflows. */
 .stepper {
+  --chevron: 6px;
   display: flex;
-  flex-direction: column;
-  gap: 5px;
   min-width: 0;
-}
-
-.stepper__track {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 3px;
-  margin: 0;
+  height: 22px;
+  margin: 2px calc(-1 * var(--card-pad-x)) calc(-1 * var(--card-pad-y));
   padding: 0;
+  overflow: hidden;
+  border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
   list-style: none;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  line-height: 1;
 }
 
 .stepper__step {
-  height: 4px;
-  border-radius: 2px;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 0 calc(var(--chevron) + 1px) 0 calc(var(--chevron) + 3px);
   background: var(--surface-3);
+  color: var(--text-muted);
+  white-space: nowrap;
+  clip-path: polygon(0 0, calc(100% - var(--chevron)) 0, 100% 50%, calc(100% - var(--chevron)) 100%, 0 100%, var(--chevron) 50%);
+}
+
+.stepper__step + .stepper__step {
+  margin-left: calc(2px - var(--chevron));
+}
+
+.stepper__step:first-child {
+  padding-left: 8px;
+  clip-path: polygon(0 0, calc(100% - var(--chevron)) 0, 100% 50%, calc(100% - var(--chevron)) 100%, 0 100%);
+}
+
+.stepper__step:last-child {
+  padding-right: 8px;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, var(--chevron) 50%);
 }
 
 .stepper__step--done {
-  background: var(--done);
+  background: color-mix(in srgb, var(--done) 30%, var(--surface-3));
+  color: var(--text);
+}
+
+/* Crowded cards truncate plain steps first, then counted ones; the current
+   step keeps its full label. */
+.stepper__step--counted {
+  flex-shrink: 0.02;
 }
 
 .stepper__step--current {
+  flex-shrink: 0;
   background: var(--accent);
+  color: var(--on-accent);
 }
 
-.stepper__step--skipped {
-  background: repeating-linear-gradient(90deg, var(--border-strong) 0 3px, transparent 3px 6px);
+.stepper__step--skipped .stepper__label {
+  text-decoration: line-through;
 }
 
-/* Whole items wrap to a second line rather than hide a count. */
-.stepper__summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  row-gap: 2px;
+.stepper__label {
+  overflow: hidden;
   min-width: 0;
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  font-weight: 560;
-  line-height: 1.5;
-  white-space: nowrap;
-}
-
-.stepper__item {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 3px;
-}
-
-.stepper__item + .stepper__item::before {
-  content: "→";
-  margin: 0 4px;
-  color: var(--text-faint);
-  font-weight: 400;
-}
-
-.stepper__item--current {
-  color: var(--accent-strong);
-  font-weight: 650;
+  text-overflow: ellipsis;
 }
 
 .stepper__count {
   flex: none;
-  min-width: 15px;
-  padding: 0 4px;
+  min-width: 13px;
+  padding: 2px 3px;
   border-radius: 999px;
-  background: var(--surface-3);
-  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.22);
+  font-size: 0.625rem;
   font-variant-numeric: tabular-nums;
-  font-weight: 650;
   text-align: center;
 }
 
-.stepper__item--retried .stepper__count {
-  background: var(--human-soft);
-  color: var(--human);
+.stepper__step--retried .stepper__count {
+  background: var(--human);
+  color: var(--on-accent);
 }
 
 .drop-line {

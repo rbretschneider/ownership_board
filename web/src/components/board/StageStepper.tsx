@@ -2,37 +2,27 @@ import type { TicketSummary } from "../../api/types";
 import { progressSteps } from "../../lib/progress";
 
 /**
- * Refine → Build → Test → Review → PR as five segments (done filled, current
- * highlighted), with one line under them naming the current step and every
- * step that ran more than once, e.g. "Build 4 → Test 5". Hover or focus a
- * segment for its full history.
+ * Refine › Build › Test › Review › PR as chevrons along the card's bottom
+ * edge. Done steps are filled, the current one is solid accent, and a step
+ * that ran more than once carries its count inside (e.g. Build 4 › Test 5).
+ * Hover or focus a step for its full history.
  */
 export function StageStepper({ ticket }: { ticket: TicketSummary }) {
   const steps = progressSteps(ticket);
-  const named = steps.filter((step) => step.state === "current" || step.count > 0);
   return (
-    <div className="stepper">
-      <ol className="stepper__track" aria-label="Workflow progress">
-        {steps.map((step) => (
-          <li
-            key={step.id}
-            className={`stepper__step stepper__step--${step.state}`}
-            title={step.title}
-            aria-label={step.title}
-            aria-current={step.state === "current" ? "step" : undefined}
-          />
-        ))}
-      </ol>
-      {named.length > 0 && (
-        <p className="stepper__summary" aria-hidden="true">
-          {named.map((step) => (
-            <span key={step.id} className={`stepper__item${step.state === "current" ? " stepper__item--current" : ""}${step.hasRetries ? " stepper__item--retried" : ""}`}>
-              <span className="stepper__label">{step.label}</span>
-              {step.count > 0 && <span className="stepper__count">{step.count}</span>}
-            </span>
-          ))}
-        </p>
-      )}
-    </div>
+    <ol className="stepper" aria-label="Workflow progress">
+      {steps.map((step) => (
+        <li
+          key={step.id}
+          className={`stepper__step stepper__step--${step.state}${step.count > 0 ? " stepper__step--counted" : ""}${step.hasRetries ? " stepper__step--retried" : ""}`}
+          title={step.title}
+          aria-label={step.title}
+          aria-current={step.state === "current" ? "step" : undefined}
+        >
+          <span className="stepper__label" aria-hidden="true">{step.label}</span>
+          {step.count > 0 && <span className="stepper__count" aria-hidden="true">{step.count}</span>}
+        </li>
+      ))}
+    </ol>
   );
 }
