@@ -2,7 +2,7 @@ import { CircleAlert, Hammer, Hourglass, Server, TestTube } from "lucide-react";
 import type { RunnerSlot } from "../../api/types";
 import { useRunners } from "../../hooks/useRunners";
 import { ticketHash } from "../../lib/hashRoute";
-import { formatMinutes, hostState, minutesSince, slotStep, slotTone } from "../../lib/runners";
+import { BLOCK_REASONS, formatMinutes, hostState, minutesSince, slotStep, slotTone } from "../../lib/runners";
 
 const QUEUE_SHOWN = 6;
 
@@ -42,6 +42,8 @@ export function RunnersStrip() {
   const seen = minutesSince(snapshot.observed_at, now);
   const hostTitle = `Windows build host ${snapshot.host || ""}: ${HOST_LABELS[state]}${state === "offline" ? `, last report ${formatMinutes(seen)} ago` : ""}`;
   const queued = snapshot.queue.slice(0, QUEUE_SHOWN);
+  const block = state === "online" && snapshot.blocked !== "" ? BLOCK_REASONS[snapshot.blocked] : undefined;
+  const blockedFor = formatMinutes(minutesSince(snapshot.blocked_since, now));
   return (
     <section className={`runners runners--${state}`} aria-label="Windows build slots">
       <span className="runners__host" title={hostTitle}>
@@ -49,6 +51,11 @@ export function RunnersStrip() {
         <span className="runners__dot" aria-hidden="true" />
         Windows{state !== "online" && <span className="runners__state">{HOST_LABELS[state]}{state === "offline" && seen !== null ? ` · ${formatMinutes(seen)}` : ""}</span>}
       </span>
+      {block && (
+        <span className="runners__blocked" title={block.long} role="status">
+          {block.short}{blockedFor ? ` · ${blockedFor}` : ""}
+        </span>
+      )}
       <span className="runners__slots">
         {Array.from({ length: slots }, (_, i) => i + 1).map((n) => {
           const slot = snapshot.slots.find((s) => s.slot === n);

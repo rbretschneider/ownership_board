@@ -3,7 +3,16 @@ import type { RunnerQueued, RunnerSlot, RunnersSnapshot } from "../api/types";
 /** The host writes a snapshot every few seconds; older than this means it is not reporting. */
 export const RUNNERS_STALE_MS = 45_000;
 
-export const EMPTY_RUNNERS: RunnersSnapshot = { observed_at: null, host: "", enabled: false, parallel_builds: 0, slots: [], queue: [] };
+export const EMPTY_RUNNERS: RunnersSnapshot = { observed_at: null, host: "", enabled: false, parallel_builds: 0, blocked: "", blocked_since: null, slots: [], queue: [] };
+
+/** Why queued work is not starting, in words the owner can act on. */
+export const BLOCK_REASONS: Record<Exclude<RunnersSnapshot["blocked"], "">, { short: string; long: string }> = {
+  "github-actions": { short: "PC busy: GitHub Actions job", long: "The Windows PC is running a GitHub Actions job (for example the MakerCAD cache warm after a merge). Board jobs start when it finishes." },
+  disabled: { short: "paused in Settings", long: "The Windows runner is switched off in Settings." },
+  "low-disk": { short: "paused: low disk", long: "The Windows PC is below its free-space reserve, so no new jobs start." },
+  "no-settings": { short: "can't reach the board", long: "The Windows PC cannot read the board's settings, so it does not start new jobs." },
+  drained: { short: "slots blocked", long: "New Windows jobs are blocked (drained) so the PC stays idle." },
+};
 
 export type HostState = "unknown" | "offline" | "paused" | "online";
 

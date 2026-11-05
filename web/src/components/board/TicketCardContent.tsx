@@ -48,7 +48,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
   const run = activity.buildServer ? ticketRun(runners.snapshot, ticket.id, runners.now) : undefined;
   const runTone = run?.kind === "running" ? slotTone(run.slot) : undefined;
   const livePhase = run === undefined ? undefined
-    : run.kind === "queued" ? `Queued #${run.entry.position}`
+    : run.kind === "queued" ? `Queued #${run.entry.position}${runners.snapshot.blocked === "github-actions" ? " · PC busy" : ""}`
     : run.kind === "orphan" ? "Old run stopping"
     : capitalize(slotStep(run.slot));
   const activeBuild = run === undefined ? activity.activeBuild : runTone === "building" || runTone === "testing";
