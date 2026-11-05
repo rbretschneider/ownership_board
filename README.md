@@ -12,6 +12,22 @@ review.
 It exists because public issue trackers are the wrong place for half-formed
 ideas about open-source projects.
 
+## What it is
+
+An AI-first kanban that acts as the outer harness and scheduler for coding
+agents.
+
+- **Outer harness.** Claude Code or Codex is the inner harness: the model loop,
+  files and shell. The board runs the loop around it, for the work rather than
+  the model. It writes each brief (`claim_work`), defines the tools agents use
+  to touch the work (MCP), and sets the rules: agents never choose lanes, and
+  people approve specs, designs and merges.
+- **Scheduler.** The board decides how many agents work at once and what they
+  pick up next, by lane rank and dependencies. Workers pull from it; the board
+  never pushes work onto them.
+- **System of record.** Tickets, leases, decisions and the activity log live
+  here, so whose move it is never depends on any one agent's memory.
+
 ## Lanes
 
 Four lanes, fixed on purpose, so agents and integrations can rely on them.
