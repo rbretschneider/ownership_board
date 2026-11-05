@@ -8,7 +8,7 @@ import { TicketCardContent } from "./TicketCardContent";
 
 const NOW = Date.parse("2026-11-04T20:30:00Z");
 const snapshot: RunnersSnapshot = {
- observed_at: "2026-11-04T20:29:58Z", host: "Ryan-Desktop", enabled: true, parallel_builds: 3,
+ observed_at: "2026-11-04T20:29:58Z", host: "Ryan-Desktop", enabled: true, parallel_builds: 3, blocked: "", blocked_since: null,
  slots: [
   { slot: 1, ticket_id: 24, repo: "acme/cad", sha: "8c19d1c048ff", preset: "script", phase: "verifying", detail: "ASan · testing", since: "2026-11-04T20:00:51Z", updated_at: null, orphan: false },
   { slot: 3, ticket_id: 85, repo: "acme/cad", sha: "958941de5c2b", preset: "script", phase: "verifying", detail: "waiting for desktop", since: "2026-11-04T20:25:00Z", updated_at: null, orphan: false },
@@ -44,6 +44,16 @@ describe("runners strip", () => {
  });
 });
 
+describe("why slots are idle", () => {
+ it("says the PC is busy with a GitHub job, for how long, on the strip and the queued pills", () => {
+  const busy = { ...snapshot, slots: [], blocked: "github-actions" as const, blocked_since: "2026-11-04T20:02:00Z" };
+  const strip = dom(<RunnersStrip />, busy);
+  expect(strip.querySelector(".runners__blocked")?.textContent).toBe("PC busy: GitHub Actions job · 28m");
+  expect(strip.querySelector(".runners__blocked")?.getAttribute("title")).toContain("cache warm");
+  expect(dom(<RunnersStrip />).querySelector(".runners__blocked")).toBeNull();
+ });
+});
+
 describe("card pill follows the build host", () => {
  const ticket: TicketSummary = {
   id: 24, repo_id: null, kind: "story", title: "Composition root", lane: "in_progress", stage: "build", owner: "agent", needs_owner: false,
@@ -59,6 +69,7 @@ describe("card pill follows the build host", () => {
  });
  it("shows the place in line and an old run being stopped", () => {
   expect(pill({ ...ticket, id: 27 })?.querySelector(".card__activity-label")?.textContent).toBe("Queued #1");
+  expect(pill({ ...ticket, id: 27 }, { ...snapshot, blocked: "github-actions" })?.querySelector(".card__activity-label")?.textContent).toBe("Queued #1 · PC busy");
   const orphaned = { ...snapshot, slots: [{ ...snapshot.slots[0]!, orphan: true }], queue: [] };
   expect(pill(ticket, orphaned)?.querySelector(".card__activity-label")?.textContent).toBe("Old run stopping");
  });

@@ -40,12 +40,15 @@ type runnerQueued struct {
 }
 
 type runnersSnapshot struct {
-	ObservedAt     *time.Time     `json:"observed_at"`
-	Host           string         `json:"host"`
-	Enabled        bool           `json:"enabled"`
-	ParallelBuilds int            `json:"parallel_builds"`
-	Slots          []runnerSlot   `json:"slots"`
-	Queue          []runnerQueued `json:"queue"`
+	ObservedAt     *time.Time `json:"observed_at"`
+	Host           string     `json:"host"`
+	Enabled        bool       `json:"enabled"`
+	ParallelBuilds int        `json:"parallel_builds"`
+	// Blocked says why slots are not taking board work; empty when they are.
+	Blocked      string         `json:"blocked"`
+	BlockedSince *time.Time     `json:"blocked_since"`
+	Slots        []runnerSlot   `json:"slots"`
+	Queue        []runnerQueued `json:"queue"`
 }
 
 // The file's own shape: epoch seconds, as the queue writes them.
@@ -54,6 +57,8 @@ type runnersFile struct {
 	Host           string  `json:"host"`
 	Enabled        bool    `json:"enabled"`
 	ParallelBuilds int     `json:"parallel_builds"`
+	Blocked        string  `json:"blocked"`
+	BlockedSince   float64 `json:"blocked_since"`
 	Slots          []struct {
 		Slot    int     `json:"slot"`
 		Ticket  *int64  `json:"ticket"`
@@ -89,6 +94,7 @@ var (
 	runnerDetailPattern = regexp.MustCompile(`^[A-Za-z0-9 .·:()/#+-]*$`)
 	runnerPhases        = map[string]bool{"queued": true, "preparing": true, "building": true, "testing": true, "verifying": true}
 	runnerPresets       = map[string]bool{"dotnet": true, "cmake": true, "script": true}
+	runnerBlocks        = map[string]bool{"github-actions": true, "disabled": true, "low-disk": true, "no-settings": true, "drained": true}
 )
 
 // Only reads a small sanitized cache written by the build queue.
@@ -125,6 +131,10 @@ func readRunnersSnapshot(path string) runnersSnapshot {
 		clean.Host = raw.Host
 	}
 	clean.Enabled = raw.Enabled
+	if runnerBlocks[raw.Blocked] {
+		clean.Blocked = raw.Blocked
+		clean.BlockedSince = epoch(raw.BlockedSince)
+	}
 	if raw.ParallelBuilds >= 0 && raw.ParallelBuilds <= maxRunnerSlots {
 		clean.ParallelBuilds = raw.ParallelBuilds
 	}

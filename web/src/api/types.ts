@@ -529,6 +529,9 @@ export interface RunnersSnapshot {
  host: string;
  enabled: boolean;
  parallel_builds: number;
+ /** Why the slots are not taking board work right now; empty when they are. */
+ blocked: "" | "github-actions" | "disabled" | "low-disk" | "no-settings" | "drained";
+ blocked_since: string | null;
  slots: RunnerSlot[];
  queue: RunnerQueued[];
 }

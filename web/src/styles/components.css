@@ -1298,6 +1298,7 @@
 .runners__state { margin-left: 4px; color: var(--text-faint); font-weight: 500; }
 .runners--offline .runners__state { color: var(--danger); }
 .runners__slots { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.runners__blocked { padding: 2px 8px; border-radius: 999px; background: var(--human-soft); color: var(--human); font-weight: 650; white-space: nowrap; }
 .runner {
   display: inline-flex;
   align-items: center;

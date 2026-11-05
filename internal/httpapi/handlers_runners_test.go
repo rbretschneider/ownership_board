@@ -18,7 +18,7 @@ func writeRunners(t *testing.T, data string) string {
 }
 
 func TestRunnersSnapshotIsSanitized(t *testing.T) {
-	path := writeRunners(t, `{"at":1793822451.5,"host":"Ryan-Desktop","enabled":true,"parallel_builds":3,"token":"secret-x",
+	path := writeRunners(t, `{"at":1793822451.5,"host":"Ryan-Desktop","enabled":true,"parallel_builds":3,"token":"secret-x","blocked":"github-actions","blocked_since":1793822000,
 		"slots":[
 		 {"slot":1,"ticket":24,"repo":"acme/cad","sha":"8c19d1c048ff5f29fef5d6f60c32fab0d768a6c8","preset":"script","phase":"verifying","detail":"ASan · testing","since":1793822451,"updated":1793822460},
 		 {"slot":1,"ticket":25,"repo":"acme/cad","sha":"8c19d1c0","preset":"script","phase":"verifying"},
@@ -27,7 +27,7 @@ func TestRunnersSnapshotIsSanitized(t *testing.T) {
 		"queue":[{"ticket":76,"repo":"acme/mix","sha":"00d05479","preset":"dotnet","queued":1793822000,"retry_after":0},
 		 {"ticket":null,"repo":"acme/cad","sha":"31674971","preset":"script","queued":1793822100,"retry_after":1793822400}]}`)
 	got := readRunnersSnapshot(path)
-	if got.ObservedAt == nil || got.Host != "Ryan-Desktop" || !got.Enabled || got.ParallelBuilds != 3 {
+	if got.ObservedAt == nil || got.Host != "Ryan-Desktop" || !got.Enabled || got.ParallelBuilds != 3 || got.Blocked != "github-actions" || got.BlockedSince == nil {
 		t.Fatalf("header %+v", got)
 	}
 	if len(got.Slots) != 2 {
@@ -46,6 +46,13 @@ func TestRunnersSnapshotIsSanitized(t *testing.T) {
 	raw, _ := json.Marshal(got)
 	if strings.Contains(string(raw), "secret") || strings.Contains(string(raw), "script>") {
 		t.Fatal(string(raw))
+	}
+}
+
+func TestRunnersSnapshotDropsUnknownBlockReasons(t *testing.T) {
+	got := readRunnersSnapshot(writeRunners(t, `{"at":1793822451,"blocked":"<b>owned</b>","blocked_since":1793822000,"slots":[],"queue":[]}`))
+	if got.Blocked != "" || got.BlockedSince != nil {
+		t.Fatalf("%+v", got)
 	}
 }
 
