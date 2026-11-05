@@ -23,6 +23,7 @@ import type {
   RelationInput,
   RelationKind,
   RequestChangesInput,
+  PRStatusSnapshot,
   RunnersSnapshot,
   TicketDetail,
   TicketSummary,
@@ -46,6 +47,8 @@ export interface BoardApi {
   accountUsage(): Promise<AccountUsage>;
   /** The Windows build host's live slots and queue. */
   runners(): Promise<RunnersSnapshot>;
+  /** What each open board pull request is waiting for (CI, merge, repair). */
+  prs(): Promise<PRStatusSnapshot>;
   /** Delivery metrics over the last `days` local days (1–365). */
   stats(days: number): Promise<StatsReport>;
   authStatus(): Promise<AuthStatus>;
@@ -99,6 +102,7 @@ export function createBoardApi(http: HttpClient): BoardApi {
   return {
     accountUsage: () => http.request("GET", "/account-usage"),
     runners: () => http.request("GET", "/runners"),
+    prs: () => http.request("GET", "/prs"),
     stats: (days) => http.request("GET", statsQuery(days, new Date())),
     authStatus: () => http.request("GET", "/auth/status"),
     setup: (input) => http.request("POST", "/auth/setup", input),

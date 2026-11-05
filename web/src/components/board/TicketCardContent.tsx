@@ -1,4 +1,4 @@
-import { Bot, CircleAlert, Hand, Hourglass, MessageCircleQuestion, Server, Zap } from "lucide-react";
+import { Bot, CircleAlert, GitPullRequest, Hand, Hourglass, MessageCircleQuestion, Server, Zap } from "lucide-react";
 import type { Repo, Stage, TicketSummary } from "../../api/types";
 import { useLeaseClock } from "../../hooks/useLeaseClock";
 import { cardActivity, hasLiveLease } from "../../lib/activity";
@@ -6,6 +6,8 @@ import { ticketRefs } from "../../lib/relations";
 import { parseWorkModel, shortTarget } from "../../lib/workModel";
 import { useRunners } from "../../hooks/useRunners";
 import { slotStep, slotTone, ticketRun } from "../../lib/runners";
+import { usePRStatus } from "../../hooks/usePRStatus";
+import { prPill, ticketPR } from "../../lib/prStatus";
 
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
@@ -53,11 +55,17 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
     : capitalize(slotStep(run.slot));
   const activeBuild = run === undefined ? activity.activeBuild : runTone === "building" || runTone === "testing";
   const phase = livePhase ?? (activity.buildServer ? activity.label.split(" · ")[0] : activity.label);
-  const label = activity.buildServer ? phase
+  // In Delivery the merge sweep knows what the PR waits for: CI, a merge, a repair.
+  const prs = usePRStatus();
+  const prStatus = ticket.stage === "pr" && !isBlocked ? ticketPR(prs.snapshot, ticket, prs.now || at) : undefined;
+  const pr = prStatus ? prPill(prStatus, prs.snapshot.observed_at, prs.now || at) : undefined;
+  const label = pr ? pr.label
+    : activity.buildServer ? phase
     : isWaiting && !isBlocked ? `Waiting on ${ticketRefs(ticket.waiting_on)}`
     : !activity.working && ticket.lane === "todo" && ticket.is_autonomous && !activity.blocked && !ticket.needs_owner ? "Autopilot"
     : activity.label;
-  const statusTitle = run?.kind === "running" ? `Build server slot ${run.slot.slot} · ${phase} · ${activity.target} · commit ${run.slot.sha.slice(0, 8)}`
+  const statusTitle = pr ? pr.title
+    : run?.kind === "running" ? `Build server slot ${run.slot.slot} · ${phase} · ${activity.target} · commit ${run.slot.sha.slice(0, 8)}`
     : run?.kind === "queued" ? `Build server · number ${run.entry.position} in line · ${activity.target} · commit ${run.entry.sha.slice(0, 8)}`
     : run?.kind === "orphan" ? `Build server slot ${run.slot.slot} is still finishing an older commit of this ticket; the host stops it`
     : activity.buildServer ? `Build server · ${phase} · ${activity.target}`
@@ -80,15 +88,16 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
               </span>
             )}
             {showActivity && (
-              <span className={`badge card__activity${activity.blocked ? " badge--blocked" : run?.kind === "orphan" ? " badge--blocked" : activeBuild ? " badge--build-server" : activity.buildServer ? " badge--build-target" : activity.working ? " badge--working" : ticket.is_autonomous ? " badge--autopilot" : ""}`}
-                title={statusTitle} aria-label={`${ticket.is_autonomous ? "Autopilot: " : ""}${activity.buildServer ? `${phase} on ${activity.target}` : label}`}>
-                {activity.buildServer ? <Server size={12} aria-hidden="true" />
+              <span className={`badge card__activity${pr ? ` badge--pr badge--pr-${pr.tone}` : activity.blocked ? " badge--blocked" : run?.kind === "orphan" ? " badge--blocked" : activeBuild ? " badge--build-server" : activity.buildServer ? " badge--build-target" : activity.working ? " badge--working" : ticket.is_autonomous ? " badge--autopilot" : ""}`}
+                title={statusTitle} aria-label={`${ticket.is_autonomous ? "Autopilot: " : ""}${pr ? `Pull request: ${label}` : activity.buildServer ? `${phase} on ${activity.target}` : label}`}>
+                {pr ? <GitPullRequest size={12} aria-hidden="true" />
+                  : activity.buildServer ? <Server size={12} aria-hidden="true" />
                   : isBlocked ? <CircleAlert size={12} aria-hidden="true" />
                   : isWaiting ? <Hourglass size={12} aria-hidden="true" />
                   : ticket.is_autonomous && <Zap className="autopilot-spark" size={12} aria-hidden="true" />}
-                {(activity.working || activeBuild) && <span className="pixel-loader" aria-hidden="true">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</span>}
+                {(pr ? pr.tone === "running" : activity.working || activeBuild) && <span className="pixel-loader" aria-hidden="true">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</span>}
                 <span className="card__activity-label">{label}</span>
-                {activity.buildServer && activity.target && <span className="card__activity-target">{shortTarget(activity.target)}</span>}
+                {!pr && activity.buildServer && activity.target && <span className="card__activity-target">{shortTarget(activity.target)}</span>}
               </span>
             )}
           </span>

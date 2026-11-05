@@ -536,6 +536,46 @@ export interface RunnersSnapshot {
  queue: RunnerQueued[];
 }
 
+/** One CI check on a board pull request, as the merge sweep last saw it. */
+export interface PRCheck {
+ name: string;
+ status: string;
+ /** SUCCESS, FAILURE, CANCELLED, ...; empty while it runs. */
+ conclusion: string;
+ started_at: string | null;
+ completed_at: string | null;
+}
+
+/** What the merge sweep decided about a PR on its last run. */
+export type PRVerdict = "running" | "no_checks" | "draft" | "checking_mergeable" | "checks_incomplete" | "green_owner" | "merged" | "merge_failed" | "closed" | "repair";
+
+/** One open board pull request and what it is waiting for. */
+export interface PRStatus {
+ ticket_id: number;
+ url: string;
+ verdict: PRVerdict;
+ /** Why a repair was queued; empty unless verdict is "repair". */
+ reason: "" | "conflict" | "changes_requested" | "checks_failed" | "unresolved";
+ /** The repo lets agents merge green PRs. */
+ may_merge: boolean;
+ /** The sweep acts on this PR (autonomous ticket or merge grant). */
+ acts: boolean;
+ gl_waived: boolean;
+ draft: boolean;
+ mergeable: string;
+ review: string;
+ head: string;
+ /** Published past the fix-round limit; never merged automatically. */
+ unresolved: boolean;
+ checks: PRCheck[];
+}
+
+/** The merge sweep's view of every open board PR; observed_at is null when unknown. */
+export interface PRStatusSnapshot {
+ observed_at: string | null;
+ prs: PRStatus[];
+}
+
 /** Durations in hours; with `count` 0 the other fields mean "no data". */
 export interface Distribution {
   count: number;
