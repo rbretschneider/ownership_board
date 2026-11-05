@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactElement } from "react";
-import type { RunnersSnapshot, TicketSummary } from "../../api/types";
+import type { PRStatusSnapshot, RunnersSnapshot, TicketSummary } from "../../api/types";
 import { RunnersContext } from "../../hooks/useRunners";
+import { PRStatusContext } from "../../hooks/usePRStatus";
 import { RunnersStrip } from "./RunnersStrip";
 import { TicketCardContent } from "./TicketCardContent";
 
@@ -51,6 +52,33 @@ describe("why slots are idle", () => {
   expect(strip.querySelector(".runners__blocked")?.textContent).toBe("PC busy: GitHub Actions job · 28m");
   expect(strip.querySelector(".runners__blocked")?.getAttribute("title")).toContain("cache warm");
   expect(dom(<RunnersStrip />).querySelector(".runners__blocked")).toBeNull();
+ });
+});
+
+describe("Delivery card pill follows the merge sweep", () => {
+ const ticket: TicketSummary = {
+  id: 92, repo_id: null, kind: "story", title: "Flyout", lane: "review", stage: "pr", owner: "human", needs_owner: true,
+  blocked_reason: "", is_autonomous: true, spec_revision: 1, design_revision: 1, pr_url: "https://github.com/acme/mix/pull/25", branch: "b",
+  open_questions: 0, waiting_on: [], lease: null, work_model: "", created_at: "", updated_at: "", lane_changed_at: "",
+ };
+ const prs: PRStatusSnapshot = { observed_at: "2026-11-04T20:28:00Z", prs: [{
+  ticket_id: 92, url: "https://github.com/acme/mix/pull/25", verdict: "running", reason: "", may_merge: true, acts: true, gl_waived: false,
+  draft: false, mergeable: "MERGEABLE", review: "", head: "9c7c3cf829b4", unresolved: false,
+  checks: [{ name: "build", status: "IN_PROGRESS", conclusion: "", started_at: "2026-11-04T20:25:00Z", completed_at: null }] }] };
+ const pill = (t: TicketSummary, value: PRStatusSnapshot) => {
+  const root = document.createElement("div");
+  root.innerHTML = renderToStaticMarkup(<PRStatusContext.Provider value={{ snapshot: value, now: NOW }}><TicketCardContent ticket={t} stages={[]} repo={undefined} now={NOW} /></PRStatusContext.Provider>);
+  return root.querySelector(".card__activity");
+ };
+ it("replaces 'Awaiting review' with what the PR is waiting for", () => {
+  const shown = pill(ticket, prs);
+  expect(shown?.querySelector(".card__activity-label")?.textContent).toBe("CI running · 0/1 · 5m");
+  expect(shown?.className).toContain("badge--pr-running");
+  expect(shown?.getAttribute("title")).toContain("build running");
+ });
+ it("falls back without a fresh status for this PR", () => {
+  expect(pill(ticket, { observed_at: null, prs: [] })?.querySelector(".card__activity-label")?.textContent).toBe("Awaiting review");
+  expect(pill({ ...ticket, stage: "build", lane: "in_progress" }, prs)?.className).not.toContain("badge--pr");
  });
 });
 

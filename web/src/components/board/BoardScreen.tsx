@@ -9,6 +9,7 @@ import { useEventStream } from "../../hooks/useEventStream";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useOwnerAlerts } from "../../hooks/useOwnerAlerts";
 import { RunnersContext, useRunnersPolling } from "../../hooks/useRunners";
+import { PRStatusContext, usePRStatusPolling } from "../../hooks/usePRStatus";
 import { DEFAULT_LANE, DESKTOP_MEDIA_QUERY, REFETCH_DEBOUNCE_MS } from "../../lib/constants";
 import { laneCardIds, type DropTarget } from "../../lib/dropTargets";
 import type { Route } from "../../lib/hashRoute";
@@ -105,6 +106,7 @@ export function BoardScreen({ route }: BoardScreenProps) {
   }, [board, repoFilter, changeRepoFilter]);
 
   const runners = useRunnersPolling();
+  const prStatus = usePRStatusPolling();
 
   const viewProps = {
     lanes,
@@ -120,6 +122,7 @@ export function BoardScreen({ route }: BoardScreenProps) {
 
   return (
     <RunnersContext.Provider value={runners}>
+    <PRStatusContext.Provider value={prStatus}>
     <div className={`app${isDesktop ? " app--desktop" : " app--mobile"}`}>
       <TopBar
         repos={repos}
@@ -186,6 +189,7 @@ export function BoardScreen({ route }: BoardScreenProps) {
         />
       )}
     </div>
+    </PRStatusContext.Provider>
     </RunnersContext.Provider>
   );
 }
