@@ -206,12 +206,67 @@ func (s *AgentService) nextClaimable(ctx context.Context, repos Repos, request c
 			}
 			filter.ExcludeAutonomous = isFull
 		}
-		ticket, isFound, err := repos.Tickets().NextClaimable(ctx, stage, filter, s.clock.Now())
-		if err != nil || isFound {
-			return ticket, isFound, err
+		for skipped := 0; ; skipped++ {
+			ticket, isFound, err := repos.Tickets().NextClaimable(ctx, stage, filter, s.clock.Now())
+			if err != nil || !isFound {
+				if err != nil {
+					return domain.Ticket{}, false, err
+				}
+				break
+			}
+			if stage != domain.StageBuild || skipped >= maxOverlapSkips {
+				return ticket, true, nil
+			}
+			held, err := heldByOverlap(ctx, repos, ticket)
+			if err != nil || !held {
+				return ticket, err == nil, err
+			}
+			filter.ExcludeIDs = append(filter.ExcludeIDs, ticket.ID)
 		}
 	}
 	return domain.Ticket{}, false, nil
+}
+
+// maxOverlapSkips bounds how many held-back builds one claim looks past.
+const maxOverlapSkips = 20
+
+// heldByOverlap reports whether a build that has not started yet shares
+// files with a build already under way in its repo: one with a branch, or
+// an open pull request. The first build to start goes on; the other waits
+// until it merges, so the two never conflict. A started build is never held
+// back, so held tickets only ever wait on work that can finish.
+func heldByOverlap(ctx context.Context, repos Repos, ticket domain.Ticket) (bool, error) {
+	if ticket.RepoID == 0 || ticket.Branch != "" || ticket.PRURL != "" {
+		return false, nil
+	}
+	mine := domain.DesignFiles(ticket.Design)
+	if len(mine) == 0 {
+		return false, nil
+	}
+	all, err := repos.Tickets().List(ctx, TicketFilter{IsScoped: true, RepoIDs: []int64{ticket.RepoID}})
+	if err != nil {
+		return false, err
+	}
+	var designs []map[string]bool
+	var underWay []map[string]bool
+	for _, other := range all {
+		if other.Design == "" || other.RepoID != ticket.RepoID {
+			continue
+		}
+		files := domain.DesignFiles(other.Design)
+		designs = append(designs, files)
+		started := (other.Stage == domain.StageBuild && other.Branch != "") || other.Stage == domain.StagePR
+		if started && other.ID != ticket.ID {
+			underWay = append(underWay, files)
+		}
+	}
+	hubs := domain.HubFiles(designs)
+	for _, files := range underWay {
+		if len(domain.SharedFiles(mine, files, hubs)) > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // autonomousSlotsFull reports whether as many autonomous tickets as the

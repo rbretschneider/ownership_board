@@ -154,6 +154,12 @@ func filterClause(filter app.TicketFilter) (string, []any) {
 		clause += " AND work_model NOT LIKE ?"
 		args = append(args, "% · awaiting Windows")
 	}
+	if len(filter.ExcludeIDs) > 0 {
+		clause += " AND id NOT IN (" + strings.TrimSuffix(strings.Repeat("?, ", len(filter.ExcludeIDs)), ", ") + ")"
+		for _, id := range filter.ExcludeIDs {
+			args = append(args, id)
+		}
+	}
 	return clause, args
 }
 
