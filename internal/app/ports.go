@@ -39,6 +39,9 @@ type TicketFilter struct {
 	// ExcludeAutonomous leaves out autonomous tickets, whatever the scope.
 	ExcludeAutonomous     bool
 	ExcludeWindowsWaiting bool
+	// ExcludeIDs leaves out these tickets, such as builds held back for
+	// sharing files with a build already under way.
+	ExcludeIDs []int64
 }
 
 // TicketRepository persists tickets.
