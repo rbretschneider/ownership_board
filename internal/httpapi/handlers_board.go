@@ -55,11 +55,24 @@ func (s *server) createTicket(w http.ResponseWriter, r *http.Request, who caller
 		Title     string  `json:"title"`
 		Body      string  `json:"body"`
 		DependsOn []int64 `json:"depends_on"`
+		// Relation and RelatedTicketID file the ticket already linked, such as
+		// a follow_up_of the ticket an agent holds. With Spec, a follow-up of
+		// an autonomous ticket runs autonomously too.
+		Relation        string `json:"relation"`
+		RelatedTicketID int64  `json:"related_ticket_id"`
+		Spec            string `json:"spec"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
 	}
 	draft := domain.TicketDraft{RepoID: valueOrZero(body.RepoID), Kind: body.Kind, Title: body.Title, Body: body.Body, DependsOn: body.DependsOn}
+	if (body.Relation == "") != (body.RelatedTicketID == 0) {
+		return domain.Invalidf("give relation and related_ticket_id together")
+	}
+	if body.Relation != "" {
+		detail, err := s.deps.Board.CreateRelated(r.Context(), who.actor, draft, body.Relation, body.RelatedTicketID, body.Spec)
+		return respondDetail(w, http.StatusCreated, detail, err)
+	}
 	detail, err := s.deps.Board.Create(r.Context(), who.actor, draft)
 	return respondDetail(w, http.StatusCreated, detail, err)
 }

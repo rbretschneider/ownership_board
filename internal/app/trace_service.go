@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/rbretschneider/ownership_board/internal/domain"
@@ -376,7 +377,12 @@ func decisionText(draft domain.DecisionDraft) map[string]string {
 // CreateRelated files a ticket already linked to another, such as a bug found
 // while working #42 ("follow_up_of" #42). An agent needs the lease on the
 // related ticket, so it can only file follow-ups for work it holds.
-func (s *BoardService) CreateRelated(ctx context.Context, actor domain.Actor, draft domain.TicketDraft, kind string, relatedID int64) (TicketDetail, error) {
+//
+// A follow-up an agent files with a spec while working an autonomous ticket
+// is autonomous too: it starts Ready, so a repair for a problem the autonomous
+// run hit does not wait on the owner overnight. Without a spec, or from a
+// ticket that is not autonomous, it starts in Todo as usual.
+func (s *BoardService) CreateRelated(ctx context.Context, actor domain.Actor, draft domain.TicketDraft, kind string, relatedID int64, spec string) (TicketDetail, error) {
 	relationKind, err := domain.ParseRelationKind(kind)
 	if err != nil {
 		return TicketDetail{}, err
@@ -391,11 +397,32 @@ func (s *BoardService) CreateRelated(ctx context.Context, actor domain.Actor, dr
 	if err := requireLeaseForAgent(related.Ticket, actor, s.clock.Now()); err != nil {
 		return TicketDetail{}, err
 	}
-	created, err := s.Create(ctx, actor, draft)
+	var created TicketDetail
+	if strings.TrimSpace(spec) != "" && actor.IsAgent() && related.Ticket.IsAutonomous && relationKind == domain.RelationFollowUpOf {
+		created, err = s.createInheritedAutonomous(ctx, actor, draft, spec, related.Ticket)
+	} else {
+		created, err = s.Create(ctx, actor, draft)
+	}
 	if err != nil {
 		return TicketDetail{}, err
 	}
 	return s.LinkTickets(ctx, actor, created.Ticket.ID, kind, relatedID)
+}
+
+func (s *BoardService) createInheritedAutonomous(ctx context.Context, actor domain.Actor, draft domain.TicketDraft, spec string, parent domain.Ticket) (TicketDetail, error) {
+	if err := rejectHiddenFromAgent(actor, map[string]string{"title": draft.Title, "body": draft.Body, "spec": spec}); err != nil {
+		return TicketDetail{}, err
+	}
+	if err := domain.RejectConcealedMarkdown("spec", spec); err != nil {
+		return TicketDetail{}, err
+	}
+	ticket, err := domain.NewInheritedAutonomousTicket(domain.AutonomousDraft{TicketDraft: draft, Spec: spec}, parent, actor, s.clock.Now())
+	if err != nil {
+		return TicketDetail{}, err
+	}
+	return s.insertAutonomous(ctx, actor, ticket, draft.DependsOn, func(id int64) domain.Decision {
+		return domain.DecisionFromInheritedAutonomy(id, parent.ID, actor, ticket.CreatedAt)
+	})
 }
 
 // rejoinChain closes the gap a removed decision leaves in a replacement chain.

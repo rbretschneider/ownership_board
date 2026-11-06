@@ -190,7 +190,7 @@ func TestCreateRelatedRefusesDependsOn(t *testing.T) {
 	f := newFixture(t)
 	api := f.repo("acme/api")
 	b := f.ticket("b", api.ID)
-	_, err := f.board.CreateRelated(f.ctx, owner, domain.TicketDraft{Kind: "story", Title: "a", RepoID: api.ID}, dependsOn, b)
+	_, err := f.board.CreateRelated(f.ctx, owner, domain.TicketDraft{Kind: "story", Title: "a", RepoID: api.ID}, dependsOn, b, "")
 	requireErrorKind(t, err, domain.KindInvalid)
 }
 

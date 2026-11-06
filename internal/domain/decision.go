@@ -134,6 +134,16 @@ func DecisionFromAgreedSpec(ticketID int64, revision int, actor Actor, now time.
 	}
 }
 
+// DecisionFromInheritedAutonomy records that a follow-up runs autonomously
+// because the agent filed it while working an autonomous ticket.
+func DecisionFromInheritedAutonomy(ticketID, parentID int64, actor Actor, now time.Time) Decision {
+	summary := fmt.Sprintf("Filed while working autonomous #%d, so it runs to a pull request without stopping too", parentID)
+	return Decision{
+		TicketID: ticketID, Summary: summary, Source: DecisionFromAgent, Weight: WeightBinding,
+		DecidedBy: actor, At: now,
+	}
+}
+
 // DecisionFromAutonomySwitch records a person turning a ticket's autonomous
 // mode on or off, so the decision log says who let it run without stopping.
 func DecisionFromAutonomySwitch(ticketID int64, isOn bool, actor Actor, now time.Time) Decision {
