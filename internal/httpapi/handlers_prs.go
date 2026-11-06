@@ -22,19 +22,20 @@ type prCheck struct {
 }
 
 type prStatus struct {
-	TicketID   int64     `json:"ticket_id"`
-	URL        string    `json:"url"`
-	Verdict    string    `json:"verdict"`
-	Reason     string    `json:"reason"`
-	MayMerge   bool      `json:"may_merge"`
-	Acts       bool      `json:"acts"`
-	GLWaived   bool      `json:"gl_waived"`
-	Draft      bool      `json:"draft"`
-	Mergeable  string    `json:"mergeable"`
-	Review     string    `json:"review"`
-	Head       string    `json:"head"`
-	Unresolved bool      `json:"unresolved"`
-	Checks     []prCheck `json:"checks"`
+	TicketID    int64     `json:"ticket_id"`
+	URL         string    `json:"url"`
+	Verdict     string    `json:"verdict"`
+	Reason      string    `json:"reason"`
+	MayMerge    bool      `json:"may_merge"`
+	Acts        bool      `json:"acts"`
+	GLWaived    bool      `json:"gl_waived"`
+	Draft       bool      `json:"draft"`
+	Mergeable   string    `json:"mergeable"`
+	Review      string    `json:"review"`
+	Head        string    `json:"head"`
+	Unresolved  bool      `json:"unresolved"`
+	ManualCheck bool      `json:"manual_check"`
+	Checks      []prCheck `json:"checks"`
 }
 
 type prStatusSnapshot struct {
@@ -46,19 +47,20 @@ type prStatusSnapshot struct {
 type prStatusFile struct {
 	At  float64 `json:"at"`
 	PRs []struct {
-		Ticket     int64  `json:"ticket"`
-		URL        string `json:"url"`
-		Verdict    string `json:"verdict"`
-		Reason     string `json:"reason"`
-		MayMerge   bool   `json:"may_merge"`
-		Acts       bool   `json:"acts"`
-		GLWaived   bool   `json:"gl_waived"`
-		Draft      bool   `json:"draft"`
-		Mergeable  string `json:"mergeable"`
-		Review     string `json:"review"`
-		Head       string `json:"head"`
-		Unresolved bool   `json:"unresolved"`
-		Checks     []struct {
+		Ticket      int64  `json:"ticket"`
+		URL         string `json:"url"`
+		Verdict     string `json:"verdict"`
+		Reason      string `json:"reason"`
+		MayMerge    bool   `json:"may_merge"`
+		Acts        bool   `json:"acts"`
+		GLWaived    bool   `json:"gl_waived"`
+		Draft       bool   `json:"draft"`
+		Mergeable   string `json:"mergeable"`
+		Review      string `json:"review"`
+		Head        string `json:"head"`
+		Unresolved  bool   `json:"unresolved"`
+		ManualCheck bool   `json:"manual_check"`
+		Checks      []struct {
 			Name       string `json:"name"`
 			Status     string `json:"status"`
 			Conclusion string `json:"conclusion"`
@@ -129,7 +131,7 @@ func readPRStatus(path string) prStatusSnapshot {
 		seen[pr.Ticket] = true
 		item := prStatus{
 			TicketID: pr.Ticket, URL: pr.URL, Verdict: pr.Verdict, Reason: pr.Reason,
-			MayMerge: pr.MayMerge, Acts: pr.Acts, GLWaived: pr.GLWaived, Draft: pr.Draft, Unresolved: pr.Unresolved,
+			MayMerge: pr.MayMerge, Acts: pr.Acts, GLWaived: pr.GLWaived, Draft: pr.Draft, Unresolved: pr.Unresolved, ManualCheck: pr.ManualCheck,
 			Checks: []prCheck{},
 		}
 		if prMergeables[pr.Mergeable] {

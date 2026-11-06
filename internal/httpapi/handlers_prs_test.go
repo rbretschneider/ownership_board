@@ -20,7 +20,7 @@ func writePRStatus(t *testing.T, data string) string {
 func TestPRStatusIsSanitized(t *testing.T) {
 	path := writePRStatus(t, `{"at":1793910000,"token":"secret-x","prs":[
 	 {"ticket":92,"url":"https://github.com/acme/mix/pull/25","verdict":"running","reason":"","may_merge":true,"acts":true,"gl_waived":false,
-	  "draft":false,"mergeable":"MERGEABLE","review":"","head":"9c7c3cf829b4","unresolved":true,"body":"secret-body",
+	  "draft":false,"mergeable":"MERGEABLE","review":"","head":"9c7c3cf829b4","unresolved":true,"manual_check":true,"body":"secret-body",
 	  "checks":[{"name":"build","status":"IN_PROGRESS","conclusion":"","started":"2026-11-05T20:51:10Z","completed":""},
 	            {"name":"<script>","status":"COMPLETED","conclusion":"SUCCESS","started":"","completed":""},
 	            {"name":"lint","status":"COMPLETED","conclusion":"SUCCESS","started":"nope","completed":"2026-11-05T20:52:00Z"}]},
@@ -36,7 +36,7 @@ func TestPRStatusIsSanitized(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 	first := got.PRs[0]
-	if first.TicketID != 92 || first.Verdict != "running" || !first.Unresolved || first.Head != "9c7c3cf829b4" || len(first.Checks) != 2 {
+	if first.TicketID != 92 || first.Verdict != "running" || !first.Unresolved || !first.ManualCheck || first.Head != "9c7c3cf829b4" || len(first.Checks) != 2 {
 		t.Fatalf("first %+v", first)
 	}
 	if first.Checks[0].StartedAt == nil || first.Checks[1].Name != "lint" || first.Checks[1].StartedAt != nil || first.Checks[1].CompletedAt == nil {

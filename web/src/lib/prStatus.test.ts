@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { PRStatus, PRStatusSnapshot } from "../api/types";
-import { prPill, ticketPR } from "./prStatus";
+import { prPill, prsAwaitingOwner, ticketPR } from "./prStatus";
 
 const NOW = Date.parse("2026-11-05T21:00:00Z");
 const base: PRStatus = {
   ticket_id: 92, url: "https://github.com/acme/mix/pull/25", verdict: "running", reason: "", may_merge: true, acts: true,
-  gl_waived: false, draft: false, mergeable: "MERGEABLE", review: "", head: "9c7c3cf829b4", unresolved: false,
+  gl_waived: false, draft: false, mergeable: "MERGEABLE", review: "", head: "9c7c3cf829b4", unresolved: false, manual_check: false,
   checks: [
     { name: "build", status: "IN_PROGRESS", conclusion: "", started_at: "2026-11-05T20:48:00Z", completed_at: null },
     { name: "lint", status: "COMPLETED", conclusion: "SUCCESS", started_at: "2026-11-05T20:47:00Z", completed_at: "2026-11-05T20:49:00Z" },
@@ -41,5 +41,18 @@ describe("PR pill", () => {
     expect(ticketPR(snapshot([base]), { ...ticket, pr_url: "https://github.com/acme/mix/pull/26" }, NOW)).toBeUndefined();
     expect(ticketPR(snapshot([base]), { id: 7, pr_url: "" }, NOW)).toBeUndefined();
     expect(ticketPR({ observed_at: null, prs: [base] }, ticket, NOW)).toBeUndefined();
+  });
+});
+
+describe("PRs awaiting the owner", () => {
+  it("counts green PRs the owner must merge or check, and says which", () => {
+    const manual = { ...base, ticket_id: 94, url: "https://github.com/acme/mix/pull/30", verdict: "green_owner" as const, manual_check: true };
+    expect(prPill(manual, null, NOW).label).toBe("Green · needs your check");
+    expect(prPill(manual, null, NOW).title).toContain("hands-on check");
+    const tickets = [
+      { id: 94, stage: "pr", pr_url: manual.url },
+      { id: 92, stage: "pr", pr_url: base.url },
+    ] as Parameters<typeof prsAwaitingOwner>[1];
+    expect(prsAwaitingOwner(snapshot([manual, base]), tickets, NOW).map((t) => t.id)).toEqual([94]);
   });
 });

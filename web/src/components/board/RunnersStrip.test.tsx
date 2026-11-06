@@ -63,7 +63,7 @@ describe("Delivery card pill follows the merge sweep", () => {
  };
  const prs: PRStatusSnapshot = { observed_at: "2026-11-04T20:28:00Z", prs: [{
   ticket_id: 92, url: "https://github.com/acme/mix/pull/25", verdict: "running", reason: "", may_merge: true, acts: true, gl_waived: false,
-  draft: false, mergeable: "MERGEABLE", review: "", head: "9c7c3cf829b4", unresolved: false,
+  draft: false, mergeable: "MERGEABLE", review: "", head: "9c7c3cf829b4", unresolved: false, manual_check: false,
   checks: [{ name: "build", status: "IN_PROGRESS", conclusion: "", started_at: "2026-11-04T20:25:00Z", completed_at: null }] }] };
  const pill = (t: TicketSummary, value: PRStatusSnapshot) => {
   const root = document.createElement("div");
