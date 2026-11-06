@@ -127,6 +127,71 @@ func (f *fixture) mustCreateAutonomous(repoID int64) int64 {
 	return detail.Ticket.ID
 }
 
+func repairDraft() domain.TicketDraft {
+	return domain.TicketDraft{Kind: "bug", Title: "Fix the broken Windows harness", Body: "Found while building."}
+}
+
+func TestAFollowUpFiledWhileWorkingAnAutonomousTicketIsAutonomousToo(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	parent := f.mustCreateAutonomous(api.ID)
+	f.mustClaim(agent, app.ClaimInput{})
+
+	detail, err := f.board.CreateRelated(f.ctx, agent, repairDraft(), "follow_up_of", parent, "Repair spec.\n\nBuild tier: normal")
+	if err != nil {
+		t.Fatalf("CreateRelated: %v", err)
+	}
+	ticket := detail.Ticket
+	if !ticket.IsAutonomous || ticket.Stage != domain.StageReady || ticket.RepoID != api.ID || ticket.ApprovedSpecRevision != 1 {
+		t.Fatalf("autonomous %v stage %s repo %d approved %d", ticket.IsAutonomous, ticket.Stage, ticket.RepoID, ticket.ApprovedSpecRevision)
+	}
+	last := detail.Decisions[len(detail.Decisions)-1]
+	if last.Weight != domain.WeightBinding || !strings.Contains(last.Summary, fmt.Sprintf("#%d", parent)) {
+		t.Fatalf("decision %+v", last)
+	}
+	if len(detail.Related) == 0 {
+		t.Fatalf("the follow-up is not linked to #%d", parent)
+	}
+}
+
+func TestAFollowUpStaysOrdinaryWithoutASpecOrAnAutonomousParent(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	parent := f.mustCreateAutonomous(api.ID)
+	f.mustClaim(agent, app.ClaimInput{})
+	noSpec, err := f.board.CreateRelated(f.ctx, agent, repairDraft(), "follow_up_of", parent, " ")
+	if err != nil || noSpec.Ticket.IsAutonomous || noSpec.Ticket.Stage != domain.StageRefine {
+		t.Fatalf("without a spec: %+v, %v", noSpec.Ticket, err)
+	}
+
+	f = newFixture(t)
+	api = f.repo("acme/api")
+	ordinary := f.ticket("ordinary", api.ID)
+	f.toReady(ordinary)
+	f.mustClaim(other, app.ClaimInput{})
+	draft := repairDraft()
+	draft.RepoID = api.ID
+	plain, err := f.board.CreateRelated(f.ctx, other, draft, "follow_up_of", ordinary, "Repair spec.")
+	if err != nil || plain.Ticket.IsAutonomous {
+		t.Fatalf("from an ordinary ticket: %+v, %v", plain.Ticket, err)
+	}
+}
+
+func TestOnlyTheLeaseHolderFilesAnAutonomousFollowUpInTheParentsRepo(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	web := f.repo("acme/web")
+	parent := f.mustCreateAutonomous(api.ID)
+	f.mustClaim(agent, app.ClaimInput{})
+
+	_, err := f.board.CreateRelated(f.ctx, other, repairDraft(), "follow_up_of", parent, "Repair spec.")
+	requireErrorKind(t, err, domain.KindForbidden)
+	elsewhere := repairDraft()
+	elsewhere.RepoID = web.ID
+	_, err = f.board.CreateRelated(f.ctx, agent, elsewhere, "follow_up_of", parent, "Repair spec.")
+	requireErrorKind(t, err, domain.KindInvalid)
+}
+
 func TestTheAutonomousQueueHasNoLengthLimit(t *testing.T) {
 	f := newFixture(t)
 	api := f.repo("acme/api")

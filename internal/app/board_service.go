@@ -118,7 +118,15 @@ func (s *BoardService) CreateAutonomous(ctx context.Context, actor domain.Actor,
 	if err != nil {
 		return TicketDetail{}, err
 	}
-	dependsOn, err := parseDependencies(ticket, draft.DependsOn)
+	return s.insertAutonomous(ctx, actor, ticket, draft.DependsOn, func(id int64) domain.Decision {
+		return domain.DecisionFromAgreedSpec(id, ticket.SpecRevision, actor, ticket.CreatedAt)
+	})
+}
+
+// insertAutonomous saves a ready autonomous ticket with the binding decision
+// that lets it run, inside the filer's hourly filing limit.
+func (s *BoardService) insertAutonomous(ctx context.Context, actor domain.Actor, ticket domain.Ticket, draftDependsOn []int64, why func(id int64) domain.Decision) (TicketDetail, error) {
+	dependsOn, err := parseDependencies(ticket, draftDependsOn)
 	if err != nil {
 		return TicketDetail{}, err
 	}
@@ -134,7 +142,7 @@ func (s *BoardService) CreateAutonomous(ctx context.Context, actor domain.Actor,
 		if err := repos.Tickets().Insert(ctx, &ticket); err != nil {
 			return err
 		}
-		decision := domain.DecisionFromAgreedSpec(ticket.ID, ticket.SpecRevision, actor, ticket.CreatedAt)
+		decision := why(ticket.ID)
 		if err := repos.Decisions().Insert(ctx, &decision); err != nil {
 			return err
 		}

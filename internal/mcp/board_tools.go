@@ -383,7 +383,9 @@ func (createTicket) Definition() Definition {
 			"relation": map[string]any{"type": "string", "enum": relationKinds,
 				"description": "How the new ticket relates to related_ticket_id, e.g. follow_up_of. Needs the lease on that ticket."},
 			"related_ticket_id": prop("integer", "The ticket the new one relates to."),
-			"depends_on":        dependsOnProp(),
+			"spec": prop("string", "A complete spec. With relation follow_up_of on an autonomous ticket you hold, "+
+				"the follow-up runs autonomously too and starts Ready with this spec; otherwise it is ignored and the ticket is refined as usual."),
+			"depends_on": dependsOnProp(),
 		}, "kind", "title"),
 	}
 }
@@ -396,6 +398,7 @@ func (t createTicket) Call(ctx context.Context, actor domain.Actor, raw json.Raw
 		RepoID          int64   `json:"repo_id"`
 		Relation        string  `json:"relation"`
 		RelatedTicketID int64   `json:"related_ticket_id"`
+		Spec            string  `json:"spec"`
 		DependsOn       []int64 `json:"depends_on"`
 	}
 	if err := decodeArguments(raw, &args); err != nil {
@@ -406,7 +409,7 @@ func (t createTicket) Call(ctx context.Context, actor domain.Actor, raw json.Raw
 		return "", &ArgumentError{Message: "give relation and related_ticket_id together"}
 	}
 	if args.Relation != "" {
-		detail, err := t.s.Board.CreateRelated(ctx, actor, draft, args.Relation, args.RelatedTicketID)
+		detail, err := t.s.Board.CreateRelated(ctx, actor, draft, args.Relation, args.RelatedTicketID, args.Spec)
 		return outcome(detail, "created and linked.", err)
 	}
 	detail, err := t.s.Board.Create(ctx, actor, draft)

@@ -102,6 +102,28 @@ func NewAutonomousTicket(draft AutonomousDraft, actor Actor, now time.Time) (Tic
 	if !actor.MayFileAutonomous() {
 		return Ticket{}, Forbiddenf("only a delegate agent token can file an autonomous ticket; a person creates one in Settings")
 	}
+	return readyAutonomous(draft, actor, now)
+}
+
+// NewInheritedAutonomousTicket returns an unsaved follow-up that an agent
+// files while working an autonomous ticket, such as a repair for a broken
+// build it hit. The owner's yes to run the parent without stopping covers the
+// work it spawns, so the follow-up runs autonomously too, in the parent's repo.
+// The caller checks the agent holds the parent's lease.
+func NewInheritedAutonomousTicket(draft AutonomousDraft, parent Ticket, actor Actor, now time.Time) (Ticket, error) {
+	if !actor.IsAgent() || !parent.IsAutonomous {
+		return Ticket{}, Forbiddenf("only an agent working an autonomous ticket files an autonomous follow-up of it")
+	}
+	if draft.RepoID == 0 {
+		draft.RepoID = parent.RepoID
+	}
+	if draft.RepoID != parent.RepoID {
+		return Ticket{}, Invalidf("an autonomous follow-up stays in its parent's repo")
+	}
+	return readyAutonomous(draft, actor, now)
+}
+
+func readyAutonomous(draft AutonomousDraft, actor Actor, now time.Time) (Ticket, error) {
 	if draft.RepoID <= 0 {
 		return Ticket{}, Invalidf("an autonomous ticket needs a repo_id")
 	}
