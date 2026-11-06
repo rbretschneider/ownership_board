@@ -17,6 +17,7 @@ import { afterIdFor, groupByLane } from "../../lib/position";
 import { decodeRepoFilter, encodeRepoFilter } from "../../lib/repos";
 import { cardTone } from "../../lib/activity";
 import { needsOwner } from "../../lib/stages";
+import { prsAwaitingOwner } from "../../lib/prStatus";
 import { preferences, STORAGE_KEYS } from "../../lib/storage";
 import { ErrorState } from "../common/ErrorState";
 import { LoadingState } from "../common/LoadingState";
@@ -81,11 +82,19 @@ export function BoardScreen({ route }: BoardScreenProps) {
   const repos = board?.repos ?? [];
   const allTickets = board?.tickets ?? [];
   const stages = board?.stages ?? [];
-  const yourMoveCount = needsOwner(allTickets).length;
+  const runners = useRunnersPolling();
+  const prStatus = usePRStatusPolling();
+  // Your move: open questions and checkpoints, plus green PRs waiting on the
+  // owner to merge or check them.
+  const yourMove = useMemo(() => {
+    const waiting = new Set(prsAwaitingOwner(prStatus.snapshot, allTickets, prStatus.now).map((t) => t.id));
+    return allTickets.filter((t) => t.needs_owner || waiting.has(t.id));
+  }, [allTickets, prStatus]);
+  const yourMoveCount = yourMove.length;
   useOwnerAlerts(board?.tickets ?? null, stages);
   const visible = useMemo(
-    () => (isYourMoveOnly ? needsOwner(allTickets) : allTickets),
-    [allTickets, isYourMoveOnly],
+    () => (isYourMoveOnly ? yourMove : allTickets),
+    [allTickets, isYourMoveOnly, yourMove],
   );
   const ticketsByLane = useMemo(() => groupByLane(visible, lanes.map((l) => l.id)), [visible, lanes]);
   const reposById = useMemo(() => new Map(repos.map((r) => [r.id, r])), [repos]);
@@ -105,8 +114,6 @@ export function BoardScreen({ route }: BoardScreenProps) {
     }
   }, [board, repoFilter, changeRepoFilter]);
 
-  const runners = useRunnersPolling();
-  const prStatus = usePRStatusPolling();
 
   const viewProps = {
     lanes,

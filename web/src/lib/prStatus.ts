@@ -42,6 +42,11 @@ export function ticketPR(snapshot: PRStatusSnapshot, ticket: Pick<TicketSummary,
   return status;
 }
 
+/** Tickets whose PR is green and waits on the owner to merge or check it. */
+export function prsAwaitingOwner(snapshot: PRStatusSnapshot, tickets: TicketSummary[], now: number): TicketSummary[] {
+  return tickets.filter((t) => t.stage === "pr" && ticketPR(snapshot, t, now)?.verdict === "green_owner");
+}
+
 /** One pill that says what a PR in Delivery is waiting for, and who moves next. */
 export function prPill(status: PRStatus, observedAt: string | null, now: number): PRPill {
   const total = status.checks.length;
@@ -63,7 +68,7 @@ export function prPill(status: PRStatus, observedAt: string | null, now: number)
       label = status.checks.some((c) => c.conclusion === "CANCELLED") ? "CI cancelled · stuck" : "CI incomplete · stuck";
       tone = "failed";
       break;
-    case "green_owner": label = "Green · needs your merge"; tone = "owner"; break;
+    case "green_owner": label = status.manual_check ? "Green · needs your check" : "Green · needs your merge"; tone = "owner"; break;
     case "merged": label = "Merged"; tone = "done"; break;
     case "merge_failed": label = "Green · merge failed"; tone = "failed"; break;
     case "closed": label = "PR closed"; tone = "failed"; break;
@@ -72,6 +77,7 @@ export function prPill(status: PRStatus, observedAt: string | null, now: number)
   const number = status.url.match(/\/pull\/(\d+)$/)?.[1];
   const lines = [`PR #${number ?? "?"}${status.head ? ` · commit ${status.head.slice(0, 8)}` : ""}`];
   if (total) lines.push("Checks: " + status.checks.map((c) => `${c.name} ${checkWord(c)}`).join(", "));
+  if (status.manual_check) lines.push("Needs your hands-on check (listed in the PR): no agent can produce that evidence. Try it, then merge or comment.");
   if (status.unresolved) lines.push("Published with unresolved problems: never merged automatically; it returns to build for repair.");
   if (status.gl_waived) lines.push("windows-msvc's GL runner check is waived (temporary).");
   if (status.verdict === "running" && status.may_merge && status.acts && !status.unresolved) lines.push("Merges automatically when every check passes.");

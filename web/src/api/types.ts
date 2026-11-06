@@ -567,6 +567,8 @@ export interface PRStatus {
  head: string;
  /** Published past the fix-round limit; never merged automatically. */
  unresolved: boolean;
+ /** Published for the owner's hands-on check (evidence no agent can produce); never merged automatically. */
+ manual_check: boolean;
  checks: PRCheck[];
 }
 
