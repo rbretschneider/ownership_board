@@ -85,14 +85,25 @@ it("replaces the step count with a stage stepper showing retries", () => {
   attempts: {build: 4, test: 5, test_failures: 4, review: 0, review_fixes: 0, pr: 0, pr_repairs: 0}});
  expect(card.textContent).not.toContain("steps complete");
  const steps = [...card.querySelectorAll(".stepper__step")];
- expect(steps.map((s) => s.getAttribute("aria-label")?.split(":")[0])).toEqual(["Refine and design", "Build", "Windows verification", "Fresh-context adversarial review", "Pull request and checks"]);
- expect(card.querySelector('[aria-current="step"]')?.getAttribute("aria-label")).toBe("Windows verification: current step · 5 Windows runs, 4 failed");
- expect(card.querySelectorAll(".stepper__step--done")).toHaveLength(2);
- expect(steps.map((s) => s.textContent)).toEqual(["Refine", "Build4", "Test5", "Review", "PR"]);
- expect(card.querySelector('[aria-current="step"] .stepper__label')?.textContent).toBe("Test");
- expect(card.querySelectorAll(".stepper__step--retried")).toHaveLength(2);
+ expect(steps.map((s) => s.getAttribute("aria-label")?.split(":")[0])).toEqual(["Refine and design", "Build and test", "Fresh-context adversarial review", "Pull request and checks"]);
+ // A Windows run is part of Build; the live phase is in the status pill.
+ expect(card.querySelector('[aria-current="step"]')?.getAttribute("aria-label")).toBe("Build and test: current step · 4 passes (4 after failed Windows runs)");
+ expect(card.querySelectorAll(".stepper__step--done")).toHaveLength(1);
+ expect(steps.map((s) => s.textContent)).toEqual(["Refine", "Build4", "Review", "PR"]);
+ expect(card.querySelectorAll(".stepper__step--retried")).toHaveLength(1);
+ expect(card.querySelector('[class*="badge--windows"]')).toBeNull();
  // Chevrons close the card: the stepper is its last element.
  expect(card.lastElementChild?.className).toBe("stepper");
+});
+
+it("shows the Windows result as a status once verification is over", () => {
+ const passed = dom({stage: "pr", lane: "review", attempts: {build: 2, test: 2, test_failures: 1, review: 1, review_fixes: 0, pr: 1, pr_repairs: 0}});
+ const chip = passed.querySelector(".badge--windows-passed");
+ expect(chip?.textContent).toBe("Windows passed");
+ expect(chip?.getAttribute("title")).toBe("Windows verification passed · 2 Windows runs, 1 failed");
+ // A repo without Windows checks shows nothing.
+ const none = dom({stage: "pr", lane: "review", attempts: {build: 1, test: 0, test_failures: 0, review: 1, review_fixes: 0, pr: 1, pr_repairs: 0}});
+ expect(none.querySelector('[class*="badge--windows"]')).toBeNull();
 });
 
 describe("work model signal", () => {

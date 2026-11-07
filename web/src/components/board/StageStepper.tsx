@@ -2,9 +2,10 @@ import type { TicketSummary } from "../../api/types";
 import { progressSteps } from "../../lib/progress";
 
 /**
- * Refine › Build › Test › Review › PR as chevrons along the card's bottom
- * edge. Done steps are filled, the current one is solid accent, and a step
- * that ran more than once carries its count inside (e.g. Build 4 › Test 5).
+ * Refine › Build › Review › PR as chevrons along the card's bottom edge.
+ * Build includes the tests and any Windows verification, whose result the
+ * card shows as a status. Done steps are filled, the current one is solid
+ * accent, and a step that ran more than once carries its count (e.g. Build 4).
  * Hover or focus a step for its full history.
  */
 export function StageStepper({ ticket }: { ticket: TicketSummary }) {

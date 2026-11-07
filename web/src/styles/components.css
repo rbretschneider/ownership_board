@@ -194,6 +194,17 @@
   border-radius: var(--radius-sm);
 }
 
+/* Windows verification result: a status, not a workflow step. */
+.badge--windows-passed {
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+  color: var(--success);
+}
+
+.badge--windows-failed {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 .stage-chip {
   display: inline-flex;
   align-items: center;
@@ -465,7 +476,7 @@
   min-height: 20px;
 }
 
-/* Refine › Build › Test › Review › PR as chevrons along the card's bottom
+/* Refine › Build › Review › PR as chevrons along the card's bottom
    edge, edge to edge. Steps share the width; the current one never shrinks,
    and other labels truncate before anything overflows. */
 .stepper {

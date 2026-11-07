@@ -1,4 +1,5 @@
-import { Bot, CircleAlert, GitPullRequest, Hand, Hourglass, MessageCircleQuestion, Server, Zap } from "lucide-react";
+import { Bot, CircleAlert, CircleCheck, CircleX, GitPullRequest, Hand, Hourglass, MessageCircleQuestion, Server, Zap } from "lucide-react";
+import { windowsStatus } from "../../lib/progress";
 import type { Repo, Stage, TicketSummary } from "../../api/types";
 import { useLeaseClock } from "../../hooks/useLeaseClock";
 import { cardActivity, hasLiveLease } from "../../lib/activity";
@@ -73,6 +74,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
     : isWaiting ? "Agents cannot claim this until these tickets are merged"
     : `${ticket.is_autonomous ? "On autopilot · " : ""}${activity.label === "Queued" ? "Waiting for a worker" : activity.label}`;
   const escalated = model?.escalatedAfter !== undefined;
+  const windows = windowsStatus(ticket);
   return (
     <>
       <div className="card__top">
@@ -124,6 +126,12 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
           <span className="badge badge--waiting" title="Agents cannot claim this until these tickets are merged">
             <Hourglass size={13} aria-hidden="true" />
             Waiting on {ticketRefs(ticket.waiting_on)}
+          </span>
+        )}
+        {windows && (
+          <span className={`badge badge--windows-${windows.passed ? "passed" : "failed"}`} title={windows.title} aria-label={windows.title}>
+            {windows.passed ? <CircleCheck size={13} aria-hidden="true" /> : <CircleX size={13} aria-hidden="true" />}
+            {windows.label}
           </span>
         )}
         {ticket.open_questions > 0 && (

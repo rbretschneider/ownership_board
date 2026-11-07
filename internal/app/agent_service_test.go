@@ -162,6 +162,19 @@ func TestBriefForUnassignedTicketListsRepos(t *testing.T) {
 	}
 }
 
+func TestBuildBriefRequiresTestFirstAndTestsInCI(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	id := f.ticket("feature", api.ID)
+	f.toBuild(id)
+	brief := f.mustClaim(agent, app.ClaimInput{}).Brief
+	for _, want := range []string{"Work test-first (TDD)", "CI must run those tests", "add one in this pull request"} {
+		if !strings.Contains(brief, want) {
+			t.Errorf("build brief is missing %q:\n%s", want, brief)
+		}
+	}
+}
+
 func TestBriefCarriesAnswers(t *testing.T) {
 	f := newFixture(t)
 	id := f.ticket("idea", 0)

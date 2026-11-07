@@ -61,7 +61,7 @@ var actionInstructions = map[domain.WorkAction]string{
 
 	domain.ActionDesign: `You are acting as the architect. The ticket is In Progress and leased to you. Write the technical design for building the spec in this repository; do not write the code yet.
 
-- Read the repository first. Cover: the approach, the components and files that change, data and API changes, how it will be tested, risks, and the order of work.
+- Read the repository first. Cover: the approach, the components and files that change, data and API changes, the tests to write first and the CI job that will run them, risks, and the order of work.
 - If you were sent back with requested changes, the newest comments say what to change.
 - Record significant choices with record_decision. Ask questions if a choice is the owner's to make.
 - Call save_design with submit: true when the design is complete. The board then waits for the owner to approve it, or starts the build when this repo needs no approval.
@@ -72,6 +72,8 @@ var actionInstructions = map[domain.WorkAction]string{
 - If the ticket was being built before (a previous session stopped, or the owner sent it back), read the newest comments first; they say what is left.
 - Work on the branch shown above unless the repository has its own convention.
 - End every commit message for this ticket with the git trailer "Ownership-Ticket: <ticket id>" (the number only).
+- Work test-first (TDD): write a test for each behaviour the spec asks for, watch it fail, then make it pass. Every behaviour change and bug fix ships with automated tests that assert real outcomes.
+- CI must run those tests. Check the repository's CI configuration: if no CI job runs the suite your tests live in, add one in this pull request (follow the existing CI style). A green check that does not run your tests is not verification.
 - Never add the spec, the design or other board text to the repository as files.
 - After pushing, record each commit and the pull request with add_work_link.
 - Record each significant choice with record_decision: approach, trade-off, scope cut, new dependency, or any deviation from the spec or design.
