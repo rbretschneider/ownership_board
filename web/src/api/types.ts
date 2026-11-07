@@ -414,6 +414,8 @@ export interface CreateTicket {
   body: string;
   /** Tickets in the same repo the new one waits for. */
   depends_on?: number[];
+  /** Start on autopilot: no checkpoints or questions, straight to a pull request. Needs a repo. */
+  is_autonomous?: boolean;
 }
 
 /** Board-wide settings (GET and PATCH /settings; only people change them). */

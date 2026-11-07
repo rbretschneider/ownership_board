@@ -94,7 +94,7 @@ const publicRepoRules = `This repo is PUBLIC, treated as public, or not chosen y
 
 // autonomousRules replace asking the owner on an autonomous ticket. They come
 // after the action's instructions and override what those say about asking.
-const autonomousRules = `The owner agreed this spec in a chat and asked for a pull request with no stops. There are no checkpoints, and the board refuses questions on this ticket; this overrides anything above about asking.
+const autonomousRules = `The owner asked for a pull request with no stops: they agreed the spec in a chat, or started the ticket on autopilot and left refining it to you. There are no checkpoints, and the board refuses questions on this ticket; this overrides anything above about asking.
 
 - Where you would have asked, choose: take the option you would have recommended, record it with record_decision (the choice, the alternatives and why), and carry on.
 - Keep to the spec. Do not widen it; file follow-ups with create_ticket instead.
