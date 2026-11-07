@@ -1,6 +1,6 @@
 import type { Repo, TicketSummary } from "../api/types";
 import { cardActivity, hasLiveLease } from "./activity";
-import { currentStepIndex } from "./progress";
+import { currentStepIndex, onWindows } from "./progress";
 
 /*
  * The flow view (#/flow): tickets drift left to right as they near merged, in
@@ -61,8 +61,8 @@ export function flowStage(t: Pick<TicketSummary, "stage" | "work_model">): FlowS
     case "design_review":
       return "design";
     case "build": {
-      const step = currentStepIndex(t);
-      return step === 2 ? "windows" : step === 3 ? "review" : "build";
+      if (onWindows(t)) return "windows";
+      return currentStepIndex(t) === 2 ? "review" : "build";
     }
     case "pr":
       return "pr";
