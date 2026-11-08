@@ -1,7 +1,8 @@
 # Architecture
 
-This baseline describes the ticket workflow and the repository-review and
-build-host features at `38c3a173fb022ea214d3ec76189f3392066a93e8`.
+This baseline describes the workflow, registered build workers and repository
+verification configuration at `629528ea0e2dd7329eeb9296a7b2b1394c641c02`.
+The dated reports below retain their own scope and verification evidence.
 The current workflow contract is the [deployment-state amendment](lanes.md#amendment-deployment-state).
 The older tables in [design.md](design.md) describe an earlier workflow.
 
@@ -14,12 +15,16 @@ and wiring, rather than a separately enforced package policy.
 
 | Module | Responsibility and dependency direction |
 | --- | --- |
-| `internal/domain` | Ticket state, validation, graph algorithms and host lifecycle. Keep these independent of services, protocols and database implementations. |
-| `internal/app` | Coordinate use cases, permissions and transactions through application-owned persistence interfaces. Depends on domain and focused support packages, including clock, stats and secretbox; keep HTTP, MCP and SQLite implementations outside this layer. |
+| `internal/domain` | Workflow and completion predicates, graph algorithms, host lifecycle/facts, job targets and repository-target normalization. Keep these independent of services, transports and database implementations. |
+| `internal/app` | Coordinate use cases, permissions, clocks and transactions through application-owned persistence/storage interfaces. Depends on domain and focused support packages, including auth primitives, clock, stats and secretbox; keep HTTP, MCP and SQLite implementations outside this layer. |
 | `internal/store/sqlite` | Implement the application ports, SQL queries and migrations. Its dependency on `app` connects the adapter to interfaces owned by its consumer. |
+| `internal/buildbundle` | Filesystem adapter for immutable opaque bundles, retained partial transfers and platform-specific upload locks. Satisfies the application `BundleStorage` interface through composition. |
+| `internal/auth` | Browser/bearer identity services and machine-signature primitives. Machine identity does not inherit browser or agent-token authority. |
 | `internal/httpapi`, `internal/mcp` | Translate incoming requests into service calls and results into transport representations. Preserve service authorization and domain transitions instead of writing workflow state directly. |
+| `internal/install`, `agent/build_host/embed.go` | Render downloadable installers from fixed embedded templates and runtime bytes. Request values and deployment credentials do not enter the renderer. |
+| `agent/build_host/build_host.py` | Separate network client: local identity/state, signing, facts, process containment, execution, assignment/result journals and scheduling. It neither imports Go services nor authorizes server operations. |
 | `internal/stats` | Compute metrics from supplied tickets, history and repository metadata. Persistence loading belongs to `app`. |
-| `cmd/ownership/wire.go` | Assemble concrete adapters, services and event delivery. This composition root can depend on both sides of a port. |
+| `cmd/ownership/wire.go` | Assemble concrete adapters, services and event delivery; perform bundle recovery before serving and own the reaper lifecycle. This composition root can depend on both sides of a port. |
 | `web/src/api` | Client requests and transport types. The server decides workflow eligibility and permissions. |
 | `web/src/lib`, feature components | Shared presentation rules and rendering. Reuse stage, relation, owner-alert, progress and PR-status helpers across views. |
 | `agent/claude`, `docs/agents.md` | Client-side operating guidance. Prompts describe orchestration; they are not server authorization or executable enforcement of an external runner's behavior. |
@@ -54,6 +59,27 @@ and wiring, rather than a separately enforced package policy.
   DTO is the explicit reveal point. Host management has its own service and
   post-commit, best-effort administrative logs, not ticket timeline events
   or a durable audit outbox ([registry amendment](amendments/118.md)).
+- `Stage.IsCompleted()` means merge-level completion: `done`, `deploying`
+  and `deployed`. Deployment can remain active without reopening dependencies
+  or repeating merge-sequence allocation. Client `isCompletedStage` mirrors
+  that display predicate; it does not authorize transitions.
+- Reuse `NormalizeRepoBuildTargets` and `BuildJobTarget.Validate/Canonical`
+  for normalized, independently owned capability lists. Repository declarations
+  feed briefs; queue eligibility uses each submitted job's target, not a
+  comparison against the repository's declared targets.
+- `BuildJobService.Submit` reserves quota in one database transaction, streams
+  outside it, then promotes the immutable bundle and publishes the job in a
+  second transaction. Filesystem publication is not rolled back with SQL:
+  retained orphans, digest verification and upload locks support recovery.
+  `BundleStorage` is the application seam; the server does not unpack bundles.
+- SQLite `eligibleQueue` serves both `Candidate` and `QueuedForHost`, keeping
+  capability matching and `(created_at,id)` ordering together. Queue rows are
+  eligible candidates, not promises of exclusive assignment to a host.
+- `useVisiblePolling` serializes reads, pauses hidden-page polling and discards
+  obsolete responses after mutations. Host settings and registered-runner
+  presentation share it. Go and Python signing share deterministic vectors in
+  `internal/auth/testdata/host_signature_vectors.json`; preserve that protocol
+  contract when either implementation changes.
 
 ## Health check after PR #9..#54 — selected changes
 
@@ -195,3 +221,196 @@ Manual inspection and focused passing checks do not prove the absence of
 duplication, unreachable code or concurrency bugs. The documentation change
 was also checked for whitespace errors and locally resolvable file/history
 references; it contains no runtime changes.
+
+## Health check after PR #55..#63 — selected changes
+
+The exact selected PRs are **#55, #57, #58, #59, #60, #61, #62 and #63**.
+Review date: 2026-11-08. The source snapshot is
+`629528ea0e2dd7329eeb9296a7b2b1394c641c02`. There is no verified earlier
+checkpoint base. Each merge's first-parent tree diff was reconstructed
+separately, using both `git diff --name-status <merge>^1 <merge>` and
+`git diff <merge>^1 <merge>`; their union contains 221 paths.
+
+| Public PR | First-parent merge | Change examined |
+| --- | --- | --- |
+| [#55](https://github.com/rbretschneider/ownership_board/pull/55) | `962a3729098a7026bee0ace84d9747dfe207eacc` | Enrollment, signed machine requests and heartbeat reports |
+| [#57](https://github.com/rbretschneider/ownership_board/pull/57) | `3e28f5bc8754a3b587ebab37c3f418c6f8406370` | Repository deployment policy and completion accounting |
+| [#58](https://github.com/rbretschneider/ownership_board/pull/58) | `e9e89dddc31852e22ab7878762e26f15d721e604` | Verification jobs, immutable uploads and assignment recovery |
+| [#59](https://github.com/rbretschneider/ownership_board/pull/59) | `23be0de06462f1d307a73e9b8868dd26a4b11952` | Deployed lane and repository policy controls |
+| [#60](https://github.com/rbretschneider/ownership_board/pull/60) | `cfd102e3121306b46e8d72ee060158551bc4512f` | Host management and registered-runner views |
+| [#61](https://github.com/rbretschneider/ownership_board/pull/61) | `b0666427cf18a817446e646ec1c363c81093639e` | Portable worker, embedded installers and native verification harness |
+| [#62](https://github.com/rbretschneider/ownership_board/pull/62) | `6fef53a3de0841e95760833c369eee2ecf755e42` | Explicit deployment request, claim and outcome reporting |
+| [#63](https://github.com/rbretschneider/ownership_board/pull/63) | `629528ea0e2dd7329eeb9296a7b2b1394c641c02` | Repository verification targets and registry-backed compatibility |
+
+PR #56 (`f5cf386`) adds the preceding architecture report and is excluded
+from the selected changes. Its findings remain historical context. The
+documentation branch was advanced to base `84567b9`, which also includes
+PR #64. That later UI change is outside this review; snapshot versions were
+used for the overlapping stage/activity helpers. The source-backed baseline
+above and the conclusions here are bounded to the selected snapshot.
+
+Merge messages, parent relationships and feature history support the mapping.
+External work-link confirmation, additional private discussion and open-ticket
+searches were unavailable. No external provenance or duplicate-search result
+is asserted. Public PR links come from local merge messages and were not
+network-verified. Direct dependencies were read to understand boundaries,
+without treating unrelated modules as additional review targets.
+
+### Ranked findings
+
+No new finding met the evidence threshold for P1 (major correctness/security
+exposure), P2 (concrete maintainability/regression risk) or P3 (specific
+assurance/documentation weakness) in the inspected paths. There is therefore
+no ranked remediation list. This is a bounded source review with focused
+checks, not a security certification or proof that all interactions are tested.
+
+### Rubric assessment
+
+| Category | Evidence and conclusion |
+| --- | --- |
+| Duplication / DRY | Repository normalization delegates capability handling to `BuildJobTarget.Validate`; SQL `Candidate` delegates to `QueuedForHost` and its `eligibleQueue` predicate. Repeated checks in the HTTP decoder, domain validator and worker protect different trust boundaries. Go/Python signing is intentional interoperability with shared vectors. No additional duplicate business policy requiring extraction was confirmed. |
+| SOLID | Application-owned `BuildHostRepository`, `BuildJobRepository` and `BundleStorage` ports keep storage replaceable at the use-case boundary. `BuildJobService` coordinates publication and recovery because filesystem and SQL failure states must be considered together. The worker separates `BoardClient`, `State`, `ProcessTree`, `JobRunner`, `FactsService` and `AgentLoop` within one distributable file. Embedded installer consumption makes a file split consequential; size alone is insufficient evidence for one. No substitution or responsibility defect was demonstrated. |
+| Layering / dependency direction | New domain files use standard-library facilities. App's `internal/auth` imports use signature verification and `ErrUnauthorized`, rather than HTTP handlers or SQLite implementations. SQLite imports app to satisfy consumer-owned ports; `buildbundle` implements the storage port without importing services. Install rendering depends on embedded assets, and the composition root owns concrete wiring/recovery. These directions fit the existing conventions. |
+| Dead code | Enrollment now reaches the previously staged identity path. `CompatibilityRunners`, the file reader and `LegacyRunnersStrip` remain reachable fallbacks; pending/revoked hosts do not suppress the file, while any approved registry host selects the registry representation. Migration downgrade paths and Windows-only containment have explicit platform/history roles. No safe deletion was established. |
+| Test gaps | The inspected tests already cover enrollment and report rollback, live-upload recovery, stale attempts, concurrent capacity, deployment accounting across retries, settings rollback and stale polls. No additional concrete missing interaction was substantiated. Native Windows, macOS and full browser/runtime execution remain assurance limits, separately from source coverage. |
+
+### Boundary traces and retained risks
+
+**Enrollment and administration.** In
+[`BuildHostService.Pair`](../internal/app/build_host_agent.go), identity
+insertion and pairing-code consumption share `Store.Write`. Notification
+follows commit and can fail without undoing enrollment. Heartbeat writes
+facts/telemetry and toolchain-change history together; SQLite's
+[`RecordHeartbeat`](../internal/store/sqlite/build_hosts.go) does not overwrite
+administrative capability, enablement or capacity columns. Signed routes in
+[`router.go`](../internal/httpapi/router.go) validate the concrete path,
+single-valued headers and bounded raw body independently of browser/bearer
+identity. Pending hosts can read status only; application mutations recheck
+approval in their transaction. `VerifyHostSignature` accepts timestamps within
+300 seconds in either direction. This is a freshness window, not nonce-based
+replay prevention; the review does not infer stronger delivery guarantees.
+
+**Queue and storage.**
+[`BuildJobService`](../internal/app/build_job_service.go) rechecks repository
+assignment at reservation and publication. Promotion can leave an immutable
+orphan after a failed SQL insert; retry verifies and adopts matching bytes.
+Recovery preserves reservations held by live upload locks and rejects corrupt
+referenced bundles. Claims serialize capacity and candidate selection; a
+cancelled/superseded assignment occupies capacity until acknowledgment or
+timeout releases it. Attempt fencing prevents old results overwriting retries;
+offline recovery stops retrying after the third attempt. Publication order is
+not Git ancestry. Quota includes retained partials/orphans: retention is a
+capacity tradeoff, not evidence of unused files that can simply be removed.
+
+**Worker and distribution.** The
+[`worker`](../agent/build_host/build_host.py) verifies bundle length/digest,
+fetches the requested object and checks the resulting commit before running
+a preset. `ProcessTree` owns platform-specific cleanup. `AgentLoop` journals
+assignments/results, persists an ambiguous-claim barrier and withholds control
+traffic while an unknown claim ages out. Durable result bytes support retry;
+they do not establish exactly-once network delivery. `resource_limits` bounds
+parallelism and respects smaller environment limits. `install.Render` consumes
+fixed embedded bytes; runtime configuration enters the local installer through
+arguments. Source inspection of DACLs, Job Objects, launchd and scheduled tasks
+does not establish native execution success on those platforms.
+
+**Deployment and completion.**
+[`RequestDeploy` and `ReportDeploy`](../internal/app/deploy_service.go) use
+`ticketWriter.change`: a person queues an eligible merged ticket, and an agent
+with its current lease reports the outcome. Failed deployment returns to
+blocked Merged; retry needs another explicit request. A later policy change
+does not prevent reporting already queued work. `Stage.IsCompleted` includes
+active deployment, so retries neither reopen prerequisites nor repeat merge
+effects. Client helpers mirror this merge-level classification. The
+[deployment amendment](lanes.md#amendment-deployment-state) controls the
+workflow; operating guidance and an agent's report do not independently prove
+that an external deployment occurred.
+
+**Targets and compatibility.**
+[`NormalizeRepoBuildTargets`](../internal/domain/repo_build_targets.go)
+canonicalizes capability sets and clones their storage. Repository edits and
+[`UpdateSettings`](../internal/app/settings_service.go) use transaction-local
+validation; Windows compatibility fields are projections of approved hosts,
+not authoritative historical setting rows. Capacity distribution sorts hosts
+by ID. [`CompatibilityRunners`](../internal/app/build_host_runners.go) exposes
+bounded eligible queues, which can contain the same job for multiple hosts.
+The actual claim remains exclusive. Repository targets are declarations used
+in briefs; `validateJobRepo` checks repository ownership but does not enforce
+those declarations as a submission allowlist. No enforcement guarantee should
+be inferred from the configuration UI. Runner views use several `Store.Read`
+queries without a snapshot transaction; `observed_at` is not a promise of an
+atomic multi-query view. Per-host queue reads can grow with registered hosts;
+no workload measurement here establishes a performance defect or justifies
+changing the repository interface.
+
+### Behavior-to-test assessment
+
+Entries below describe inspected source assertions. Only the explicitly
+listed commands in the next section were executed for this report.
+
+| Behavior | Source evidence | Assessment |
+| --- | --- | --- |
+| Enrollment, approval and credential isolation | `TestEnrollmentConcurrencyAndRollback` checks competing consumption and rollback; `TestHeartbeatHistoryAndManagementIsolation` injects report failure and verifies event rollback and preserved admin settings in [build_host_agent_test.go](../internal/app/build_host_agent_test.go). `TestMachineHostFlow` checks pending/approved/revoked access, duplicate headers, tampering and browser/token separation in [handlers_build_host_agent_test.go](../internal/httpapi/handlers_build_host_agent_test.go). | Existing negative-path coverage addresses identity and column-ownership boundaries. |
+| Signing | `TestHostSignature`, tampering tests and shared vectors in [host_signature_test.go](../internal/auth/host_signature_test.go); Python `ProtocolTests.test_shared_vectors` in [test_protocol.py](../agent/build_host/tests/test_protocol.py). | Shared deterministic bytes cover cross-language drift; the timestamp window is explicitly tested. |
+| Storage publication and recovery | `TestBuildJobsPublicationRollbackRetainsOrphan`, `TestBuildJobsRecoveryPreservesLiveReservation`, quota/corruption tests in [build_job_service_test.go](../internal/app/build_job_service_test.go); cross-process upload-lock and symlink tests in [store_test.go](../internal/buildbundle/store_test.go). | SQL rollback, filesystem retention and live-uploader ownership are tested separately rather than assumed atomic. |
+| Claims, cancellation and attempts | Concurrent-claim/capacity, eligibility, foreign-host, supersession/result-race and historical-log allocation tests in [build_job_service_test.go](../internal/app/build_job_service_test.go). `TestBuildQueueHTTP` checks route separation, malformed uploads and exact result limits in [handlers_build_jobs_test.go](../internal/httpapi/handlers_build_jobs_test.go). | Capacity and stale-report protections have concrete assertions; allocation coverage is a regression bound, not a benchmark. |
+| Worker execution and restart | [test_scheduler.py](../agent/build_host/tests/test_scheduler.py) checks lost-claim responses across restarts, journal-write failures, exact completion retries and connectivity cutoff. [test_execution.py](../agent/build_host/tests/test_execution.py) checks real bundles, wrong SHAs, command exits and JSON budgets; [test_process_tree.py](../agent/build_host/tests/test_process_tree.py) checks descendants and controller death. | Execution and scheduling have independent seams. Platform-gated assertions require their native environments. |
+| Installers and protocol integration | `TestRenderedInstallersEmbedCanonicalPayload` in [install_test.go](../internal/install/install_test.go), platform fixtures in [test_installers.py](../agent/build_host/tests/test_installers.py), and `TestBuildHostPythonInterop` / result-budget coverage in [build_host_python_test.go](../internal/httpapi/build_host_python_test.go). | Renderer tests prove payload identity, not installation. Interop requires `BUILD_HOST_PYTHON`; generic Go jobs can skip it. |
+| Deployment and merge effects | `TestDeploymentCycleAndCompletionAccounting`, `TestDeployWritesRollbackTogether`, `TestDeploymentPreservesMergeEffectsAcrossAttempts`, request/report permission and claim-recovery tests in [deploy_service_test.go](../internal/app/deploy_service_test.go). | Existing tests include dependants, generated reviews, retries and injected timeline failures; a combined rollback gap is not inferred from the older report. |
+| Deployment presentation | [stages.test.ts](../web/src/lib/stages.test.ts), [flow.test.ts](../web/src/lib/flow.test.ts), board layout tests and [RepoGateToggles.test.tsx](../web/src/components/settings/RepoGateToggles.test.tsx). | Selected-snapshot tests check completion helpers, lane layout and policy save/refusal behavior. Later PR #64 UI assertions are outside scope. |
+| Repository targets and compatibility | [repo_build_targets_test.go](../internal/domain/repo_build_targets_test.go) checks normalization, limits and independent storage; repository service tests inject combined-edit failures. [settings_hosts_test.go](../internal/app/settings_hosts_test.go) checks distribution/rollback and historical-setting nonauthority; [runners_registry_test.go](../internal/httpapi/runners_registry_test.go) checks fallback, redaction and database-error propagation. | Existing tests distinguish omitted/empty target edits, registry policy and compatibility presentation. |
+| Host presentation and polling | `TestCompatibilityRunnersQueuesAndHeartbeat` in [build_host_runners_test.go](../internal/app/build_host_runners_test.go) checks bounded ordering, overlapping eligible queues and disabled hosts. [BuildHostsSection.test.tsx](../web/src/components/settings/BuildHostsSection.test.tsx) checks obsolete polls and mutation drafts; [useRunners.test.tsx](../web/src/hooks/useRunners.test.tsx) checks visibility, aging, serialization and effect replay. | These tests address stale client state without promising database snapshot consistency. |
+
+### Follow-ups and verification
+
+No new refactor or test-only follow-up is proposed or created from this scope.
+The evidence supports keeping the existing ports, worker distribution model
+and completion path. A broader migration or new abstraction is not recommended
+without a demonstrated failure or measured cost. No open-ticket duplicate
+search was performed; that limitation is not a claim that no related work exists.
+
+Tool discovery ran before detailed inspection. `web/package.json` and
+`.github/workflows/ci.yml` define Go formatting/vet/race tests, frontend
+tests/build and worker unittest/interop jobs. No configured duplication or
+complexity detector or separate lint command was found. `command -v` found
+none of `golangci-lint`, `gocyclo`, `gocognit`, `dupl`, `jscpd`, `eslint`,
+`staticcheck`, `ruff`, `pylint` or `radon`; none was installed.
+
+Executed on Linux/amd64 with Go 1.27.3:
+
+- `/usr/local/go/bin/gofmt -l cmd internal agent/build_host`: no output.
+- `GOTOOLCHAIN=local GOMAXPROCS=3 /usr/local/go/bin/go vet -p=3 ./...`:
+  passed with no diagnostics. Both checks preceded the base fast-forward;
+  that update changed only frontend files, so their Go inputs are unchanged.
+- The following focused command passed the eleven selected application tests.
+  The other three packages reported **no tests to run** for this expression:
+
+  ```sh
+  GOTOOLCHAIN=local GOMAXPROCS=3 /usr/local/go/bin/go test -p=3 \
+    ./internal/app ./internal/auth ./internal/store/sqlite ./internal/install \
+    -run '^(TestEnrollmentConcurrencyAndRollback|TestHeartbeatHistoryAndManagementIsolation|TestBuildJobsPublicationRollbackRetainsOrphan|TestBuildJobsRecoveryPreservesLiveReservation|TestBuildJobsSupersessionAndResultRace|TestDeploymentCycleAndCompletionAccounting|TestDeployWritesRollbackTogether|TestDeploymentPreservesMergeEffectsAcrossAttempts|TestWindowsSettingsDistributeAndRollback|TestWindowsHistoricalSettingsAreNotAuthoritative|TestCompatibilityRunnersQueuesAndHeartbeat)$' \
+    -count=1
+  ```
+
+- Signature and embedded-payload checks also passed:
+
+  ```sh
+  GOTOOLCHAIN=local GOMAXPROCS=3 /usr/local/go/bin/go test -p=3 \
+    ./internal/auth ./internal/install \
+    -run '^(TestHostSignature|TestHostSignatureProtocolVector|TestHostSignatureTampering|TestHostSignatureSharedVectors|TestRenderedInstallersEmbedCanonicalPayload)$' \
+    -count=1
+  ```
+
+`web/node_modules` was absent. `python3 -c 'import nacl; print(nacl.__version__)'`
+failed with `ModuleNotFoundError`; no dependencies were installed. Frontend,
+Python/interop, full Go/race, native Windows/macOS, hardware and live-network
+suites were not run for this documentation change. The checked-in
+`.ownership/windows_verify.ps1 -MaxJobs 2` remains available for native worker
+verification; its presence is not a passing result.
+
+Documentation validation checked the eight merge/parent references, selected
+path union, local file links and named symbols, preserved the previous report,
+reviewed additions for public-safe content, and ran `git diff --check`. The
+authored change is limited to `docs/architecture.md`. Earlier verification
+entries above belong to the preceding report and are not current execution
+claims.
