@@ -41,6 +41,7 @@ export const LIVE_LEASE = { holder: "worker", expires_at: "2026-03-10T13:00:00Z"
 /** A repo with defaults. */
 export function repo(id: number, name: string): Repo {
   return {
+    build_targets: [],
     id, provider: "manual", full_name: `example/${name}`, name, url: "", description: "", color: "", default_branch: "main",
     is_private: false, is_archived: false, synced_at: null, missing_since: null, treat_as_public: false, visibility: "public",
     require_spec_approval: false, require_design_approval: false, allow_agent_merge: false, deploy_mode: "off",

@@ -67,6 +67,24 @@ func TestImplementationBriefUsesPRStageHandoff(t *testing.T) {
 	}
 }
 
+func TestBriefBuildTargetFacts(t *testing.T) {
+	input := app.BriefInput{Repo: &domain.Repo{FullName: "example/app", BuildTargets: []domain.RepoBuildTarget{{OS: "windows", Preset: "cmake", Capabilities: []string{"gl", "msvc"}}, {OS: "linux", Preset: "script", Capabilities: []string{}}}}}
+	brief := app.RenderBrief(input)
+	for _, want := range []string{"windows / cmake (capabilities: [gl, msvc])", "linux / script (capabilities: [])"} {
+		if !strings.Contains(brief, want) {
+			t.Fatal(brief)
+		}
+	}
+	input.Repo.BuildTargets = nil
+	if !strings.Contains(app.RenderBrief(input), "no build-host verification configured") {
+		t.Fatal("missing empty policy")
+	}
+	input.Repo = nil
+	if strings.Contains(app.RenderBrief(input), "Build targets:") {
+		t.Fatal("targets without repo")
+	}
+}
+
 func TestDeployBriefSafetyAndPinnedEvidence(t *testing.T) {
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	for _, autonomous := range []bool{false, true} {

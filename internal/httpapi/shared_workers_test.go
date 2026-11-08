@@ -1,6 +1,7 @@
 package httpapi_test
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 )
@@ -57,6 +58,7 @@ func TestWindowsRunnerMasterSwitchIsHumanOnly(t *testing.T) {
 		t.Fatal("Windows should default off")
 	}
 	browser.asAgent(token).expect(http.StatusForbidden, "PATCH", "/api/v1/settings", `{"windows_runner_enabled":true}`)
+	seedWindowsSettingsHost(t, browser, false)
 	browser.expect(http.StatusOK, "PATCH", "/api/v1/settings", `{"windows_runner_enabled":true}`)
 	if got := browser.expect(http.StatusOK, "GET", "/api/v1/settings", "")["windows_runner_enabled"]; got != true {
 		t.Fatal("enable not persisted")
@@ -83,16 +85,41 @@ func TestAccountWeeklyCeilingsAndClaudePool(t *testing.T) {
 
 func TestWindowsParallelBuildSettings(t *testing.T) {
 	browser, token := signedIn(t)
+	seedWindowsSettingsHost(t, browser, true)
 	if got := browser.expect(http.StatusOK, "GET", "/api/v1/settings", "")["windows_parallel_builds"]; got != float64(3) {
 		t.Fatalf("default parallelism %v", got)
 	}
 	browser.asAgent(token).expect(http.StatusForbidden, "PATCH", "/api/v1/settings", `{"windows_parallel_builds":6}`)
-	for _, body := range []string{`{"windows_parallel_builds":0}`, `{"windows_parallel_builds":7}`, `{"windows_parallel_builds":1.5}`} {
+	for _, body := range []string{`{"windows_parallel_builds":0}`, `{"windows_parallel_builds":9}`, `{"windows_parallel_builds":1.5}`} {
 		browser.expect(http.StatusBadRequest, "PATCH", "/api/v1/settings", body)
 	}
 	browser.expect(http.StatusOK, "PATCH", "/api/v1/settings", `{"windows_parallel_builds":6}`)
 	got := browser.expect(http.StatusOK, "GET", "/api/v1/settings", "")
-	if got["windows_parallel_builds"] != float64(6) || got["windows_runner_enabled"] != false {
+	if got["windows_parallel_builds"] != float64(6) || got["windows_runner_enabled"] != true {
 		t.Fatalf("Windows scaling changed unrelated switch: %v", got)
 	}
+}
+
+func seedWindowsSettingsHost(t *testing.T, c *apiClient, enabled bool) int64 {
+	t.Helper()
+	id := seedBuildHost(t, c)
+	if _, err := c.store.SQL().Exec(`UPDATE build_hosts SET os='windows',max_parallel=3 WHERE id=?`, id); err != nil {
+		t.Fatal(err)
+	}
+	path := fmt.Sprintf("/api/v1/build-hosts/%d", id)
+	c.expect(200, "POST", path+"/approve", `{}`)
+	c.expect(200, "PATCH", path, fmt.Sprintf(`{"enabled":%t}`, enabled))
+	return id
+}
+
+func TestWindowsSettingsNoHostCompatibility(t *testing.T) {
+	c, _ := signedIn(t)
+	got := c.expect(200, "GET", "/api/v1/settings", "")
+	if got["windows_parallel_builds"] != float64(0) || got["windows_parallel_build_limit"] != float64(0) || got["windows_runner_enabled"] != false {
+		t.Fatal(got)
+	}
+	c.expect(409, "PATCH", "/api/v1/settings", `{"windows_runner_enabled":true}`)
+	c.expect(409, "PATCH", "/api/v1/settings", `{"windows_parallel_builds":1}`)
+	c.expect(200, "PATCH", "/api/v1/settings", `{"windows_runner_enabled":false}`)
+	c.expect(200, "PATCH", "/api/v1/settings", `{"codex_workers":4}`)
 }

@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { RegisteredRunnersContext } from "../../hooks/useRunners";
+import { RunnersContext, RegisteredRunnersContext } from "../../hooks/useRunners";
 import type { RegisteredRunnersSnapshot } from "../../api/types";
 import { RunnersStrip } from "./RunnersStrip";
 const hosts: RegisteredRunnersSnapshot = {
@@ -90,4 +90,12 @@ it("marks retained readings stale separately from reported connectivity", () => 
   expect(d.textContent).toContain("Status reading is stale");
   expect(d.textContent).toContain("Last reported online");
   expect(d.textContent).not.toContain("Offline with queued work");
+});
+
+it("suppresses the legacy row for registry snapshots and retains file fallback",()=>{
+ const now=Date.now();
+ const snapshot={observed_at:new Date(now).toISOString(),host:"File builder",enabled:true,parallel_builds:1,blocked:"" as const,blocked_since:null,slots:[],queue:[]};
+ const render=(registry:boolean)=>renderToStaticMarkup(<RunnersContext value={{snapshot:registry?{...snapshot,hosts:[]}:snapshot,now}}><RegisteredRunnersContext value={{snapshot:hosts,stale:false,error:null,refresh:()=>{}}}><RunnersStrip/></RegisteredRunnersContext></RunnersContext>);
+ expect(render(true)).not.toContain('aria-label="Windows build slots"');
+ expect(render(false)).toContain('aria-label="Windows build slots"');
 });

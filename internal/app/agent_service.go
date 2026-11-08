@@ -192,7 +192,7 @@ func (s *AgentService) tryClaim(ctx context.Context, actor domain.Actor, request
 // nextClaimable runs inside the claim's write transaction, so the in-flight
 // count and the claim cannot race another claim.
 func (s *AgentService) nextClaimable(ctx context.Context, repos Repos, request claimRequest) (domain.Ticket, bool, error) {
-	settings, err := repos.Settings().Get(ctx)
+	settings, err := loadSettings(ctx, repos)
 	if err != nil {
 		return domain.Ticket{}, false, err
 	}
@@ -274,7 +274,7 @@ func heldByOverlap(ctx context.Context, repos Repos, ticket domain.Ticket) (bool
 // an autonomous ticket in flight, so only that claim is held back; one
 // already in flight can always be picked up again.
 func autonomousSlotsFull(ctx context.Context, repos Repos) (bool, error) {
-	settings, err := repos.Settings().Get(ctx)
+	settings, err := loadSettings(ctx, repos)
 	if err != nil {
 		return false, err
 	}

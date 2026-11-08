@@ -63,6 +63,7 @@ export type Provider = "github" | "bitbucket" | "forgejo" | "manual";
 
 /** A code repository tickets can target. */
 export interface Repo {
+  build_targets: RepoBuildTarget[];
   id: number;
   provider: Provider;
   /** e.g. "acme/api". */
@@ -112,8 +113,15 @@ export interface ManualRepoInput {
   color: string;
 }
 
+export interface RepoBuildTarget {
+  os: BuildHostOS;
+  capabilities: string[];
+  preset: "dotnet" | "cmake" | "script";
+}
+
 /** Body of PATCH /repos/{id}. */
 export type RepoEdit = Partial<{
+  build_targets: RepoBuildTarget[];
   color: string;
   description: string;
   treat_as_public: boolean;
@@ -540,6 +548,7 @@ export interface RunnerQueued {
 
 /** The Windows build host's live state; observed_at is null when unknown. */
 export interface RunnersSnapshot {
+ hosts?: (Omit<RunnersSnapshot, "hosts"> & {id: number; os: BuildHostOS; online: boolean})[];
  observed_at: string | null;
  host: string;
  enabled: boolean;

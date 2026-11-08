@@ -668,8 +668,21 @@ for prerequisites, services, resource limits and uninstall instructions.
 
 ### Build-host presentation
 
-Human sessions can manage registered hosts in Settings. The legacy
-`GET /api/v1/runners` feed remains independent of registered hosts.
+Human sessions can manage registered hosts in Settings. `GET /api/v1/runners`
+uses approved registry hosts when any exist. It keeps its single-host fields
+and adds a `hosts` array, ordered by ID, whose entries also expose `id`, `os`
+and `online`. The top-level view selects the first Windows host, or the first
+host when none uses Windows. Disabled and offline hosts still select registry
+mode. With no approved host, the endpoint returns the sanitized file feed
+without a `hosts` property; registry errors do not select the file feed.
+
+Registry `observed_at` values are the host's last heartbeat, or null before
+its first report. Slots include every unreleased assignment, even after
+completion or a capacity reduction. Cancelled and superseded jobs carry
+`orphan:true`. Per-host queues contain up to 40 matching queued jobs, ordered
+by creation time and ID. These are eligible jobs, so the same job can appear
+under more than one host. The compatibility endpoint is read-only and requires
+a human session.
 
 `POST /api/v1/build-hosts/pairing-codes` returns `code`, `expires_at`, and
 `public_base_url` from server configuration. The response is marked
@@ -728,3 +741,38 @@ lease: `deployed` enters Deployed; `failed` returns to Done blocked. Both save
 the summary and clear the lease. Summary is required, trimmed, limited to
 1,000 characters and subject to the agent text rules. No REST reporting or
 agent deployment-request endpoint is exposed.
+
+## Repository verification configuration
+
+Repository reads include `build_targets`, an ordered array. A person can replace
+it through `PATCH /api/v1/repos/{id}`, for example:
+
+```json
+{"build_targets":[{"os":"linux","capabilities":["cmake"],"preset":"cmake"}]}
+```
+
+An omitted field preserves the current configuration; `[]` clears it. Null,
+missing target fields, unknown target fields and invalid values receive `400`.
+Supported operating systems are `windows`, `linux` and `macos`; presets are
+`dotnet`, `cmake` and `script`. Each target permits up to 32 capability tokens
+matching `[a-z][a-z0-9_-]{0,31}`. Capabilities are sorted and deduplicated; targets
+that become identical are rejected. A repository permits at most 32 targets.
+Provider refreshes preserve this configuration. Brief facts include the targets,
+or explicitly state that verification is unconfigured. This setting declares
+policy; it does not itself enqueue work or enforce publication.
+
+The Windows fields on `GET /api/v1/settings` come from approved Windows hosts.
+`windows_runner_enabled` reports whether any are enabled;
+`windows_parallel_builds` sums enabled capacity, including offline hosts;
+`windows_parallel_build_limit` is eight times the approved Windows host count.
+Without approved Windows hosts, these fields are false, zero and zero.
+
+Human settings PATCH requests can still change the Windows fields. The enabled
+flag applies to every approved Windows host. A parallel total is spread evenly
+across all approved Windows hosts, including disabled ones, with remainder slots
+assigned in ID order. It must be between the host count and eight times that
+count (`400` otherwise). Changing capacity alone preserves enabled flags, so
+the returned enabled capacity can differ from the requested nominal total.
+Enabling or setting capacity without an approved Windows host receives `409`;
+disabling remains an idempotent success. Combined ordinary and host edits are
+atomic. Other operating systems and unapproved hosts are unaffected.

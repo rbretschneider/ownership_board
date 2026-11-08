@@ -88,6 +88,11 @@ func (s *RepoService) Restyle(ctx context.Context, actor domain.Actor, id int64,
 				return err
 			}
 		}
+		if style.BuildTargets != nil {
+			if err := repos.CodeRepos().SetBuildTargets(ctx, repo); err != nil {
+				return err
+			}
+		}
 		if style.ChangesHealthCheck() {
 			return repos.CodeRepos().SetHealthCheck(ctx, repo)
 		}

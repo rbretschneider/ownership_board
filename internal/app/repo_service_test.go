@@ -116,3 +116,59 @@ func TestOnlyPeopleChangeTheHealthCheckInterval(t *testing.T) {
 		t.Fatalf("interval %d after owner change and sync, want 12", got.HealthCheckEvery)
 	}
 }
+
+func TestRepoBuildTargetsSurviveProviderChanges(t *testing.T) {
+	source := &scriptedSource{names: []string{"example/app"}}
+	f := newFixture(t, source)
+	if err := f.repos.Sync(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	repo := f.repoNamed("example/app")
+	targets := []domain.RepoBuildTarget{{OS: "linux", Preset: "cmake"}}
+	if _, err := f.repos.Restyle(f.ctx, agent, repo.ID, domain.RepoStyle{BuildTargets: &targets}); err == nil {
+		t.Fatal("agent edit")
+	}
+	if _, err := f.repos.Restyle(f.ctx, owner, repo.ID, domain.RepoStyle{BuildTargets: &targets}); err != nil {
+		t.Fatal(err)
+	}
+	for _, names := range [][]string{{"example/app"}, {}, {"example/app"}} {
+		source.names = names
+		if err := f.repos.Sync(f.ctx); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.repoNamed("example/app"); len(got.BuildTargets) != 1 || got.BuildTargets[0].Preset != "cmake" {
+			t.Fatal(got)
+		}
+	}
+	empty := []domain.RepoBuildTarget{}
+	got, err := f.repos.Restyle(f.ctx, owner, repo.ID, domain.RepoStyle{BuildTargets: &empty})
+	if err != nil || len(got.BuildTargets) != 0 {
+		t.Fatal(got, err)
+	}
+}
+
+func TestRepoBuildTargetsCombinedEditRollback(t *testing.T) {
+	f := newFixture(t)
+	repo := f.repo("example/app")
+	for _, trigger := range []string{
+		`CREATE TRIGGER fail_repo_edit BEFORE UPDATE OF build_targets ON repos BEGIN SELECT RAISE(ABORT,'refused'); END`,
+		`CREATE TRIGGER fail_repo_edit BEFORE UPDATE OF health_check_every ON repos BEGIN SELECT RAISE(ABORT,'refused'); END`,
+	} {
+		if _, err := f.store.SQL().Exec(trigger); err != nil {
+			t.Fatal(err)
+		}
+		targets := []domain.RepoBuildTarget{{OS: "windows", Preset: "dotnet"}}
+		description := "Changed"
+		interval := 12
+		if _, err := f.repos.Restyle(f.ctx, owner, repo.ID, domain.RepoStyle{BuildTargets: &targets, Description: &description, HealthCheckEvery: &interval}); err == nil {
+			t.Fatal("expected failure")
+		}
+		got := f.repoNamed("example/app")
+		if len(got.BuildTargets) != 0 || got.Description != repo.Description || got.HealthCheckEvery != repo.HealthCheckEvery {
+			t.Fatal("partial edit", got)
+		}
+		if _, err := f.store.SQL().Exec(`DROP TRIGGER fail_repo_edit`); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

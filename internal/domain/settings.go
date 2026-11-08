@@ -12,7 +12,6 @@ const SettingAutonomousInFlightCap = "autonomous_in_flight_cap"
 const SettingCodexWorkers = "codex_workers"
 const SettingWindowsRunnerEnabled = "windows_runner_enabled"
 const SettingWindowsParallelBuilds = "windows_parallel_builds"
-const MaxWindowsParallelBuilds = 6
 const MaxCodexWorkers = 6
 const MaxClaudeWorkers = 6
 const SettingClaudeWorkers = "claude_workers"
@@ -29,12 +28,13 @@ const (
 
 // BoardSettings are the board-wide settings people change in Settings.
 type BoardSettings struct {
-	WindowsParallelBuilds int
-	WindowsRunnerEnabled  bool
-	CodexWorkers          int
-	ClaudeWorkers         int
-	CodexWeeklyLimit      int
-	ClaudeWeeklyLimit     int
+	WindowsParallelBuildLimit int
+	WindowsParallelBuilds     int
+	WindowsRunnerEnabled      bool
+	CodexWorkers              int
+	ClaudeWorkers             int
+	CodexWeeklyLimit          int
+	ClaudeWeeklyLimit         int
 	// AutonomousInFlightCap is how many autonomous tickets may be in design
 	// or build at once. While that many are, agents claim no further
 	// autonomous ticket from Ready; other work still flows.
@@ -54,20 +54,15 @@ type SettingsEdit struct {
 
 // DefaultBoardSettings are the settings of a new board.
 func DefaultBoardSettings() BoardSettings {
-	return BoardSettings{WindowsParallelBuilds: 3, AutonomousInFlightCap: DefaultAutonomousInFlightCap, CodexWorkers: 3, CodexWeeklyLimit: 100, ClaudeWeeklyLimit: 100}
+	return BoardSettings{AutonomousInFlightCap: DefaultAutonomousInFlightCap, CodexWorkers: 3, CodexWeeklyLimit: 100, ClaudeWeeklyLimit: 100}
 }
 
 // Apply validates edit and returns the settings with it applied.
 func (s BoardSettings) Apply(edit SettingsEdit) (BoardSettings, error) {
 	next := s
-	if edit.WindowsParallelBuilds != nil {
-		if *edit.WindowsParallelBuilds < 1 || *edit.WindowsParallelBuilds > MaxWindowsParallelBuilds {
-			return BoardSettings{}, Invalidf("windows_parallel_builds must be between 1 and %d", MaxWindowsParallelBuilds)
-		}
-		next.WindowsParallelBuilds = *edit.WindowsParallelBuilds
-	}
-	if edit.WindowsRunnerEnabled != nil {
-		next.WindowsRunnerEnabled = *edit.WindowsRunnerEnabled
+	// Windows edits require registry context and are handled by the application service.
+	if edit.WindowsParallelBuilds != nil || edit.WindowsRunnerEnabled != nil {
+		return BoardSettings{}, Invalidf("Windows settings require build host validation")
 	}
 	if edit.CodexWorkers != nil {
 		if *edit.CodexWorkers < 0 || *edit.CodexWorkers > MaxCodexWorkers {

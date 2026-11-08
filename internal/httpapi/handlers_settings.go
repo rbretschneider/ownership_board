@@ -56,5 +56,5 @@ func (s *server) editSettings(w http.ResponseWriter, r *http.Request, who caller
 }
 
 func toSettings(settings domain.BoardSettings) settingsDTO {
-	return settingsDTO{WindowsParallelBuilds: settings.WindowsParallelBuilds, WindowsParallelBuildLimit: domain.MaxWindowsParallelBuilds, AutonomousInFlightCap: settings.AutonomousInFlightCap, CodexWorkers: settings.CodexWorkers, ClaudeWorkers: settings.ClaudeWorkers, ClaudeWorkerLimit: domain.MaxClaudeWorkers, CodexWeeklyLimit: settings.CodexWeeklyLimit, ClaudeWeeklyLimit: settings.ClaudeWeeklyLimit, CodexWorkerLimit: domain.MaxCodexWorkers, WindowsRunnerEnabled: settings.WindowsRunnerEnabled}
+	return settingsDTO{WindowsParallelBuilds: settings.WindowsParallelBuilds, WindowsParallelBuildLimit: settings.WindowsParallelBuildLimit, AutonomousInFlightCap: settings.AutonomousInFlightCap, CodexWorkers: settings.CodexWorkers, ClaudeWorkers: settings.ClaudeWorkers, ClaudeWorkerLimit: domain.MaxClaudeWorkers, CodexWeeklyLimit: settings.CodexWeeklyLimit, ClaudeWeeklyLimit: settings.ClaudeWeeklyLimit, CodexWorkerLimit: domain.MaxCodexWorkers, WindowsRunnerEnabled: settings.WindowsRunnerEnabled}
 }

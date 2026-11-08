@@ -311,6 +311,15 @@ func (r *briefRenderer) repoFact(repo *domain.Repo, visibility domain.Visibility
 		fmt.Fprintf(&r.b, ", default branch `%s`", oneLine(repo.DefaultBranch))
 	}
 	r.b.WriteString("\n")
+	if len(repo.BuildTargets) == 0 {
+		r.b.WriteString("- Build targets: no build-host verification configured\n")
+	} else {
+		var targets []string
+		for _, t := range repo.BuildTargets {
+			targets = append(targets, fmt.Sprintf("%s / %s (capabilities: [%s])", t.OS, t.Preset, strings.Join(t.Capabilities, ", ")))
+		}
+		fmt.Fprintf(&r.b, "- Build targets: %s\n", strings.Join(targets, "; "))
+	}
 	if repo.AllowAgentMerge && allowMergeInstructions {
 		r.b.WriteString("- Merge policy: **the owner lets agents merge in this repo.** Once this ticket's PR is not a draft, every check has passed, and no review requests changes, merge it yourself (a merge commit, no force, no branch deletion) and report it merged. A failing or pending check, a requested change, or any doubt means leave it for the owner as usual.\n")
 	}

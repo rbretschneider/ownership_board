@@ -7,7 +7,8 @@ import (
 )
 
 func TestDisabledWindowsRunnerSkipsWaitingWorkUntilEnabled(t *testing.T) {
-	f := newFixture(t)
+	f := settingsFixture(t)
+	settingsHost(t, f, "windows", domain.BuildHostApproved, false, 3)
 	repo := f.repo("acme/windows")
 	id := f.ticket("Needs Windows", repo.ID)
 	f.toBuild(id)
