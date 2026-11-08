@@ -122,6 +122,7 @@ type RepoRepository interface {
 	Update(ctx context.Context, repo domain.Repo) error
 	SetGates(ctx context.Context, repo domain.Repo) error
 	SetBuildTargets(ctx context.Context, repo domain.Repo) error
+	SetOverlapIgnore(ctx context.Context, repo domain.Repo) error
 	// SetHealthCheck writes the health check interval.
 	SetHealthCheck(ctx context.Context, repo domain.Repo) error
 	// NextMergeSequence allocates the next repository-local completion position.

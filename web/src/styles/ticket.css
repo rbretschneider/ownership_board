@@ -908,7 +908,7 @@
 .settings .repo-gates, .settings .repo-visibility { padding-left: 0; gap: 0 18px; }
 .settings .repo-row__controls .switch { font-size: 0.8125rem; }
 
-.repo-build-targets { flex-basis: 100%; min-width: 0; margin-top: 8px; }
-.repo-build-targets fieldset { min-width: 0; border: 1px solid var(--border-strong); border-radius: var(--radius); }
+.repo-build-targets, .repo-overlap-ignore { flex-basis: 100%; min-width: 0; margin-top: 8px; }
+.repo-build-targets fieldset, .repo-overlap-ignore fieldset { min-width: 0; border: 1px solid var(--border-strong); border-radius: var(--radius); }
 .repo-build-targets__row { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-bottom: 8px; }
 .repo-build-targets__row label { display: grid; gap: 4px; font-size: .8125rem; }

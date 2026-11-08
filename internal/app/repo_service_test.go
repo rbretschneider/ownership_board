@@ -172,3 +172,45 @@ func TestRepoBuildTargetsCombinedEditRollback(t *testing.T) {
 		}
 	}
 }
+
+func TestRepoOverlapIgnoreEditsAndSync(t *testing.T) {
+	source := &scriptedSource{names: []string{"example/app"}}
+	f := newFixture(t, source)
+	if err := f.repos.Sync(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	repo := f.repoNamed("example/app")
+	patterns := []string{" src/*/Catalog.cpp "}
+	every := 3
+	style := domain.RepoStyle{OverlapIgnore: &patterns, HealthCheckEvery: &every}
+	if _, err := f.repos.Restyle(f.ctx, agent, repo.ID, style); domain.KindOf(err) != domain.KindForbidden {
+		t.Fatal(err)
+	}
+	saved, err := f.repos.Restyle(f.ctx, owner, repo.ID, style)
+	if err != nil || saved.OverlapIgnore[0] != "src/*/Catalog.cpp" || saved.HealthCheckEvery != 3 {
+		t.Fatal(saved, err)
+	}
+	for _, names := range [][]string{{"example/app"}, {}, {"example/app"}} {
+		source.names = names
+		if err := f.repos.Sync(f.ctx); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.repoNamed("example/app"); len(got.OverlapIgnore) != 1 || got.OverlapIgnore[0] != "src/*/Catalog.cpp" {
+			t.Fatal(got)
+		}
+	}
+	bad := []string{"../file.go"}
+	description := "changed"
+	every = 4
+	if _, err := f.repos.Restyle(f.ctx, owner, repo.ID, domain.RepoStyle{Description: &description, OverlapIgnore: &bad, HealthCheckEvery: &every}); err == nil {
+		t.Fatal("invalid update accepted")
+	}
+	if got := f.repoNamed("example/app"); got.Description == description || got.HealthCheckEvery != 3 || len(got.OverlapIgnore) != 1 {
+		t.Fatal(got)
+	}
+	patterns = []string{}
+	saved, err = f.repos.Restyle(f.ctx, owner, repo.ID, domain.RepoStyle{OverlapIgnore: &patterns})
+	if err != nil || saved.OverlapIgnore == nil || len(saved.OverlapIgnore) != 0 {
+		t.Fatal(saved, err)
+	}
+}

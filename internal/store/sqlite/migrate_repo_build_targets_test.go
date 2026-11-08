@@ -31,6 +31,10 @@ func TestRepoBuildTargetsMigration(t *testing.T) {
 		if _, err := db.Exec(`UPDATE repos SET build_targets='[{"os":"other","preset":"cmake","capabilities":[]}]'`); err != nil {
 			t.Fatal(err)
 		}
+		// The current adapter reads columns added after this migration too.
+		if err := m.Migrate(20); err != nil {
+			t.Fatal(err)
+		}
 		if _, err := (codeRepoRepo{q: db}).Get(context.Background(), 1); err == nil {
 			t.Fatal("corrupt target was ignored")
 		}

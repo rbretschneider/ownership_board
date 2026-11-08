@@ -10,6 +10,7 @@ import (
 // agnostic: repos are synced from hosting providers or added by hand, and a
 // ticket may have none until the agent works out where it belongs.
 type Repo struct {
+	OverlapIgnore []string
 	BuildTargets  []RepoBuildTarget
 	ID            int64
 	Provider      Provider
@@ -99,6 +100,7 @@ type ManualRepoDraft struct {
 
 // RepoStyle is what a person may change on any repo, synced or not.
 type RepoStyle struct {
+	OverlapIgnore *[]string
 	BuildTargets  *[]RepoBuildTarget
 	DeployMode    *DeployMode
 	Color         *string
@@ -140,7 +142,7 @@ func NewManualRepo(draft ManualRepoDraft, now time.Time) (Repo, error) {
 
 // NewSyncedRepo validates a provider listing as a new repo.
 func NewSyncedRepo(listing RepoListing, now time.Time) (Repo, error) {
-	repo := Repo{BuildTargets: []RepoBuildTarget{}, DeployMode: DeployModeOff, Provider: listing.Provider, CreatedAt: now, RequireSpecApproval: true, HealthCheckEvery: DefaultHealthCheckEvery}
+	repo := Repo{OverlapIgnore: []string{}, BuildTargets: []RepoBuildTarget{}, DeployMode: DeployModeOff, Provider: listing.Provider, CreatedAt: now, RequireSpecApproval: true, HealthCheckEvery: DefaultHealthCheckEvery}
 	if err := repo.Refresh(listing, now); err != nil {
 		return Repo{}, err
 	}
@@ -189,6 +191,13 @@ func (r Repo) IsMissing() bool {
 
 // Restyle applies a person's display changes.
 func (r *Repo) Restyle(style RepoStyle) error {
+	if style.OverlapIgnore != nil {
+		patterns, err := NormalizeRepoOverlapIgnore(*style.OverlapIgnore)
+		if err != nil {
+			return err
+		}
+		r.OverlapIgnore = patterns
+	}
 	if style.BuildTargets != nil {
 		targets, err := NormalizeRepoBuildTargets(*style.BuildTargets)
 		if err != nil {

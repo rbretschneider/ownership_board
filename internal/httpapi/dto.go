@@ -31,6 +31,7 @@ type oidcDTO struct {
 }
 
 type repoDTO struct {
+	OverlapIgnore   []string                 `json:"overlap_ignore"`
 	BuildTargets    []domain.RepoBuildTarget `json:"build_targets"`
 	ID              int64                    `json:"id"`
 	Provider        domain.Provider          `json:"provider"`
@@ -165,11 +166,14 @@ func toUser(user auth.User) userDTO {
 }
 
 func toRepo(repo domain.Repo) repoDTO {
+	if repo.OverlapIgnore == nil {
+		repo.OverlapIgnore = []string{}
+	}
 	if repo.BuildTargets == nil {
 		repo.BuildTargets = []domain.RepoBuildTarget{}
 	}
 	return repoDTO{
-		BuildTargets: repo.BuildTargets, ID: repo.ID, Provider: repo.Provider, FullName: repo.FullName, Name: repo.Name(), URL: repo.URL,
+		OverlapIgnore: repo.OverlapIgnore, BuildTargets: repo.BuildTargets, ID: repo.ID, Provider: repo.Provider, FullName: repo.FullName, Name: repo.Name(), URL: repo.URL,
 		Description: repo.Description, Color: repo.Color, DefaultBranch: repo.DefaultBranch,
 		IsPrivate: repo.IsPrivate, IsArchived: repo.IsArchived, SyncedAt: repo.SyncedAt, MissingSince: repo.MissingSince,
 		TreatAsPublic: repo.TreatAsPublic, Visibility: repo.Visibility(time.Now()),

@@ -16,7 +16,7 @@ type codeRepoRepo struct {
 
 const repoColumns = `id, provider, full_name, url, description, color, default_branch, is_private, is_archived, synced_at, created_at, missing_since, treat_as_public,
 	require_spec_approval, require_design_approval, allow_agent_merge,
-	health_check_every, health_checked_through_ticket, health_checked_at, merge_sequence, health_checked_through_merge_sequence, deploy_mode, build_targets`
+	health_check_every, health_checked_through_ticket, health_checked_at, merge_sequence, health_checked_through_merge_sequence, deploy_mode, build_targets, overlap_ignore`
 
 func (r codeRepoRepo) List(ctx context.Context) ([]domain.Repo, error) {
 	return r.query(ctx, `SELECT `+repoColumns+` FROM repos ORDER BY full_name COLLATE NOCASE, provider`)
@@ -36,6 +36,15 @@ func (r codeRepoRepo) ByProvider(ctx context.Context, provider domain.Provider) 
 }
 
 func (r codeRepoRepo) Insert(ctx context.Context, repo *domain.Repo) error {
+	patterns, err := domain.NormalizeRepoOverlapIgnore(repo.OverlapIgnore)
+	if err != nil {
+		return err
+	}
+	ignored, err := json.Marshal(patterns)
+	if err != nil {
+		return err
+	}
+	repo.OverlapIgnore = patterns
 	targets, err := domain.NormalizeRepoBuildTargets(repo.BuildTargets)
 	if err != nil {
 		return err
@@ -47,11 +56,11 @@ func (r codeRepoRepo) Insert(ctx context.Context, repo *domain.Repo) error {
 	repo.BuildTargets = targets
 	result, err := r.q.ExecContext(ctx,
 		`INSERT INTO repos (provider, full_name, url, description, color, default_branch, is_private, is_archived, synced_at, created_at, missing_since, treat_as_public,
-			require_spec_approval, require_design_approval, allow_agent_merge, health_check_every, deploy_mode, build_targets)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			require_spec_approval, require_design_approval, allow_agent_merge, health_check_every, deploy_mode, build_targets, overlap_ignore)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		string(repo.Provider), repo.FullName, repo.URL, repo.Description, repo.Color, repo.DefaultBranch,
 		boolToInt(repo.IsPrivate), boolToInt(repo.IsArchived), formatOptionalTime(repo.SyncedAt), formatTime(repo.CreatedAt), formatOptionalTime(repo.MissingSince), boolToInt(repo.TreatAsPublic),
-		boolToInt(repo.RequireSpecApproval), boolToInt(repo.RequireDesignApproval), boolToInt(repo.AllowAgentMerge), repo.HealthCheckEvery, repo.DeployMode, string(raw))
+		boolToInt(repo.RequireSpecApproval), boolToInt(repo.RequireDesignApproval), boolToInt(repo.AllowAgentMerge), repo.HealthCheckEvery, repo.DeployMode, string(raw), string(ignored))
 	if err != nil {
 		return conflictOr(err, "repo %s is already on the board", repo.FullName)
 	}
@@ -121,15 +130,21 @@ func (r codeRepoRepo) query(ctx context.Context, query string, args ...any) ([]d
 
 func scanRepo(row scanner) (domain.Repo, error) {
 	var repo domain.Repo
-	var provider, created, targets string
+	var provider, created, targets, ignored string
 	var isPrivate, isArchived, treatAsPublic, requireSpec, requireDesign, allowAgentMerge int
 	var synced, missing, checkedAt sql.NullString
 	var checkedThrough sql.NullInt64
 	err := row.Scan(&repo.ID, &provider, &repo.FullName, &repo.URL, &repo.Description, &repo.Color, &repo.DefaultBranch,
 		&isPrivate, &isArchived, &synced, &created, &missing, &treatAsPublic, &requireSpec, &requireDesign, &allowAgentMerge,
-		&repo.HealthCheckEvery, &checkedThrough, &checkedAt, &repo.MergeSequence, &repo.HealthCheckedThroughMergeSequence, &repo.DeployMode, &targets)
+		&repo.HealthCheckEvery, &checkedThrough, &checkedAt, &repo.MergeSequence, &repo.HealthCheckedThroughMergeSequence, &repo.DeployMode, &targets, &ignored)
 	if err != nil {
 		return domain.Repo{}, err
+	}
+	if err := json.Unmarshal([]byte(ignored), &repo.OverlapIgnore); err != nil {
+		return domain.Repo{}, fmt.Errorf("sqlite: repo %d overlap ignore: %w", repo.ID, err)
+	}
+	if repo.OverlapIgnore, err = domain.NormalizeRepoOverlapIgnore(repo.OverlapIgnore); err != nil {
+		return domain.Repo{}, fmt.Errorf("sqlite: repo %d overlap ignore: %w", repo.ID, err)
 	}
 	if err := json.Unmarshal([]byte(targets), &repo.BuildTargets); err != nil {
 		return domain.Repo{}, fmt.Errorf("sqlite: repo %d build targets: %w", repo.ID, err)
@@ -173,5 +188,18 @@ func (r codeRepoRepo) SetBuildTargets(ctx context.Context, repo domain.Repo) err
 		return err
 	}
 	_, err = r.q.ExecContext(ctx, `UPDATE repos SET build_targets = ? WHERE id = ?`, string(raw), repo.ID)
+	return err
+}
+
+func (r codeRepoRepo) SetOverlapIgnore(ctx context.Context, repo domain.Repo) error {
+	patterns, err := domain.NormalizeRepoOverlapIgnore(repo.OverlapIgnore)
+	if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(patterns)
+	if err != nil {
+		return err
+	}
+	_, err = r.q.ExecContext(ctx, `UPDATE repos SET overlap_ignore = ? WHERE id = ?`, string(raw), repo.ID)
 	return err
 }

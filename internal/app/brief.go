@@ -194,6 +194,10 @@ func renderBody(input BriefInput, limits briefLimits) string {
 	ticket := input.Detail.Ticket
 	fmt.Fprintf(&r.b, "# Ticket #%d\n\n", ticket.ID)
 	r.facts(input)
+	if input.Action == domain.ActionImplement && input.Repo != nil && len(input.Repo.OverlapIgnore) > 0 {
+		r.b.WriteString("## Shared registries\n\nthese files are shared registries; when merging main, keep both sides' entries.\n\n")
+		r.wholeField("Shared registry patterns", strings.Join(input.Repo.OverlapIgnore, "\n"), "")
+	}
 	fmt.Fprintf(&r.b, "%s\n\n", untrustedContentWarning)
 	r.field("Title", ticket.Title, "")
 	r.field("Request", ticket.Body, "No details were given beyond the title.")

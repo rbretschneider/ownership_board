@@ -123,3 +123,26 @@ func TestDeployBriefSafetyAndPinnedEvidence(t *testing.T) {
 		}
 	}
 }
+
+func TestRepoOverlapIgnoreBrief(t *testing.T) {
+	note := "these files are shared registries; when merging main, keep both sides' entries."
+	for _, action := range []domain.WorkAction{domain.ActionImplement, domain.ActionDesign, domain.ActionRefine} {
+		for _, health := range []bool{false, true} {
+			for _, patterns := range [][]string{nil, {"src/*/Catalog.cpp", "src/```data.go"}} {
+				input := app.BriefInput{Action: action, Repo: &domain.Repo{FullName: "example/app", OverlapIgnore: patterns}, Detail: app.TicketDetail{TicketSummary: app.TicketSummary{Ticket: domain.Ticket{IsHealthCheck: health, Body: strings.Repeat("long content ", 10000)}}}}
+				brief := app.RenderBrief(input)
+				want := action == domain.ActionImplement && len(patterns) > 0
+				if strings.Contains(brief, note) != want {
+					t.Fatal(action, health, want)
+				}
+				if want && !strings.Contains(brief, "````text\n"+strings.Join(patterns, "\n")+"\n````") {
+					t.Fatal("patterns not fenced")
+				}
+				input.Repo = nil
+				if strings.Contains(app.RenderBrief(input), note) {
+					t.Fatal("nil repo")
+				}
+			}
+		}
+	}
+}
