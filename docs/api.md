@@ -102,7 +102,7 @@ the repo approval rules, otherwise design. No human drop target selects PR.
 | POST   | `/api/v1/tickets/{id}/unblock` | `{comment?}` | `TicketDetail` |
 | DELETE | `/api/v1/tickets/{id}` | | `204` |
 | POST   | `/api/v1/repos` | `{full_name, url?, description?, color?}` | `Repo` (added by hand) |
-| PATCH  | `/api/v1/repos/{id}` | `{color?, description?, treat_as_public?, require_spec_approval?, require_design_approval?}` | `Repo` |
+| PATCH  | `/api/v1/repos/{id}` | `{color?, description?, treat_as_public?, require_spec_approval?, require_design_approval?, overlap_ignore?}` | `Repo` |
 | *      | `/api/v1/connections/...` | | Provider connections, admin only: see [connections.md](connections.md#api-admins-only-agents-get-403) |
 | GET    | `/api/v1/tokens` | | `Token[]` |
 | POST   | `/api/v1/tokens` | `{name, is_delegate?}` | `Token & {secret}` (the secret is shown once). `is_delegate` lets the token file autonomous tickets. |
@@ -194,6 +194,7 @@ type Provider = "github" | "bitbucket" | "forgejo" | "manual";
 type Repo = {
   id: number; provider: Provider;
   deploy_mode: "off" | "agent"; // human-controlled, default off
+  overlap_ignore: string[]; // human-controlled path/glob exclusions, default []
   full_name: string;       // "acme/api"
   name: string;            // "api"
   url: string; description: string; color: string; default_branch: string;
@@ -776,3 +777,33 @@ the returned enabled capacity can differ from the requested nominal total.
 Enabling or setting capacity without an approved Windows host receives `409`;
 disabling remains an idempotent success. Combined ordinary and host edits are
 atomic. Other operating systems and unapproved hosts are unaffected.
+
+### Repository overlap exclusions
+
+People may replace repository overlap exclusions with
+`PATCH /api/v1/repos/{id}`:
+
+```json
+{"overlap_ignore":["src/messages/Catalog.cpp","src/*/include/app/*/*ErrorCodes.h"]}
+```
+
+The response is the saved `Repo`. Repository representations in lists, board
+snapshots and work responses always include `overlap_ignore` as an array, default
+`[]`. Omitting the field preserves it; `{"overlap_ignore":[]}` clears it.
+Explicit `null`, null elements, non-string elements and non-arrays return `400`.
+Agent callers receive `403`; provider synchronization preserves the setting.
+Invalid combined edits leave all repository fields unchanged.
+
+Supply at most 100 patterns, each at most 200 Unicode characters after trimming
+surrounding whitespace. Blank patterns, invalid UTF-8, control characters, any
+`..`, absolute or Windows drive-qualified paths, empty or dot segments and invalid
+glob syntax return `400`. Use forward slashes. Matching is case-sensitive against
+the complete path, with an equal number of segments and Go `path.Match` per
+segment: `*`, `?` and character classes stay within a segment. Backslashes escape
+glob characters; `**` does not match recursively.
+
+Matching design files are excluded from overlap scheduling in addition to the
+built-in exclusions. A nonmatching shared file can still hold an unstarted build.
+Health-check candidates are exempt from overlap holds; other claim checks remain
+in effect. See [Per-repo overlap ignore](agents.md#per-repo-overlap-ignore) for
+configuration and merge guidance.

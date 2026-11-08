@@ -63,6 +63,7 @@ export type Provider = "github" | "bitbucket" | "forgejo" | "manual";
 
 /** A code repository tickets can target. */
 export interface Repo {
+  overlap_ignore: string[];
   build_targets: RepoBuildTarget[];
   id: number;
   provider: Provider;
@@ -121,6 +122,7 @@ export interface RepoBuildTarget {
 
 /** Body of PATCH /repos/{id}. */
 export type RepoEdit = Partial<{
+  overlap_ignore: string[];
   build_targets: RepoBuildTarget[];
   color: string;
   description: string;

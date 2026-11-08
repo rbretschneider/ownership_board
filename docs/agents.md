@@ -381,3 +381,29 @@ Lease expiry/release leaves deploying unchanged; the next worker must inspect
 for partial effects. Losing a lease requires stopping further mutations.
 Repository settings changes do not cancel queued attempts, while a person's
 move out of deploying clears the lease and prevents a stale report.
+
+## Per-repo overlap ignore
+
+People can configure **Files that never block parallel builds** in repository
+settings, or replace `overlap_ignore` through the repository PATCH API. Agents
+cannot change this setting. Use it for append-only registries such as message
+catalogs and error-code lists whose merge conflicts can be resolved mechanically.
+Other shared source files continue to hold unstarted builds while an overlapping
+build is under way. Built-in exclusions and automatic shared-file detection
+continue to apply.
+
+Enter one repository-relative path or glob per line, using forward slashes.
+Matching is case-sensitive against the entire path: each slash-separated segment
+uses Go `path.Match` syntax (`*`, `?`, and character classes). A star never crosses
+a slash, and `**` has no recursive meaning. For example,
+`src/*/include/app/*/*ErrorCodes.h` matches only paths with that number of
+segments. Backslashes escape glob characters; they are not directory separators.
+At most 100 entries of 200 Unicode characters each are accepted. Patterns cannot
+contain `..`, absolute or drive-qualified paths, empty or dot segments, control
+characters, or invalid glob syntax.
+
+Implementation briefs include configured patterns and shared-registry merge
+guidance. When merging the default branch, preserve both sides' registry entries.
+Exclusions permit parallel editing; they do not eliminate merge conflicts.
+Health-check candidates bypass overlap holds even without exclusions; all other
+claim eligibility rules still apply.

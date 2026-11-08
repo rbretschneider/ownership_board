@@ -5,6 +5,7 @@ import { decodeRepoFilter, encodeRepoFilter, repoColor, searchRepos } from "./re
 
 function repo(id: number, fullName: string, overrides: Partial<Repo> = {}): Repo {
   return {
+    overlap_ignore: [],
     build_targets: [],
     id, provider: "github", full_name: fullName, name: fullName.split("/").pop() ?? fullName,
     url: "", description: "", color: "", default_branch: "main",
