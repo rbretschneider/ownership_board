@@ -23,7 +23,17 @@ func projectWindowsSettings(settings domain.BoardSettings, hosts []domain.BuildH
 	settings.WindowsRunnerEnabled = false
 	settings.WindowsParallelBuilds = 0
 	settings.WindowsParallelBuildLimit = 0
-	for _, h := range windowsHosts(hosts) {
+	approved := windowsHosts(hosts)
+	if len(approved) == 0 {
+		// No approved Windows host yet: the pre-build-host values stay in
+		// force (read-only) so existing Windows verification keeps running.
+		if settings.LegacyWindowsRunnerEnabled && settings.LegacyWindowsParallelBuilds > 0 {
+			settings.WindowsRunnerEnabled = true
+			settings.WindowsParallelBuilds = settings.LegacyWindowsParallelBuilds
+		}
+		return settings
+	}
+	for _, h := range approved {
 		settings.WindowsParallelBuildLimit += 8
 		if h.Enabled {
 			settings.WindowsRunnerEnabled = true
@@ -77,6 +87,9 @@ func (s *BoardService) UpdateSettings(ctx context.Context, actor domain.Actor, e
 		n := len(hosts)
 		if n == 0 && (edit.WindowsParallelBuilds != nil || (edit.WindowsRunnerEnabled != nil && *edit.WindowsRunnerEnabled)) {
 			return domain.Conflictf("register and approve a Windows build host before enabling or configuring Windows builds")
+		}
+		if n == 0 && edit.WindowsRunnerEnabled != nil && !*edit.WindowsRunnerEnabled {
+			settings.LegacyWindowsRunnerEnabled = false
 		}
 		if edit.WindowsParallelBuilds != nil && (*edit.WindowsParallelBuilds < n || *edit.WindowsParallelBuilds > 8*n) {
 			return domain.Invalidf("windows_parallel_builds must be between %d and %d for %d approved Windows hosts", n, 8*n, n)

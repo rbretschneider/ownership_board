@@ -53,6 +53,24 @@ func (r settingsRepo) Get(ctx context.Context) (domain.BoardSettings, error) {
 			}
 		}
 	}
+	// Pre-build-host Windows values are read but never written here; the
+	// application decides whether they apply.
+	err = r.q.QueryRowContext(ctx, `SELECT value FROM board_settings WHERE key = ?`, domain.SettingWindowsRunnerEnabled).Scan(&raw)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return domain.BoardSettings{}, fmt.Errorf("sqlite: read legacy Windows setting: %w", err)
+	}
+	if err == nil {
+		settings.LegacyWindowsRunnerEnabled, _ = strconv.ParseBool(raw)
+	}
+	err = r.q.QueryRowContext(ctx, `SELECT value FROM board_settings WHERE key = ?`, domain.SettingWindowsParallelBuilds).Scan(&raw)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return domain.BoardSettings{}, fmt.Errorf("sqlite: read legacy Windows setting: %w", err)
+	}
+	if err == nil {
+		if n, e := strconv.Atoi(raw); e == nil && n >= 1 && n <= domain.MaxLegacyWindowsParallelBuilds {
+			settings.LegacyWindowsParallelBuilds = n
+		}
+	}
 	return settings, nil
 }
 
@@ -66,6 +84,15 @@ func (r settingsRepo) Save(ctx context.Context, settings domain.BoardSettings, a
 	for key, value := range map[string]int{domain.SettingClaudeWorkers: settings.ClaudeWorkers, domain.SettingCodexWeeklyLimit: settings.CodexWeeklyLimit, domain.SettingClaudeWeeklyLimit: settings.ClaudeWeeklyLimit} {
 		if _, err := r.q.ExecContext(ctx, `INSERT INTO board_settings (key,value,updated_by,updated_at) VALUES (?,?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_by=excluded.updated_by,updated_at=excluded.updated_at`, key, strconv.Itoa(value), actor.Name, formatTime(now)); err != nil {
 			return fmt.Errorf("sqlite: save account settings: %w", err)
+		}
+	}
+	// The legacy Windows switch can only be turned off, never on: new Windows
+	// capacity comes from approved build hosts.
+	if !settings.LegacyWindowsRunnerEnabled {
+		if _, err := r.q.ExecContext(ctx,
+			`UPDATE board_settings SET value = 'false', updated_by = ?, updated_at = ? WHERE key = ? AND value <> 'false'`,
+			actor.Name, formatTime(now), domain.SettingWindowsRunnerEnabled); err != nil {
+			return fmt.Errorf("sqlite: save legacy Windows setting: %w", err)
 		}
 	}
 	_, err := r.q.ExecContext(ctx,
