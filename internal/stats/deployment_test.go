@@ -35,3 +35,20 @@ func TestDeploymentKeepsOriginalCompletionTime(t *testing.T) {
 		t.Fatalf("double counted deployment: %+v", all.All)
 	}
 }
+
+func TestDeployingAndRetriesKeepOriginalMergeMetrics(t *testing.T) {
+	b := newBoard(t)
+	b.ticket(1, true, 60*day).to(domain.StageBuild, 50*day).to(domain.StageDone, 40*day).to(domain.StageDeploying, 3*day).to(domain.StageDone, 2*day).to(domain.StageDeploying, hour)
+	r := b.report(7)
+	if r.All.Merged != 0 || r.All.MergedRecent != 0 || len(r.Repos) != 0 {
+		t.Fatalf("deployment reopened metrics: %+v", r)
+	}
+	for _, w := range r.All.WIP {
+		if w.Count != 0 {
+			t.Fatalf("deployment counted as WIP: %+v", w)
+		}
+	}
+	if r := b.report(90); r.All.Merged != 1 {
+		t.Fatalf("retry counted twice: %+v", r.All)
+	}
+}

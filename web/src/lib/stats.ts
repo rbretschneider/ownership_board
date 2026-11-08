@@ -36,6 +36,7 @@ const STAGE_NAMES: Record<StageId, string> = {
   build: "Build",
   pr: "Review (PR)",
   done: "Merged",
+  deploying: "Deploying",
   deployed: "Deployed",
 };
 

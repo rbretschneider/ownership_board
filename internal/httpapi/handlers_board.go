@@ -22,6 +22,7 @@ func (s *server) boardRoutes(rt *router) {
 	rt.anyone("PUT /api/v1/tickets/{id}/spec", s.saveSpec)
 	rt.anyone("PUT /api/v1/tickets/{id}/design", s.saveDesign)
 	rt.anyone("POST /api/v1/tickets/{id}/block", s.block)
+	rt.human("POST /api/v1/tickets/{id}/deploy", s.requestDeploy)
 	rt.human("POST /api/v1/tickets/{id}/approve", s.approve)
 	rt.human("POST /api/v1/tickets/{id}/request-changes", s.requestChanges)
 	rt.human("POST /api/v1/tickets/{id}/unblock", s.unblock)

@@ -324,8 +324,8 @@ A repository's `deploy_mode` selects what happens after a reported PR merge.
 The default, `off`, completes the ticket in `deployed` / `deployed`. The
 `agent` policy keeps it in `merged` / `done` pending deployment. Unassigned
 tickets complete directly in Deployed. Changing this setting applies to later
-PR reports; it does not move existing tickets. Deployment execution is a
-separate operation and is not provided by this change.
+PR reports; it does not move existing tickets. Deployment is executed by
+the external worker, following the repository's own release procedure.
 
 Only people may change the setting. People may also drag tickets into either
 completion lane: Merged selects `done`; Deployed selects `deployed` and adds
@@ -335,7 +335,7 @@ does not add another deployment entry. Agents continue to submit builds to
 
 The catalog labels `done` as Merged. Clients may display Awaiting deploy for
 that stage when its repository uses `agent`. The Deployed label is fixed.
-Both completed stages satisfy dependencies and count toward completion
+Done, Deploying and Deployed satisfy dependencies and count toward completion
 statistics. A later move from Merged to Deployed preserves the original
 completion time, sequence and dependency-release effects. Deployed sends a
 low-priority completion notification, subject to the usual suppression of a
@@ -346,3 +346,42 @@ become Deployed/Deployed. Historical entries and other ticket fields remain
 unchanged. Downgrading maps Deployed back to Merged/Done and removes the
 setting, losing deployment distinctions. This amendment describes the server
 contract; frontend deployment controls are delivered separately.
+
+### Person-requested deployment
+
+An unblocked ticket at `merged/done` in an agent-deployment repository accepts
+`POST /api/v1/tickets/{id}/deploy` from a person. The server records the
+requester's binding decision, enters `merged/deploying`, and preserves its
+position in Merged. Agents cannot request deployment, including through lane
+moves. Ineligible or repeated requests return 409.
+
+Deploying is an agent stage owned by the agent unless owner attention is
+required. It is claimed before build, design, refine and ready work. It
+remains merge-complete: dependencies, completion times, merge sequences and
+review scheduling are preserved throughout attempts and retries. It does not
+consume autonomous capacity. No storage migration is needed for this stage.
+
+With a live matching lease, `report_deploy` takes `id`, `outcome` and a
+required summary (1–1,000 characters after trimming). `deployed` stores the
+summary as a comment and enters `deployed/deployed`. `failed` stores the
+summary and returns to `merged/done`, blocked with a single-line reason.
+`mark_blocked` while deploying has the same failure result. Both outcomes
+clear the lease. Only people can unblock; retry requires another request.
+Failure sends one high-priority blocked alert, without a spurious merged
+note. Success sends one quiet deployed note. Notification bodies are fixed
+text and exclude agent summaries.
+
+Expiry and explicit release leave deploying intact for the next claimant.
+Workers inspect current state before any external operation, as earlier work
+may have applied partially. They must use documented release commands and
+existing access, establish intended identity, compare the actual running
+version/digest and perform documented health checks before success. Missing
+instructions/access or unverifiable identity are failures. Lease loss stops
+further mutations; leases cannot themselves fence external systems. The
+repository's documented locks remain necessary, including between tickets.
+
+Policy changes after queueing do not cancel work or prevent reporting. A
+person can move the ticket away, clearing the lease and rejecting stale
+reports; this controls board state rather than cancelling an external process.
+Drain deploying work before rolling back to an older server binary that
+cannot interpret this stage. UI request controls are a separate addition.

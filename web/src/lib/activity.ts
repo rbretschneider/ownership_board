@@ -19,7 +19,7 @@ export function cardActivity(t: TicketSummary, now = Date.now()): { label: strin
     if (signal.includes("preparing workspace")) return { label: "Preparing", working: true, blocked: false };
     if (signal.includes("awaiting review")) return { label: "Awaiting review", working: false, blocked: false };
     if (signal.includes("adversarial review")) return { label: "Reviewing", working: true, blocked: false };
-    const labels = { refine: "Refining", ready: "Starting", design: "Designing", build: "Building", spec_review: "Reviewing", design_review: "Reviewing", pr: "Reviewing" };
+    const labels = { deploying: "Deploying", refine: "Refining", ready: "Starting", design: "Designing", build: "Building", spec_review: "Reviewing", design_review: "Reviewing", pr: "Reviewing" };
     return { label: labels[t.stage], working: true, blocked: false };
   }
   return { label: ["spec_review", "design_review", "pr"].includes(t.stage) ? "Awaiting review" : "Queued", working: false, blocked: false };

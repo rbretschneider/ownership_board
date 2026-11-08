@@ -4,7 +4,7 @@
 export type LaneId = "todo" | "in_progress" | "merged" | "deployed";
 
 /** A ticket's place within its lane (each stage belongs to one lane). */
-export type StageId = "refine" | "spec_review" | "ready" | "design" | "design_review" | "build" | "pr" | "done" | "deployed";
+export type StageId = "refine" | "spec_review" | "ready" | "design" | "design_review" | "build" | "pr" | "done" | "deploying" | "deployed";
 
 export type DeployMode = "off" | "agent";
 
