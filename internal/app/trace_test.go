@@ -394,7 +394,7 @@ func (f *fixture) inReview(title string) int64 {
 	if _, err := f.board.Edit(f.ctx, agent, id, domain.TicketEdit{PRURL: &pr}); err != nil {
 		f.t.Fatalf("link PR: %v", err)
 	}
-	f.move(agent, id, domain.LaneReview, nil)
+	f.move(agent, id, domain.LaneInProgress, nil)
 	return id
 }
 
@@ -404,7 +404,7 @@ func TestMergedPullRequestMovesReviewToMerged(t *testing.T) {
 	if _, err := f.board.ReportPullRequest(f.ctx, agent, id, app.PullRequestOpen, ""); err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	f.requireLane(id, domain.LaneReview)
+	f.requireLane(id, domain.LaneInProgress)
 	if _, err := f.board.ReportPullRequest(f.ctx, agent, id, app.PullRequestMerged, "merged as abc1234"); err != nil {
 		t.Fatalf("merged: %v", err)
 	}
@@ -511,6 +511,31 @@ func TestRelatedCreationDependenciesAndEventsCommitTogether(t *testing.T) {
 			}
 			if published != 1 || len(child.Related) != 2 {
 				t.Fatalf("events %d, links %d", published, len(child.Related))
+			}
+		})
+	}
+}
+
+func TestPRReconciliationDoesNotInventLaneMoves(t *testing.T) {
+	for _, state := range []app.PullRequestState{app.PullRequestClosed, app.PullRequestRepair, app.PullRequestOpen} {
+		t.Run(string(state), func(t *testing.T) {
+			f := newFixture(t)
+			id := f.inReview("PR state")
+			before := f.detail(id)
+			after, err := f.board.ReportPullRequest(f.ctx, agent, id, state, "provider evidence")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if after.Ticket.Lane != domain.LaneInProgress || !after.Ticket.LaneChangedAt.Equal(before.Ticket.LaneChangedAt) {
+				t.Fatal("changed lane")
+			}
+			for _, entry := range after.Timeline[len(before.Timeline):] {
+				if entry.Type == domain.TimelineMoved {
+					t.Fatal("fictitious lane move")
+				}
+			}
+			if state == app.PullRequestOpen && after.Ticket.Stage != domain.StagePR {
+				t.Fatal("open PR changed stage")
 			}
 		})
 	}

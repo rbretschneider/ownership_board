@@ -37,14 +37,13 @@ ticket when you hand it on.
 | Lane | Stages | Who acts |
 |---|---|---|
 | Todo | refine → spec_review → ready | agent refines; owner approves the spec |
-| In Progress | design → design_review → build | agent designs; owner approves the design; agent builds |
-| Review | pr | owner reviews and merges |
+| In Progress | design → design_review → build → pr | agent designs and builds; owner approves gated design and reviews the PR |
 | Merged | done | nobody |
 
 Each repo says whether the spec and design checkpoints apply; the board
 skips a checkpoint that is off. You hand a ticket on with `save_spec` or
 `save_design` with `submit: true`, `ask_questions`, `mark_blocked`, or (only
-from build, with the PR open) `move_ticket` to `review`. Each of these ends
+from build, with the PR open) `move_ticket` with `lane: "in_progress"` to enter stage `pr`. Each of these ends
 your lease.
 
 ## Ground rules (every step)
@@ -83,7 +82,7 @@ refuses `ask_questions` on it. Wherever this file says to ask the owner:
   alternatives, why) and carry on;
 - where it says to ask because work keeps failing (security REVISE twice, QA
   failing after escalation), call `mark_blocked` with the report instead. That
-  is the only way an autonomous ticket stops before Review.
+  is the only way an autonomous ticket stops before the PR stage.
 
 No person reads the design, so a second model does, and every tier gets the
 GPT code review (except when Codex built): see steps 4 and 5. The owner
@@ -109,7 +108,10 @@ directory this session started in. The run folder for a ticket is
 
 ## Step 1: close finished reviews
 
-Call `list_tickets` with `lane: "review"`. For each ticket with a PR, check the
+Call `list_tickets` with `lane: "in_progress"`. For each ticket with a PR URL,
+call `get_ticket` and confirm stage `pr` before checking the PR. A PR URL on a
+build ticket may belong to an active repair; do not report its provider state.
+For confirmed PR-stage tickets, check the
 PR right now with `gh pr view <url> --json state,mergedAt,mergeCommit`
 (Forgejo/Bitbucket: their CLI or API). Then `report_pr_state`:
 
@@ -124,13 +126,13 @@ PR right now with `gh pr view <url> --json state,mergedAt,mergeCommit`
   `merged` with the merge commit) only when ALL hold: not a draft; every
   check in the rollup is SUCCESS or SKIPPED (none pending, none failed);
   `reviewDecision` is not `CHANGES_REQUESTED`; `mergeable` is `MERGEABLE`.
-  A healthy pending check stays in Delivery. A conflict, failed check or
+  A healthy pending check stays in the PR stage within In Progress. A conflict, failed check or
   requested change returns to agents with `report_pr_state state: "repair"`
   and current evidence. Repair does not grant merge permission. Never
   force, never delete the branch, never merge a PR whose repo does not show
   that policy line.
 - still open with healthy pending checks, or green without merge permission →
-  leave in Delivery. Repairs follow the rule below.
+  leave in the PR stage within In Progress. Repairs follow the rule below.
 
 For **every** open PR, including repos without agent merge permission, read
 `mergeable,reviewDecision,statusCheckRollup` from GitHub in this pass.
@@ -422,7 +424,7 @@ do it now instead of handing it off.
   which were fixed, and each one not fixed with its reason (or why the review
   was skipped). When Codex built, it also names the builder per
   commit range and the reviewing family.
-- `move_ticket` to `review` only if the final QA and security re-reviews are
+- `move_ticket` with `lane: "in_progress"` to enter stage `pr` only if the final QA and security re-reviews are
   clear or notes only; else follow the terminal rules (`mark_blocked` if
   autonomous and QA failed, else comment and `ask_questions`).
 
@@ -436,7 +438,7 @@ both stories, run the required checks, commit and push normally. Never
 force-push. Read requested reviews and failed job logs and repair the cause;
 do not remove tests, bypass security gates or weaken required checks.
 Use the selected builder and independent reviewers, just as for a new build.
-Return the same PR to Review once repairs are pushed and checks pass.
+Return the same PR to stage `pr` within In Progress once repairs are pushed and checks pass.
 Healthy pending checks follow the waiting rules below. Record what changed
 in plain product language. Escalate only an actual owner decision, missing
 access, or an exhausted documented recovery path with concrete evidence.
@@ -488,7 +490,7 @@ End the pass with one line per thing you did, for example:
 - `#12 PR merged → Merged`
 - `#15 refined on haiku → spec submitted (2 decisions)`
 - `#16 designed (tier normal) → design submitted, security APPROVE`
-- `#17 built (tier normal) → PR https://… (CI green, GPT review 3 findings, 2 fixed) → Review`
-- #18 built by codex (tier normal) → Claude QA 1 finding fixed by codex, security APPROVE, GPT review skipped (builder codex) → PR https://… → Review
+- `#17 built (tier normal) → PR https://… (CI green, GPT review 3 findings, 2 fixed) → In Progress (PR open)`
+- #18 built by codex (tier normal) → Claude QA 1 finding fixed by codex, security APPROVE, GPT review skipped (builder codex) → PR https://… → In Progress (PR open)
 - `#18 designed (tier small, autonomous) → GPT design review 1 finding, fixed → build`
 - `Board idle`

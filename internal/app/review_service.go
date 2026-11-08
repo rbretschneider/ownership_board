@@ -81,7 +81,7 @@ func (s *BoardService) reviewOutcome(actor domain.Actor, state PullRequestState,
 		}
 		from, fromLane := ticket.Stage, ticket.Lane
 		ticket.PullRequestClosed(rank, s.clock.Now())
-		entries := append([]domain.TimelineEntry{comment}, stageEntries(*ticket, from, fromLane, actor, true)...)
+		entries := append([]domain.TimelineEntry{comment}, stageEntries(*ticket, from, fromLane, actor, fromLane != ticket.Lane)...)
 		blocked := domain.NewEntry(ticket.ID, domain.TimelineBlocked, domain.SystemActor, ticket.UpdatedAt).WithBody(ticket.BlockedReason)
 		return append(entries, blocked), nil
 	}

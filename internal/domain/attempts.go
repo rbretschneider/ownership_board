@@ -22,7 +22,7 @@ type StageAttempts struct {
 	Review int
 	// ReviewFixes counts review rounds that sent the work back for fixes.
 	ReviewFixes int
-	// PR counts entries into the review lane with a pull request.
+	// PR counts entries into the PR stage with a pull request.
 	PR int
 	// PRRepairs counts returns from an open PR to build (failed check,
 	// conflict or requested change).

@@ -25,6 +25,8 @@ merged:
  Queued +3 │ Queued +2 │ Queued +1 │ Up next │ In progress │ PR │ Merged
 ```
 
+- **PR comes from stage.** The PR column groups stage `pr` tickets within
+  the board lane In Progress; it is not a separate board lane.
 - **Simple by default.** Design, build, Windows verification and review are
   one **In progress** column: the owner cares that work moves, not how. "Show
   stages" splits it into Design / Build / Windows / Review (and Up next into

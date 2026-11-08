@@ -501,3 +501,55 @@ func TestHealthCheckFollowUpHTTPQuota(t *testing.T) {
 		t.Fatal("refused request left an orphan")
 	}
 }
+
+func TestThreeLaneCatalogAndPRSubmission(t *testing.T) {
+	for _, transport := range []string{"http", "mcp"} {
+		for _, lane := range []string{"in_progress", "review"} {
+			t.Run(transport+"/"+lane, func(t *testing.T) {
+				browser, token := signedIn(t)
+				response, err := browser.http.Get(browser.base + "/api/v1/lanes")
+				if err != nil {
+					t.Fatal(err)
+				}
+				var catalog []map[string]any
+				err = json.NewDecoder(response.Body).Decode(&catalog)
+				response.Body.Close()
+				if err != nil || response.StatusCode != http.StatusOK || len(catalog) != 3 {
+					t.Fatalf("lane endpoint: %v %v", catalog, err)
+				}
+				board := browser.expect(http.StatusOK, "GET", "/api/v1/board", "")
+				lanes := board["lanes"].([]any)
+				if len(lanes) != 3 {
+					t.Fatalf("lanes: %v", lanes)
+				}
+				for i, id := range []string{"todo", "in_progress", "merged"} {
+					if lanes[i].(map[string]any)["id"] != id {
+						t.Fatal(lanes)
+					}
+				}
+				repo := browser.expect(http.StatusCreated, "POST", "/api/v1/repos", `{"full_name":"acme/api"}`)
+				ticket := browser.expect(http.StatusCreated, "POST", "/api/v1/tickets", `{"kind":"story","title":"example","repo_id":`+jsonNumber(repo["id"])+`}`)
+				path := "/api/v1/tickets/" + jsonNumber(ticket["id"])
+				browser.expect(http.StatusOK, "PUT", path+"/design", `{"design":"A plan."}`)
+				browser.expect(http.StatusOK, "POST", path+"/move", `{"lane":"in_progress"}`)
+				browser.expect(http.StatusBadRequest, "POST", path+"/move", `{"lane":"review"}`)
+				agent := browser.asAgent(token)
+				agent.expect(http.StatusForbidden, "POST", path+"/move", `{"lane":"`+lane+`"}`)
+				agent.expect(http.StatusOK, "POST", "/api/v1/agent/claim", `{}`)
+				browser.expect(http.StatusOK, "PATCH", path, `{"pr_url":"https://example.com/pr/1"}`)
+				if transport == "http" {
+					agent.expect(http.StatusOK, "POST", path+"/move", `{"lane":"`+lane+`"}`)
+				} else {
+					reply := agent.expect(http.StatusOK, "POST", "/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"move_ticket","arguments":{"id":`+jsonNumber(ticket["id"])+`,"lane":"`+lane+`"}}}`)
+					if reply["result"].(map[string]any)["isError"].(bool) {
+						t.Fatal(reply)
+					}
+				}
+				detail := browser.expect(http.StatusOK, "GET", path, "")
+				if detail["lane"] != "in_progress" || detail["stage"] != "pr" || detail["needs_owner"] != true || detail["lease"] != nil {
+					t.Fatalf("PR detail: %v", detail)
+				}
+			})
+		}
+	}
+}

@@ -120,7 +120,7 @@ func TestApplyRejectsScriptURLAndLeavesTicketUntouched(t *testing.T) {
 
 func TestAutonomousDeliveryStaysWithAgents(t *testing.T) {
 	ticket := mustTicket(t)
-	ticket.Stage, ticket.Lane, ticket.IsAutonomous = domain.StagePR, domain.LaneReview, true
+	ticket.Stage, ticket.Lane, ticket.IsAutonomous = domain.StagePR, domain.LaneInProgress, true
 	if ticket.NeedsOwner(0) || ticket.Owner(0) != domain.OwnerAgent {
 		t.Fatal("autonomous delivery asked for its owner")
 	}
