@@ -41,7 +41,7 @@ func TestHostReportAndConsumption(t *testing.T) {
 		t.Fatal("reused")
 	}
 	e = db.Write(ctx, func(r app.Repos) error {
-		return r.BuildHosts().RecordHeartbeat(ctx, h.ID, domain.BuildHostReport{Facts: []byte(`{}`), RunningJobIDs: []int64{}, FreeDiskBytes: 3}, now)
+		return r.BuildHosts().RecordHeartbeat(ctx, h.ID, domain.BuildHostReport{Facts: []byte(`{}`), RunningJobIDs: []domain.BuildHostJobID{}, FreeDiskBytes: 3}, now)
 	})
 	if e == nil {
 		t.Fatal("pending heartbeat")
@@ -51,7 +51,7 @@ func TestHostReportAndConsumption(t *testing.T) {
 func TestBuildHostTelemetryRoundTrip(t *testing.T) {
 	db, h := hostFixture(t)
 	ctx := context.Background()
-	h.RunningJobIDs = []int64{3, 7}
+	h.RunningJobIDs = []domain.BuildHostJobID{"3", "7"}
 	free := int64(123)
 	h.FreeDiskBytes = &free
 	if e := db.Write(ctx, func(r app.Repos) error { return r.BuildHosts().Insert(ctx, &h) }); e != nil {
