@@ -39,6 +39,10 @@ type apiClient struct {
 }
 
 func newServer(t *testing.T) *apiClient {
+	return newServerWithPublicBaseURL(t, "")
+}
+
+func newServerWithPublicBaseURL(t *testing.T, publicBaseURL string) *apiClient {
 	t.Helper()
 	ctx := context.Background()
 	db, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "api.db"))
@@ -70,9 +74,10 @@ func newServer(t *testing.T) *apiClient {
 		t.Fatal(err)
 	}
 	handler := httpapi.New(httpapi.Deps{
-		BuildJobs:  app.NewBuildJobService(db, clk, bundles, logger),
-		BuildHosts: app.NewBuildHostService(db, clk, logger, nil),
-		Board:      services.Board, Agents: services.Agents, Repos: services.Repos, Auth: authService,
+		PublicBaseURL: publicBaseURL,
+		BuildJobs:     app.NewBuildJobService(db, clk, bundles, logger),
+		BuildHosts:    app.NewBuildHostService(db, clk, logger, nil),
+		Board:         services.Board, Agents: services.Agents, Repos: services.Repos, Auth: authService,
 		OIDC: auth.NewOIDC(auth.OIDCConfig{}, authService), Broker: hub, Health: db, Logger: logger,
 		MCP:         mcp.NewServer("test", logger, mcp.BoardTools(services)...),
 		Connections: connections.NewService(catalog, services.Repos, notify.Noop{}, connections.Policy{}),

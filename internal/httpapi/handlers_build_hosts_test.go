@@ -70,7 +70,7 @@ func TestBuildHostAPI(t *testing.T) {
 		t.Fatal(host)
 	}
 	code := browser.expect(201, "POST", "/api/v1/build-hosts/pairing-codes", "")
-	if len(code) != 2 || len(code["code"].(string)) != 26 || code["expires_at"] == nil {
+	if len(code) != 3 || len(code["code"].(string)) != 26 || code["expires_at"] == nil {
 		t.Fatal(code)
 	}
 	for _, route := range []struct{ method, path string }{{"POST", "/api/v1/build-hosts/pairing-codes"}, {"POST", path + "/approve"}, {"PATCH", path}, {"POST", path + "/revoke"}} {

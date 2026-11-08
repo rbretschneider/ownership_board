@@ -24,6 +24,7 @@ type BuildHostPairingCodeRepository interface {
 }
 
 type BuildHostEventRepository interface {
+	RecentForHost(context.Context, int64, int) ([]domain.BuildHostEvent, error)
 	Append(context.Context, *domain.BuildHostEvent) error
 	ForHost(context.Context, int64, int64, int) ([]domain.BuildHostEvent, error)
 }

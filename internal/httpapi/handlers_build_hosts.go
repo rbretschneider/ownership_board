@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rbretschneider/ownership_board/internal/domain"
@@ -48,6 +49,7 @@ func (s *server) buildHostRoutes(rt *router) {
 	rt.signedHost("GET /api/v1/build-host/status", true, s.buildHostStatus)
 	rt.signedHost("POST /api/v1/build-host/heartbeat", false, s.buildHostHeartbeat)
 	rt.human("GET /api/v1/build-hosts/{id}/events", s.buildHostEvents)
+	rt.human("GET /api/v1/build-hosts/runners", s.buildHostRunners)
 	rt.human("GET /api/v1/build-hosts", s.listBuildHosts)
 	rt.human("GET /api/v1/build-hosts/{id}", s.getBuildHost)
 	rt.human("POST /api/v1/build-hosts/pairing-codes", s.createBuildHostPairingCode)
@@ -95,10 +97,12 @@ func (s *server) createBuildHostPairingCode(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		return err
 	}
+	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusCreated, struct {
-		Code      string    `json:"code"`
-		ExpiresAt time.Time `json:"expires_at"`
-	}{code.Code.Reveal(), code.ExpiresAt})
+		PublicBaseURL string    `json:"public_base_url"`
+		Code          string    `json:"code"`
+		ExpiresAt     time.Time `json:"expires_at"`
+	}{strings.TrimRight(s.deps.PublicBaseURL, "/"), code.Code.Reveal(), code.ExpiresAt})
 	return nil
 }
 
@@ -231,11 +235,17 @@ func (s *server) buildHostEvents(w http.ResponseWriter, r *http.Request, who cal
 	}
 	after := int64(0)
 	limit := 100
+	latest := false
 	for key, vals := range q {
 		if len(vals) != 1 {
 			return domain.Invalidf("invalid pagination")
 		}
 		switch key {
+		case "latest":
+			if vals[0] != "true" && vals[0] != "false" {
+				return domain.Invalidf("invalid pagination")
+			}
+			latest = vals[0] == "true"
 		case "after_id":
 			after, e = strconv.ParseInt(vals[0], 10, 64)
 		case "limit":
@@ -247,10 +257,62 @@ func (s *server) buildHostEvents(w http.ResponseWriter, r *http.Request, who cal
 			return domain.Invalidf("invalid pagination")
 		}
 	}
-	events, e := s.deps.BuildHosts.Events(r.Context(), who.actor, id, after, limit)
+	if _, hasLatest := q["latest"]; hasLatest && q.Has("after_id") {
+		return domain.Invalidf("latest cannot be combined with after_id")
+	}
+	var events []domain.BuildHostEvent
+	if latest {
+		events, e = s.deps.BuildHosts.RecentEvents(r.Context(), who.actor, id, limit)
+	} else {
+		events, e = s.deps.BuildHosts.Events(r.Context(), who.actor, id, after, limit)
+	}
 	if e != nil {
 		return e
 	}
 	writeJSON(w, 200, events)
+	return nil
+}
+
+func (s *server) buildHostRunners(w http.ResponseWriter, r *http.Request, who caller) error {
+	snapshot, err := s.deps.BuildHosts.Runners(r.Context(), who.actor)
+	if err != nil {
+		return err
+	}
+	type job struct {
+		ID        string     `json:"id"`
+		TicketID  int64      `json:"ticket_id"`
+		Repo      string     `json:"repo"`
+		SHA       string     `json:"sha"`
+		Preset    string     `json:"preset"`
+		Status    string     `json:"status"`
+		Phase     string     `json:"phase"`
+		Detail    string     `json:"detail"`
+		StartedAt *time.Time `json:"started_at"`
+		Attempt   int        `json:"attempt"`
+	}
+	type host struct {
+		ID          int64              `json:"id"`
+		Name        string             `json:"name"`
+		OS          domain.BuildHostOS `json:"os"`
+		Enabled     bool               `json:"enabled"`
+		MaxParallel int                `json:"max_parallel"`
+		Online      bool               `json:"online"`
+		LastSeenAt  *time.Time         `json:"last_seen_at"`
+		Jobs        []job              `json:"jobs"`
+	}
+	hosts := []host{}
+	for _, row := range snapshot.Hosts {
+		h := row.Host
+		jobs := []job{}
+		for _, a := range row.Jobs {
+			jobs = append(jobs, job{a.ID, a.TicketID, a.Repo, a.SHA, a.Preset, a.Status, a.Phase, a.Detail, a.StartedAt, a.Attempt})
+		}
+		hosts = append(hosts, host{h.ID, h.Name, h.OS, h.Enabled, h.MaxParallel, h.Online(snapshot.ObservedAt), h.LastSeenAt, jobs})
+	}
+	writeJSON(w, 200, struct {
+		ObservedAt time.Time                  `json:"observed_at"`
+		Hosts      []host                     `json:"hosts"`
+		QueuedByOS map[domain.BuildHostOS]int `json:"queued_by_os"`
+	}{snapshot.ObservedAt, hosts, snapshot.QueuedByOS})
 	return nil
 }
