@@ -31,9 +31,9 @@ export function LaneList({
   shouldIgnoreClick,
   onQuickAdd,
 }: LaneListProps) {
-  const [showAllDelivered, setShowAllDelivered] = useState(false);
+  const [showAllMerged, setShowAllMerged] = useState(false);
   const hasMore = lane === "merged" && tickets.length > 5;
-  const shown = hasMore && !showAllDelivered ? tickets.slice(0, 5) : tickets;
+  const shown = hasMore && !showAllMerged ? tickets.slice(0, 5) : tickets;
   const dropIndex = target !== null && target.kind === "list" && target.lane === lane ? target.index : null;
   const isEmpty = tickets.filter((t) => t.id !== draggedId).length === 0;
   let position = 0;
@@ -62,8 +62,8 @@ export function LaneList({
       })}
       {dropIndex !== null && dropIndex >= position && <div className="drop-line" aria-hidden="true" />}
       {hasMore && (
-        <button type="button" className="button button--secondary lane-list__more" aria-expanded={showAllDelivered} onClick={() => setShowAllDelivered((value) => !value)}>
-          {showAllDelivered ? "Show fewer" : `See ${tickets.length - 5} more`}
+        <button type="button" className="button button--secondary lane-list__more" aria-expanded={showAllMerged} onClick={() => setShowAllMerged((value) => !value)}>
+          {showAllMerged ? "Show fewer" : `See ${tickets.length - 5} more`}
         </button>
       )}
       {isEmpty && <p className="lane-list__empty">{LANE_EMPTY_HINTS[lane]}</p>}

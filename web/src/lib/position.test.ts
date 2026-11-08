@@ -48,23 +48,23 @@ describe("afterIdFor", () => {
 });
 
 describe("applyMove", () => {
-  const board = [ticket(1, "todo"), ticket(2, "todo"), ticket(3, "review"), ticket(4, "review")];
+  const board = [ticket(1, "todo"), ticket(2, "todo"), ticket(3, "in_progress"), ticket(4, "in_progress")];
 
   it("moves a card to the top of another lane", () => {
-    expect(order(applyMove(board, 1, "review", null))).toEqual(["todo:2", "review:1", "review:3", "review:4"]);
+    expect(order(applyMove(board, 1, "in_progress", null))).toEqual(["todo:2", "in_progress:1", "in_progress:3", "in_progress:4"]);
   });
   it("places a card after the given card", () => {
-    expect(order(applyMove(board, 1, "review", 3))).toEqual(["todo:2", "review:3", "review:1", "review:4"]);
+    expect(order(applyMove(board, 1, "in_progress", 3))).toEqual(["todo:2", "in_progress:3", "in_progress:1", "in_progress:4"]);
   });
   it("reorders within a lane", () => {
-    expect(order(applyMove(board, 1, "todo", 2))).toEqual(["todo:2", "todo:1", "review:3", "review:4"]);
+    expect(order(applyMove(board, 1, "todo", 2))).toEqual(["todo:2", "todo:1", "in_progress:3", "in_progress:4"]);
   });
   it("appends into an empty lane", () => {
-    expect(order(applyMove(board, 3, "merged", null))).toEqual(["todo:1", "todo:2", "review:4", "merged:3"]);
+    expect(order(applyMove(board, 3, "merged", null))).toEqual(["todo:1", "todo:2", "in_progress:4", "merged:3"]);
   });
   it("does not modify its input", () => {
     applyMove(board, 1, "merged", null);
-    expect(order(board)).toEqual(["todo:1", "todo:2", "review:3", "review:4"]);
+    expect(order(board)).toEqual(["todo:1", "todo:2", "in_progress:3", "in_progress:4"]);
   });
   it("returns a copy unchanged for an unknown card", () => {
     expect(order(applyMove(board, 99, "merged", null))).toEqual(order(board));
@@ -73,8 +73,15 @@ describe("applyMove", () => {
 
 describe("groupByLane", () => {
   it("keeps order and includes empty lanes", () => {
-    const groups = groupByLane([ticket(2, "review"), ticket(1, "review")], ["todo", "review"]);
+    const groups = groupByLane([ticket(2, "in_progress"), ticket(1, "in_progress")], ["todo", "in_progress"]);
     expect(groups.get("todo")).toEqual([]);
-    expect(groups.get("review")?.map((t) => t.id)).toEqual([2, 1]);
+    expect(groups.get("in_progress")?.map((t) => t.id)).toEqual([2, 1]);
   });
+});
+
+it("preserves the server-owned stage on moves and reorders", () => {
+ const pr = {...ticket(1, "in_progress"), stage: "pr" as const};
+ const board = [pr, ticket(2, "in_progress")];
+ expect(applyMove(board, 1, "in_progress", 2).find(t => t.id === 1)?.stage).toBe("pr");
+ expect(applyMove(board, 1, "todo", null).find(t => t.id === 1)?.stage).toBe("pr");
 });

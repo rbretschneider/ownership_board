@@ -21,7 +21,7 @@ const STAGES: Stage[] = [
   { id: "design", lane: "in_progress", label: "Designing", is_owner_review: false },
   { id: "design_review", lane: "in_progress", label: "Design ready", is_owner_review: true },
   { id: "build", lane: "in_progress", label: "Building", is_owner_review: false },
-  { id: "pr", lane: "review", label: "PR open", is_owner_review: true },
+  { id: "pr", lane: "in_progress", label: "PR open", is_owner_review: true },
   { id: "done", lane: "merged", label: "Merged", is_owner_review: false },
 ];
 
@@ -109,9 +109,13 @@ describe("checkpoints", () => {
 });
 
 describe("desktop layout", () => {
-  it("fits four columns side by side on a vertical 1080p monitor", () => {
-    const needed = 4 * COLUMN_MIN_WIDTH_PX + 3 * COLUMN_GAP_PX + 2 * COLUMNS_PADDING_PX;
+  it("fits three columns side by side on a vertical 1080p monitor", () => {
+    const needed = 3 * COLUMN_MIN_WIDTH_PX + 2 * COLUMN_GAP_PX + 2 * COLUMNS_PADDING_PX;
     expect(needed).toBeLessThanOrEqual(DESKTOP_MIN_WIDTH_PX);
     expect(DESKTOP_MIN_WIDTH_PX).toBeLessThanOrEqual(1080);
   });
+});
+
+it("includes PR work in the in-progress stage summary", () => {
+ expect(stageSummary(stageCounts(STAGES, [ticket(1, "pr"), ticket(2, "build")], "in_progress"))).toBe("Building 1 · PR open 1");
 });

@@ -1,7 +1,7 @@
 /** Wire types for the ownership_board HTTP API (see docs/api.md). */
 
-/** The four fixed lane ids. Finer progress lives in a ticket's stage. */
-export type LaneId = "todo" | "in_progress" | "review" | "merged";
+/** The three fixed lane ids. Finer progress lives in a ticket's stage. */
+export type LaneId = "todo" | "in_progress" | "merged";
 
 /** A ticket's place within its lane (each stage belongs to one lane). */
 export type StageId = "refine" | "spec_review" | "ready" | "design" | "design_review" | "build" | "pr" | "done";
@@ -243,7 +243,7 @@ export interface StageAttempts {
   /** Fresh-context adversarial review rounds. */
   review: number;
   review_fixes: number;
-  /** Entries into the review lane. */
+  /** Entries into the PR stage. */
   pr: number;
   /** Returns from an open PR to build. */
   pr_repairs: number;

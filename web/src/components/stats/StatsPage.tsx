@@ -16,7 +16,7 @@ export interface StatsPageProps {
   route: Route;
 }
 
-/** Delivery stats (#/stats?days=N): autonomous tickets versus the owner's own. */
+/** Throughput stats (#/stats?days=N): autonomous tickets versus the owner's own. */
 export function StatsPage({ route }: StatsPageProps) {
   const days = periodFromParam(route.params.get("days"));
   const { report, error, isLoading, refetch } = useStats(days);
@@ -66,8 +66,8 @@ function StatsReportView({ report, isRefreshing }: { report: StatsReport; isRefr
         Autonomous tickets were filed from a chat you agreed and run to a pull request without stops; yours are
         tickets you created on the board. Periods end now and start at local midnight.
       </p>
-      <StatsSection title={`Delivery, ${period}`}>
-        <CompareTable caption="Delivery" rowHeader="Metric" rows={deliveryRows(report)} />
+      <StatsSection title={`Throughput, ${period}`}>
+        <CompareTable caption="Throughput" rowHeader="Metric" rows={deliveryRows(report)} />
       </StatsSection>
       <StatsSection title="Merged per day">
         <ThroughputChart days={throughputDays(report)} />
@@ -90,7 +90,7 @@ function StatsReportView({ report, isRefreshing }: { report: StatsReport; isRefr
       <StatsSection title="By repository">
         <RepoTable report={report} />
       </StatsSection>
-      <StatsSection title="Architecture health" note="Current status, independent of the selected delivery period. Last-check time records when the review was filed.">
+      <StatsSection title="Architecture health" note="Current status, independent of the selected throughput period. Last-check time records when the review was filed.">
         <HealthTable repos={report.repos} />
       </StatsSection>
       <StatsSection title="Not recorded yet">
@@ -121,7 +121,7 @@ function RepoTable({ report }: { report: StatsReport }) {
   return (
     <div className="stats-table__scroll">
       <table className="stats-table">
-        <caption className="visually-hidden">Delivery by repository</caption>
+        <caption className="visually-hidden">Throughput by repository</caption>
         <thead>
           <tr>
             <th scope="col">Repository</th>

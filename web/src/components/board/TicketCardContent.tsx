@@ -57,7 +57,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
     : capitalize(slotStep(run.slot));
   const activeBuild = run === undefined ? activity.activeBuild : runTone === "building" || runTone === "testing";
   const phase = livePhase ?? (activity.buildServer ? activity.label.split(" · ")[0] : activity.label);
-  // In Delivery the merge sweep knows what the PR waits for: CI, a merge, a repair.
+  // At the PR stage the merge sweep knows what the PR waits for: CI, a merge, a repair.
   const prs = usePRStatus();
   const prStatus = ticket.stage === "pr" && !isBlocked ? ticketPR(prs.snapshot, ticket, prs.now || at) : undefined;
   const pr = prStatus ? prPill(prStatus, prs.snapshot.observed_at, prs.now || at) : undefined;
@@ -120,7 +120,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
         )}
         {/* Without a status pill, the stage and owner signals still need a place. */}
         {!showActivity && ticket.stage !== "done" && <StageChip stage={ticket.stage} stages={stages} />}
-        {!showActivity && ticket.needs_owner && (
+        {ticket.needs_owner && (!showActivity || ticket.stage === "pr") && (
           <span className="badge badge--needs">
             <Hand size={13} aria-hidden="true" />
             Needs you

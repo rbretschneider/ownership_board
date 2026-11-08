@@ -1231,7 +1231,7 @@
 .badge--autopilot { color: var(--human); background: var(--human-soft); }
 .badge--working { color: var(--success); background: color-mix(in srgb, var(--success) 9%, transparent); }
 .card__activity { flex-shrink: 0; gap: 4px; font-size: 0.6875rem; }
-/* Delivery: what the PR waits for. CI running is activity; a green PR needing
+/* PR status: what the PR waits for. CI running is activity; a green PR needing
    the owner's merge is the owner's move; a repair is going back to build. */
 .badge--pr-running { color: var(--accent-strong); background: var(--accent-soft); }
 .badge--pr-owner { background: var(--human); color: var(--on-accent); font-weight: 650; }

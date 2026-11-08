@@ -1,7 +1,7 @@
 import type { TicketSummary } from "../api/types";
 export function cardActivity(t: TicketSummary, now = Date.now()): { label: string; working: boolean; blocked: boolean; buildServer?: boolean; activeBuild?: boolean; target?: string } {
   if (t.blocked_reason || t.waiting_on.length) return { label: t.blocked_reason ? "Blocked" : "Waiting", working: false, blocked: true };
-  if (t.stage === "done") return { label: "Delivered", working: false, blocked: false };
+  if (t.stage === "done") return { label: "Merged", working: false, blocked: false };
   const build = t.stage === "build" && t.work_model?.match(/ · build-server:(queued|paused|preparing|building|testing|verifying):([^·]+) · awaiting Windows$/);
   if (build && build[1] && build[2] && !t.needs_owner) {
     const phase = hasLiveLease(t, now) || ["queued", "paused"].includes(build[1]) ? build[1] : "queued";

@@ -35,6 +35,7 @@ it("summarises recent merges on the board, each linking to the stats page", asyn
   const stats = vi.fn().mockResolvedValue(report);
   const host = await render(stats, <StatsSummary />);
 
+  expect(host.querySelector('[role="group"]')?.getAttribute("aria-label")).toBe("Throughput summary");
   const links = [...host.querySelectorAll("a")];
   expect(links.map((a) => a.textContent)).toEqual(["3merged · 24h", "9merged · 7d", "6 hcycle · 7d"]);
   expect(links.every((a) => a.getAttribute("href") === "#/stats")).toBe(true);
@@ -57,6 +58,10 @@ it("compares autonomous tickets with the owner's for the period in the route", a
   expect(host.querySelector("h1")?.textContent).toBe("Stats");
   const merged = [...host.querySelectorAll("tr")].find((tr) => tr.querySelector("th")?.textContent === "Merged");
   expect([...(merged?.querySelectorAll("td") ?? [])].map((td) => td.textContent)).toEqual(["5", "4"]);
+  expect(host.textContent).toContain("Throughput, last 90 days");
+  expect([...host.querySelectorAll("caption")].map(c => c.textContent)).toContain("Throughput by repository");
+  expect([...host.querySelectorAll("caption")].map(c => c.textContent)).toContain("Throughput");
+  expect(host.textContent).not.toMatch(/Delivery|Delivered/);
   expect(host.textContent).toContain("gpt-5");
   expect(host.textContent).toContain("Not recorded yet");
   expect([...host.querySelectorAll("h2")].some(h => h.textContent === "Architecture health")).toBe(true);
@@ -72,5 +77,5 @@ it("shows a retry path when stats fail to load", async () => {
   expect(host.textContent).toContain("Couldn't load stats: boom");
   await act(async () => host.querySelector<HTMLButtonElement>("button")?.click());
   expect(stats).toHaveBeenCalledTimes(2);
-  expect(host.textContent).toContain("Delivery, last 7 days");
+  expect(host.textContent).toContain("Throughput, last 7 days");
 });

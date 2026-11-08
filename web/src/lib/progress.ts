@@ -37,7 +37,7 @@ export function onWindows(ticket: Pick<TicketSummary, "stage" | "work_model">): 
 }
 
 /**
- * Which step the ticket is on (0–3), or 4 once delivered. Within build, the
+ * Which step the ticket is on (0–3), or 4 once merged. Within build, the
  * work-model signal says whether the code is being built (written, tested,
  * verified on Windows) or reviewed.
  */
