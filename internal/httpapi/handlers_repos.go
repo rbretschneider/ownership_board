@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"unicode/utf8"
 
 	"github.com/rbretschneider/ownership_board/internal/domain"
 )
@@ -48,6 +49,7 @@ func (s *server) restyleRepo(w http.ResponseWriter, r *http.Request, who caller)
 		return err
 	}
 	var body struct {
+		OverlapIgnore    json.RawMessage    `json:"overlap_ignore"`
 		BuildTargets     json.RawMessage    `json:"build_targets"`
 		Color            *string            `json:"color"`
 		TreatAsPublic    *bool              `json:"treat_as_public"`
@@ -90,7 +92,25 @@ func (s *server) restyleRepo(w http.ResponseWriter, r *http.Request, who caller)
 		}
 		targets = &parsed
 	}
-	style := domain.RepoStyle{BuildTargets: targets,
+	var overlapIgnore *[]string
+	if body.OverlapIgnore != nil {
+		if !utf8.Valid(body.OverlapIgnore) {
+			return domain.Invalidf("overlap_ignore must contain valid UTF-8")
+		}
+		var entries []*string
+		if err := json.Unmarshal(body.OverlapIgnore, &entries); err != nil || entries == nil {
+			return domain.Invalidf("overlap_ignore must be an array of strings")
+		}
+		parsed := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			if entry == nil {
+				return domain.Invalidf("overlap_ignore must contain strings")
+			}
+			parsed = append(parsed, *entry)
+		}
+		overlapIgnore = &parsed
+	}
+	style := domain.RepoStyle{OverlapIgnore: overlapIgnore, BuildTargets: targets,
 		Color: body.Color, Description: body.Description, TreatAsPublic: body.TreatAsPublic, DeployMode: body.DeployMode,
 		RequireSpecApproval: body.RequireSpec, RequireDesignApproval: body.RequireDesign,
 		AllowAgentMerge: body.AllowAgentMerge, HealthCheckEvery: body.HealthCheckEvery,

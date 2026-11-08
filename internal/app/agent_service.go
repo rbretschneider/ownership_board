@@ -236,10 +236,14 @@ const maxOverlapSkips = 20
 // until it merges, so the two never conflict. A started build is never held
 // back, so held tickets only ever wait on work that can finish.
 func heldByOverlap(ctx context.Context, repos Repos, ticket domain.Ticket) (bool, error) {
-	if ticket.RepoID == 0 || ticket.Branch != "" || ticket.PRURL != "" {
+	if ticket.IsHealthCheck || ticket.RepoID == 0 || ticket.Branch != "" || ticket.PRURL != "" {
 		return false, nil
 	}
-	mine := domain.DesignFiles(ticket.Design)
+	repo, err := repos.CodeRepos().Get(ctx, ticket.RepoID)
+	if err != nil {
+		return false, err
+	}
+	mine := domain.DesignFiles(ticket.Design, repo.OverlapIgnore...)
 	if len(mine) == 0 {
 		return false, nil
 	}
@@ -253,7 +257,7 @@ func heldByOverlap(ctx context.Context, repos Repos, ticket domain.Ticket) (bool
 		if other.Design == "" || other.RepoID != ticket.RepoID {
 			continue
 		}
-		files := domain.DesignFiles(other.Design)
+		files := domain.DesignFiles(other.Design, repo.OverlapIgnore...)
 		designs = append(designs, files)
 		started := (other.Stage == domain.StageBuild && other.Branch != "") || other.Stage == domain.StagePR
 		if started && other.ID != ticket.ID {

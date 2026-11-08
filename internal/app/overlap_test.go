@@ -64,3 +64,108 @@ func TestAStartedBuildIsNeverHeldBack(t *testing.T) {
 	f.mustClaim(agent, app.ClaimInput{})
 	f.mustClaim(other, app.ClaimInput{})
 }
+
+func TestRepoOverlapIgnoreClaims(t *testing.T) {
+	for _, tc := range []struct {
+		name, pattern, extra string
+		held                 bool
+	}{
+		{"exact", "src/messages/Catalog.cpp", "", false},
+		{"glob", "src/*/Catalog.cpp", "", false},
+		{"unmatched", "src/*/Other.cpp", "", true},
+		{"other shared file", "src/*/Catalog.cpp", "  src/core/Engine.cpp", true},
+		{"empty", "", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			repo := f.repo("example/app")
+			patterns := []string{}
+			if tc.pattern != "" {
+				patterns = append(patterns, tc.pattern)
+			}
+			if _, err := f.repos.Restyle(f.ctx, owner, repo.ID, domain.RepoStyle{OverlapIgnore: &patterns}); err != nil {
+				t.Fatal(err)
+			}
+			a, b := f.ticket("first", repo.ID), f.ticket("second", repo.ID)
+			f.toReady(a)
+			f.toReady(b)
+			f.toBuildWith(b, "Edit src/messages/Catalog.cpp"+tc.extra)
+			f.toBuildWith(a, "Edit src/messages/Catalog.cpp"+tc.extra)
+			if w := f.mustClaim(agent, app.ClaimInput{}); w.Ticket.Ticket.ID != a {
+				t.Fatal(w)
+			}
+			branch := "ob/first"
+			if _, err := f.board.Edit(f.ctx, agent, a, domain.TicketEdit{Branch: &branch}); err != nil {
+				t.Fatal(err)
+			}
+			if tc.held {
+				f.requireNoClaim(other, "shared source")
+			} else if w := f.mustClaim(other, app.ClaimInput{}); w.Ticket.Ticket.ID != b {
+				t.Fatal(w)
+			}
+		})
+	}
+}
+
+func TestHealthCheckBypassesOverlap(t *testing.T) {
+	f := newFixture(t)
+	repo := f.repo("example/app")
+	a, b := f.ticket("first", repo.ID), f.ticket("review", repo.ID)
+	f.toReady(a)
+	f.toReady(b)
+	f.toBuildWith(b, "Edit src/core/Engine.cpp")
+	f.toBuildWith(a, "Edit src/core/Engine.cpp")
+	if err := f.store.Write(f.ctx, func(repos app.Repos) error {
+		ticket, err := repos.Tickets().Get(f.ctx, b)
+		if err != nil {
+			return err
+		}
+		ticket.IsHealthCheck = true
+		return repos.Tickets().Update(f.ctx, ticket)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	f.mustClaim(agent, app.ClaimInput{})
+	branch := "ob/first"
+	if _, err := f.board.Edit(f.ctx, agent, a, domain.TicketEdit{Branch: &branch}); err != nil {
+		t.Fatal(err)
+	}
+	if w := f.mustClaim(other, app.ClaimInput{}); w.Ticket.Ticket.ID != b {
+		t.Fatal(w)
+	}
+}
+
+func TestOverlapIgnoreIsRepositoryLocal(t *testing.T) {
+	f := newFixture(t)
+	ignored := f.repo("example/ignored")
+	ordinary := f.repo("example/ordinary")
+	patterns := []string{"src/*/Catalog.cpp"}
+	if _, err := f.repos.Restyle(f.ctx, owner, ignored.ID, domain.RepoStyle{OverlapIgnore: &patterns}); err != nil {
+		t.Fatal(err)
+	}
+	for i, repo := range []domain.Repo{ignored, ordinary} {
+		a, b := f.ticket("first", repo.ID), f.ticket("second", repo.ID)
+		f.toReady(a)
+		f.toReady(b)
+		f.toBuildWith(b, "Edit src/messages/Catalog.cpp")
+		f.toBuildWith(a, "Edit src/messages/Catalog.cpp")
+		actor := domain.Actor{Kind: domain.ActorAgent, ID: int64(20 + i), Name: "worker"}
+		if w := f.mustClaim(actor, app.ClaimInput{Repo: repo.FullName}); w.Ticket.Ticket.ID != a {
+			t.Fatal(w)
+		}
+		branch := "ob/first"
+		if _, err := f.board.Edit(f.ctx, actor, a, domain.TicketEdit{Branch: &branch}); err != nil {
+			t.Fatal(err)
+		}
+		second := domain.Actor{Kind: domain.ActorAgent, ID: int64(30 + i), Name: "second"}
+		if i == 0 {
+			if w := f.mustClaim(second, app.ClaimInput{Repo: repo.FullName}); w.Ticket.Ticket.ID != b {
+				t.Fatal(w)
+			}
+		} else {
+			if _, ok := f.claim(second, app.ClaimInput{Repo: repo.FullName}); ok {
+				t.Fatal("another repository's exclusions applied")
+			}
+		}
+	}
+}
