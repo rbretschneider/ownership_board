@@ -50,3 +50,36 @@ func TestRepoBuildTargets(t *testing.T) {
 		})
 	}
 }
+
+func TestRepoBuildTargetLimitsAndOwnership(t *testing.T) {
+	targets := make([]RepoBuildTarget, 32)
+	for i := range targets {
+		targets[i] = RepoBuildTarget{OS: "linux", Preset: "cmake", Capabilities: []string{"c" + strings.Repeat("a", i)}}
+	}
+	repo := Repo{}
+	if err := repo.Restyle(RepoStyle{BuildTargets: &targets}); err != nil {
+		t.Fatal(err)
+	}
+	targets[0].OS = "windows"
+	if repo.BuildTargets[0].OS != "linux" {
+		t.Fatal("shared target storage")
+	}
+	for _, n := range []int{32, 33} {
+		target := []RepoBuildTarget{{OS: "linux", Preset: "cmake", Capabilities: []string{strings.Repeat("a", n)}}}
+		err := repo.Restyle(RepoStyle{BuildTargets: &target})
+		if (err == nil) != (n == 32) {
+			t.Fatal(n, err)
+		}
+	}
+	caps := make([]string, 32)
+	for i := range caps {
+		caps[i] = "gl"
+	}
+	target := []RepoBuildTarget{{OS: "linux", Preset: "cmake", Capabilities: caps}, {OS: "windows", Preset: "script"}}
+	if err := repo.Restyle(RepoStyle{BuildTargets: &target}); err != nil {
+		t.Fatal(err)
+	}
+	if repo.BuildTargets[1].Capabilities == nil || repo.BuildTargets[0].OS != "linux" || len(repo.BuildTargets[0].Capabilities) != 1 {
+		t.Fatal(repo.BuildTargets)
+	}
+}

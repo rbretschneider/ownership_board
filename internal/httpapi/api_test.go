@@ -43,6 +43,10 @@ func newServer(t *testing.T) *apiClient {
 }
 
 func newServerWithPublicBaseURL(t *testing.T, publicBaseURL string) *apiClient {
+	return newServerWithRunnersFile(t, publicBaseURL, "")
+}
+
+func newServerWithRunnersFile(t *testing.T, publicBaseURL, runnersFile string) *apiClient {
 	t.Helper()
 	ctx := context.Background()
 	db, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "api.db"))
@@ -75,6 +79,7 @@ func newServerWithPublicBaseURL(t *testing.T, publicBaseURL string) *apiClient {
 	}
 	handler := httpapi.New(httpapi.Deps{
 		PublicBaseURL: publicBaseURL,
+		RunnersFile:   runnersFile,
 		BuildJobs:     app.NewBuildJobService(db, clk, bundles, logger),
 		BuildHosts:    app.NewBuildHostService(db, clk, logger, nil),
 		Board:         services.Board, Agents: services.Agents, Repos: services.Repos, Auth: authService,

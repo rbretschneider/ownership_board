@@ -133,3 +133,23 @@ func TestWindowsSettingsWithoutHosts(t *testing.T) {
 		t.Fatal(got, err)
 	}
 }
+
+func TestWindowsHistoricalSettingsAreNotAuthoritative(t *testing.T) {
+	f := settingsFixture(t)
+	for key, value := range map[string]string{"windows_runner_enabled": "true", "windows_parallel_builds": "6"} {
+		if _, err := f.store.SQL().Exec(`INSERT INTO board_settings(key,value,updated_by,updated_at) VALUES(?,?,'Owner','2026-01-01T00:00:00.000Z')`, key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	workers := 4
+	got, err := f.board.UpdateSettings(f.ctx, owner, domain.SettingsEdit{CodexWorkers: &workers})
+	if err != nil || got.WindowsRunnerEnabled || got.WindowsParallelBuilds != 0 || got.WindowsParallelBuildLimit != 0 {
+		t.Fatal(got, err)
+	}
+	for key, want := range map[string]string{"windows_runner_enabled": "true", "windows_parallel_builds": "6"} {
+		var value string
+		if err := f.store.SQL().QueryRow(`SELECT value FROM board_settings WHERE key=?`, key).Scan(&value); err != nil || value != want {
+			t.Fatal(key, value, err)
+		}
+	}
+}

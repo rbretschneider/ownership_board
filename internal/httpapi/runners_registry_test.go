@@ -3,6 +3,8 @@ package httpapi_test
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -74,4 +76,34 @@ func TestRunnersRegistryCompatibility(t *testing.T) {
 			t.Fatal("exposed", secret)
 		}
 	}
+}
+
+func TestRunnersRegistryFileFallback(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "runners.json")
+	if err := os.WriteFile(path, []byte(`{"at":1793822451,"host":"File-builder","enabled":true,"parallel_builds":2,"slots":[],"queue":[]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	c := newServerWithRunnersFile(t, "", path)
+	c.expect(200, "POST", "/api/v1/auth/setup", `{"name":"Owner","email":"owner@example.com","password":"a long enough password"}`)
+	assertFile := func() {
+		t.Helper()
+		got := c.expect(200, "GET", "/api/v1/runners", "")
+		if got["host"] != "File-builder" || got["hosts"] != nil {
+			t.Fatal(got)
+		}
+	}
+	assertFile()
+	id := seedBuildHost(t, c)
+	assertFile()
+	c.expect(200, "POST", fmt.Sprintf("/api/v1/build-hosts/%d/approve", id), `{}`)
+	got := c.expect(200, "GET", "/api/v1/runners", "")
+	if got["host"] != "Builder" || got["hosts"] == nil || got["observed_at"] != nil {
+		t.Fatal(got)
+	}
+	c.expect(200, "POST", fmt.Sprintf("/api/v1/build-hosts/%d/revoke", id), `{}`)
+	assertFile()
+	if _, err := c.store.SQL().Exec(`DROP TABLE build_hosts`); err != nil {
+		t.Fatal(err)
+	}
+	c.expect(500, "GET", "/api/v1/runners", "")
 }

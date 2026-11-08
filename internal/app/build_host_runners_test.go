@@ -107,7 +107,7 @@ func TestRecentBuildHostEvents(t *testing.T) {
 func TestCompatibilityRunnersQueuesAndHeartbeat(t *testing.T) {
 	f, _, _, h := jobFixture(t)
 	// Queue entries are eligible work, and can match more than one host.
-	for i := 0; i < 47; i++ {
+	for i := 46; i >= 0; i-- {
 		os, caps, status := "linux", `["cmake"]`, "queued"
 		if i == 0 {
 			os = "windows"

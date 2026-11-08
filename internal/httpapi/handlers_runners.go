@@ -2,8 +2,6 @@ package httpapi
 
 import (
 	"encoding/json"
-	"github.com/rbretschneider/ownership_board/internal/app"
-	"github.com/rbretschneider/ownership_board/internal/domain"
 	"io"
 	"math"
 	"net/http"
@@ -11,6 +9,9 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/rbretschneider/ownership_board/internal/app"
+	"github.com/rbretschneider/ownership_board/internal/domain"
 )
 
 // The Windows build host's live state, written by the verification queue on

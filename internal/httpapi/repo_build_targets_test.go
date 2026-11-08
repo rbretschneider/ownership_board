@@ -26,6 +26,15 @@ func TestRepoBuildTargetAPI(t *testing.T) {
 		t.Fatal(omitted)
 	}
 	b.asAgent(token).expect(http.StatusOK, "GET", "/api/v1/repos", "")
+	board := b.asAgent(token).expect(http.StatusOK, "GET", "/api/v1/board", "")
+	if len(board["repos"].([]any)[0].(map[string]any)["build_targets"].([]any)) != 1 {
+		t.Fatal(board)
+	}
+	b.expect(http.StatusCreated, "POST", "/api/v1/tickets", `{"kind":"story","title":"Example","repo_id":`+jsonNumber(repo["id"])+`}`)
+	work := b.asAgent(token).expect(http.StatusOK, "POST", "/api/v1/agent/claim", "")
+	if len(work["repo"].(map[string]any)["build_targets"].([]any)) != 1 {
+		t.Fatal(work)
+	}
 	cleared := b.expect(http.StatusOK, "PATCH", path, `{"build_targets":[]}`)
 	if len(cleared["build_targets"].([]any)) != 0 {
 		t.Fatal(cleared)
