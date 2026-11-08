@@ -52,6 +52,12 @@ func (w ticketWriter) apply(ctx context.Context, repos Repos, ticket *domain.Tic
 	if err != nil {
 		return TicketDetail{}, nil, err
 	}
+	if before != domain.StageDone && ticket.Stage == domain.StageDone && !ticket.IsHealthCheck && ticket.RepoID != 0 && ticket.HealthCheckMergeSequence == 0 {
+		ticket.HealthCheckMergeSequence, err = repos.CodeRepos().NextMergeSequence(ctx, ticket.RepoID)
+		if err != nil {
+			return TicketDetail{}, nil, err
+		}
+	}
 	if err := repos.Tickets().Update(ctx, *ticket); err != nil {
 		return TicketDetail{}, nil, err
 	}
@@ -65,6 +71,11 @@ func (w ticketWriter) apply(ctx context.Context, repos Repos, ticket *domain.Tic
 			return TicketDetail{}, nil, err
 		}
 		events = append(events, released...)
+		filed, err := fileHealthCheck(ctx, repos, ticket.RepoID, w.clock.Now())
+		if err != nil {
+			return TicketDetail{}, nil, err
+		}
+		events = append(events, filed...)
 	}
 	detail, err := loadDetail(ctx, repos, *ticket)
 	return detail, events, err

@@ -206,6 +206,7 @@ type TicketSummary = {
   needs_owner: boolean;      // open questions, blocked, or an owner-review stage
   blocked_reason: string;    // "" when not blocked
   is_autonomous: boolean;    // no checkpoints or questions; runs to a pull request
+  is_health_check: boolean;  // read-only; identifies a scheduled architecture review
   spec_revision: number; design_revision: number;
   pr_url: string; branch: string;
   open_questions: number;

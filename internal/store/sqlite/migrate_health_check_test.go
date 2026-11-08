@@ -84,7 +84,7 @@ func TestHealthCheckSettingsRoundTripAndSurviveSync(t *testing.T) {
 		if err := repos.CodeRepos().SetHealthCheck(ctx, repo); err != nil {
 			return err
 		}
-		if err := repos.CodeRepos().RecordHealthCheck(ctx, repo.ID, 42, now); err != nil {
+		if err := repos.CodeRepos().RecordHealthCheck(ctx, repo.ID, 42, 5, now); err != nil {
 			return err
 		}
 		repo.HealthCheckEvery = 30

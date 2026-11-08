@@ -15,7 +15,7 @@ type codeRepoRepo struct {
 
 const repoColumns = `id, provider, full_name, url, description, color, default_branch, is_private, is_archived, synced_at, created_at, missing_since, treat_as_public,
 	require_spec_approval, require_design_approval, allow_agent_merge,
-	health_check_every, health_checked_through_ticket, health_checked_at`
+	health_check_every, health_checked_through_ticket, health_checked_at, merge_sequence, health_checked_through_merge_sequence`
 
 func (r codeRepoRepo) List(ctx context.Context) ([]domain.Repo, error) {
 	return r.query(ctx, `SELECT `+repoColumns+` FROM repos ORDER BY full_name COLLATE NOCASE, provider`)
@@ -83,9 +83,9 @@ func (r codeRepoRepo) SetHealthCheck(ctx context.Context, repo domain.Repo) erro
 }
 
 // RecordHealthCheck stores where the latest health check ended.
-func (r codeRepoRepo) RecordHealthCheck(ctx context.Context, repoID, throughTicket int64, at time.Time) error {
-	_, err := r.q.ExecContext(ctx, `UPDATE repos SET health_checked_through_ticket = ?, health_checked_at = ? WHERE id = ?`,
-		throughTicket, formatTime(at), repoID)
+func (r codeRepoRepo) RecordHealthCheck(ctx context.Context, repoID, throughTicket, throughSequence int64, at time.Time) error {
+	_, err := r.q.ExecContext(ctx, `UPDATE repos SET health_checked_through_ticket = ?, health_checked_at = ?, health_checked_through_merge_sequence = ? WHERE id = ?`,
+		throughTicket, formatTime(at), throughSequence, repoID)
 	if err != nil {
 		return fmt.Errorf("sqlite: record health check of repo %d: %w", repoID, err)
 	}
@@ -117,7 +117,7 @@ func scanRepo(row scanner) (domain.Repo, error) {
 	var checkedThrough sql.NullInt64
 	err := row.Scan(&repo.ID, &provider, &repo.FullName, &repo.URL, &repo.Description, &repo.Color, &repo.DefaultBranch,
 		&isPrivate, &isArchived, &synced, &created, &missing, &treatAsPublic, &requireSpec, &requireDesign, &allowAgentMerge,
-		&repo.HealthCheckEvery, &checkedThrough, &checkedAt)
+		&repo.HealthCheckEvery, &checkedThrough, &checkedAt, &repo.MergeSequence, &repo.HealthCheckedThroughMergeSequence)
 	if err != nil {
 		return domain.Repo{}, err
 	}
@@ -139,4 +139,10 @@ func scanRepo(row scanner) (domain.Repo, error) {
 	}
 	repo.CreatedAt, err = parseTime(created)
 	return repo, err
+}
+
+func (r codeRepoRepo) NextMergeSequence(ctx context.Context, repoID int64) (int64, error) {
+	var sequence int64
+	err := r.q.QueryRowContext(ctx, `UPDATE repos SET merge_sequence = merge_sequence + 1 WHERE id = ? RETURNING merge_sequence`, repoID).Scan(&sequence)
+	return sequence, err
 }
