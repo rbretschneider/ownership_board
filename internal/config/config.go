@@ -76,6 +76,8 @@ type Sources struct {
 // DatabasePath is the SQLite file.
 func (c Config) DatabasePath() string { return filepath.Join(c.DataDir, "ownership.db") }
 
+func (c Config) BuildJobsDir() string { return filepath.Join(c.DataDir, "build_jobs") }
+
 // LogDir holds the rolling log files.
 func (c Config) LogDir() string { return filepath.Join(c.DataDir, "logs") }
 

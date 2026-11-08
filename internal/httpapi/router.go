@@ -191,9 +191,20 @@ func (rt *router) machinePublic(pattern string, fn handlerFunc) {
 	})
 }
 func (rt *router) signedHost(pattern string, allowPending bool, fn handlerFunc) {
+	rt.signedHostLimit(pattern, allowPending, 96*1024, fn)
+}
+func (rt *router) signedHostLimit(pattern string, allowPending bool, limit int64, fn handlerFunc) {
 	rt.machinePublic(pattern, func(w http.ResponseWriter, r *http.Request, _ caller) error {
-		method, path, _ := strings.Cut(pattern, " ")
-		if r.Method != method || r.URL.Path != path || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.RawPath != "" || r.URL.EscapedPath() != r.URL.Path {
+		method, routePath, _ := strings.Cut(pattern, " ")
+		concretePath := routePath
+		if strings.Contains(routePath, "{id}") {
+			id := r.PathValue("id")
+			if !domain.ValidBuildJobID(id) {
+				return auth.ErrUnauthorized
+			}
+			concretePath = strings.Replace(routePath, "{id}", id, 1)
+		}
+		if r.Method != method || r.URL.Path != concretePath || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.RawPath != "" || r.URL.EscapedPath() != r.URL.Path {
 			return auth.ErrUnauthorized
 		}
 		values := []string{}
@@ -208,8 +219,11 @@ func (rt *router) signedHost(pattern string, allowPending bool, fn handlerFunc) 
 		if !ok {
 			return auth.ErrUnauthorized
 		}
-		body, e := io.ReadAll(http.MaxBytesReader(w, r.Body, 96*1024))
+		body, e := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
 		if e != nil {
+			if routePath == "/api/v1/build-host/claim" || strings.Contains(routePath, "/jobs/") {
+				return domain.TooLargef("request body exceeds the size limit")
+			}
 			return domain.Invalidf("request body exceeds the size limit")
 		}
 		who, e := rt.hosts.AuthenticateHost(r.Context(), id, r.Method, r.URL.Path, values[1], values[2], body, allowPending)
@@ -225,7 +239,7 @@ func (rt *router) signedHost(pattern string, allowPending bool, fn handlerFunc) 
 func rejectHostPathRedirects(next http.Handler, logger *slog.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		clean := path.Clean(r.URL.Path)
-		if (clean == "/api/v1/build-host/status" || clean == "/api/v1/build-host/heartbeat") && clean != r.URL.Path {
+		if strings.HasPrefix(clean, "/api/v1/build-host/") && clean != r.URL.Path {
 			writeError(w, r, logger, auth.ErrUnauthorized)
 			return
 		}

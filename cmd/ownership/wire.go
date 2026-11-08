@@ -14,6 +14,7 @@ import (
 	"github.com/rbretschneider/ownership_board/internal/auth"
 	"github.com/rbretschneider/ownership_board/internal/backup"
 	"github.com/rbretschneider/ownership_board/internal/broker"
+	"github.com/rbretschneider/ownership_board/internal/buildbundle"
 	"github.com/rbretschneider/ownership_board/internal/clock"
 	"github.com/rbretschneider/ownership_board/internal/config"
 	"github.com/rbretschneider/ownership_board/internal/connections"
@@ -33,12 +34,15 @@ var systemClock = clock.System{}
 
 // application is the wired board plus what runs beside the HTTP server.
 type application struct {
-	handler http.Handler
-	db      *sqlite.DB
-	repos   *app.RepoService
-	backups *backup.Backups
-	cfg     config.Config
-	logger  *slog.Logger
+	jobs         *app.BuildJobService
+	reaperCancel context.CancelFunc
+	reaperDone   chan struct{}
+	handler      http.Handler
+	db           *sqlite.DB
+	repos        *app.RepoService
+	backups      *backup.Backups
+	cfg          config.Config
+	logger       *slog.Logger
 }
 
 func build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*application, error) {
@@ -66,10 +70,25 @@ func build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*applic
 		Agents: app.NewAgentService(db, systemClock, sink, hub),
 		Repos:  app.NewRepoService(db, systemClock, catalog, logger),
 	}
+	bundles, err := buildbundle.New(cfg.BuildJobsDir())
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("open bundle storage: %w", err)
+	}
+	jobs := app.NewBuildJobService(db, systemClock, bundles, logger)
+	if err = jobs.RecoverStorage(ctx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("recover bundle storage: %w", err)
+	}
+	if err = jobs.RequeueOffline(ctx); err != nil {
+		db.Close()
+		return nil, err
+	}
 	handler := httpapi.New(httpapi.Deps{
 		UsageFile:    filepath.Join(cfg.DataDir, "account_usage.json"),
 		RunnersFile:  filepath.Join(cfg.DataDir, "windows_runners.json"),
 		PRStatusFile: filepath.Join(cfg.DataDir, "pr_status.json"),
+		BuildJobs:    jobs,
 		BuildHosts:   app.NewBuildHostService(db, systemClock, logger, boardNotifier(cfg)),
 		Board:        services.Board, Agents: services.Agents, Repos: services.Repos,
 		Connections: connections.NewService(catalog, services.Repos, boardNotifier(cfg), connectionPolicy(cfg)),
@@ -79,12 +98,16 @@ func build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*applic
 		PublicBaseURL: cfg.PublicBaseURL, TrustedHops: cfg.TrustProxyHops, Frontend: webui.FS(),
 	})
 	return &application{
-		handler: handler, db: db, repos: services.Repos, cfg: cfg, logger: logger,
+		jobs: jobs, handler: handler, db: db, repos: services.Repos, cfg: cfg, logger: logger,
 		backups: backup.New(db.SQL(), cfg.BackupDir(), cfg.BackupKeep, systemClock, logger),
 	}, nil
 }
 
 func (a *application) close() {
+	if a.reaperCancel != nil {
+		a.reaperCancel()
+		<-a.reaperDone
+	}
 	if err := a.db.Close(); err != nil {
 		a.logger.Error("closing database", "error", err)
 	}
@@ -92,6 +115,10 @@ func (a *application) close() {
 
 // startBackground runs the scheduled jobs until ctx ends.
 func (a *application) startBackground(ctx context.Context) {
+	reaperCtx, cancel := context.WithCancel(ctx)
+	a.reaperCancel = cancel
+	a.reaperDone = make(chan struct{})
+	go func() { defer close(a.reaperDone); a.jobs.RunReaper(reaperCtx) }()
 	if a.cfg.BackupKeep > 0 {
 		go a.backups.Run(ctx)
 	}

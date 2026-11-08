@@ -80,6 +80,8 @@ func classify(err error) (int, errorCode, bool) {
 		return http.StatusBadGateway, codeProvider, true
 	}
 	switch domain.KindOf(err) {
+	case domain.KindTooLarge:
+		return http.StatusRequestEntityTooLarge, errorCode("payload_too_large"), true
 	case domain.KindInvalid:
 		return http.StatusBadRequest, codeBadRequest, true
 	case domain.KindNotFound:
