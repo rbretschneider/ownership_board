@@ -44,7 +44,7 @@ func (w ticketWriter) change(ctx context.Context, actor domain.Actor, id int64, 
 
 // apply runs fn on an already loaded ticket within the caller's transaction.
 // The caller publishes the returned events once the transaction commits.
-// Every way into Merged passes through here, so this is where tickets that
+// Every completion transition passes through here, so this is where tickets that
 // depended on this one learn they are free.
 func (w ticketWriter) apply(ctx context.Context, repos Repos, ticket *domain.Ticket, fn ticketChange) (TicketDetail, []Event, error) {
 	before := ticket.Stage
@@ -52,7 +52,7 @@ func (w ticketWriter) apply(ctx context.Context, repos Repos, ticket *domain.Tic
 	if err != nil {
 		return TicketDetail{}, nil, err
 	}
-	if before != domain.StageDone && ticket.Stage == domain.StageDone && !ticket.IsHealthCheck && ticket.RepoID != 0 && ticket.HealthCheckMergeSequence == 0 {
+	if !before.IsCompleted() && ticket.Stage.IsCompleted() && !ticket.IsHealthCheck && ticket.RepoID != 0 && ticket.HealthCheckMergeSequence == 0 {
 		ticket.HealthCheckMergeSequence, err = repos.CodeRepos().NextMergeSequence(ctx, ticket.RepoID)
 		if err != nil {
 			return TicketDetail{}, nil, err
@@ -65,7 +65,7 @@ func (w ticketWriter) apply(ctx context.Context, repos Repos, ticket *domain.Tic
 	if err != nil {
 		return TicketDetail{}, nil, err
 	}
-	if before != domain.StageDone && ticket.Stage == domain.StageDone {
+	if !before.IsCompleted() && ticket.Stage.IsCompleted() {
 		released, err := releaseDependants(ctx, repos, *ticket, mergedBy(entries), w.clock.Now())
 		if err != nil {
 			return TicketDetail{}, nil, err

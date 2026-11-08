@@ -111,7 +111,7 @@ func (b *segmentBuilder) addMerge(h history) {
 }
 
 func (b *segmentBuilder) addCurrent(ticket domain.Ticket, openQuestions int) {
-	if ticket.Stage == domain.StageDone {
+	if ticket.Stage.IsCompleted() {
 		return
 	}
 	b.wip[ticket.Stage]++
@@ -153,7 +153,7 @@ func (b *segmentBuilder) dailyCounts() []DayCount {
 func (b *segmentBuilder) stageTimes() []StageTime {
 	var times []StageTime
 	for _, info := range domain.Stages() {
-		if info.ID != domain.StageDone {
+		if !info.ID.IsCompleted() {
 			times = append(times, StageTime{Stage: info.ID, Distribution: distributionOf(b.stageHours[info.ID])})
 		}
 	}
@@ -163,7 +163,7 @@ func (b *segmentBuilder) stageTimes() []StageTime {
 func (b *segmentBuilder) wipCounts() []StageCount {
 	var counts []StageCount
 	for _, info := range domain.Stages() {
-		if info.ID != domain.StageDone {
+		if !info.ID.IsCompleted() {
 			counts = append(counts, StageCount{Stage: info.ID, Lane: info.Lane, Count: b.wip[info.ID]})
 		}
 	}

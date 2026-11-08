@@ -68,7 +68,15 @@ func (s *BoardService) reviewOutcome(actor domain.Actor, state PullRequestState,
 		}
 		comment := domain.NewEntry(ticket.ID, domain.TimelineComment, actor, s.clock.Now()).WithBody(body)
 		if state == PullRequestMerged {
-			moved, err := changeStage(ctx, repos, ticket, domain.StageDone, actor, s.clock)
+			repo, err := repoOf(ctx, repos, ticket.RepoID)
+			if err != nil {
+				return nil, err
+			}
+			target := domain.StageDeployed
+			if repo != nil && repo.DeployMode == domain.DeployModeAgent {
+				target = domain.StageDone
+			}
+			moved, err := changeStage(ctx, repos, ticket, target, actor, s.clock)
 			return append([]domain.TimelineEntry{comment}, moved...), err
 		}
 		if state == PullRequestRepair {

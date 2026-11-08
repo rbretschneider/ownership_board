@@ -78,7 +78,7 @@ superseded_by_id, at}`
 ### Dependencies
 
 `depends_on` ("depends on #B" / "needed by #A") keeps agents from claiming
-the `from` ticket until the `to` ticket is merged; see
+the `from` ticket until the `to` ticket reaches `done` or `deployed`; see
 [agents.md](agents.md#dependencies). Its extra rules:
 
 - Same repo only: both tickets need a repo, and the same one. Changing or
@@ -97,9 +97,9 @@ the `from` ticket until the `to` ticket is merged; see
   `relation` cannot be `depends_on`.
 - Adding one needs a person, the lease on the `from` ticket, or the agent
   that filed it. Removing one needs a person or the agent that added it.
-- When a ticket reaches Merged, each ticket that now waits on nothing gets a
+- When a ticket first reaches Done or Deployed, each ticket that now waits on nothing gets a
   `dependencies_met` timeline entry, `{ticket_id, merged_by_kind}`, by the
-  actor that merged it. It sends no notification.
+  actor that completed it. It sends no notification.
 - Migration `0008_depends_on` creates the `board_settings` table (seeded with
   `autonomous_in_flight_cap` = 1) and a partial index on `depends_on` links.
   Existing tickets and relations are not changed. Going down deletes every

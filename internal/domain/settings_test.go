@@ -82,6 +82,7 @@ func TestDependencyStallFollowsTheWholeChain(t *testing.T) {
 		4: ticket(4, domain.StageDone, false),   // merged
 		5: ticket(5, domain.StageReady, false),  // ordinary
 		6: ticket(6, domain.StageDesign, true),  // holds a slot
+		7: ticket(7, domain.StageDeployed, false),
 	}
 	cases := map[string]struct {
 		edges    map[int64][]int64
@@ -89,17 +90,19 @@ func TestDependencyStallFollowsTheWholeChain(t *testing.T) {
 		want     domain.InFlightStall
 		isStall  bool
 	}{
-		"direct":                        {nil, 1, 3, domain.InFlightStall{Holder: 1, Waiter: 3}, true},
-		"holder link added last":        {map[int64][]int64{2: {3}}, 1, 2, domain.InFlightStall{Holder: 1, Waiter: 3}, true},
-		"waiter link added last":        {map[int64][]int64{1: {2}}, 2, 3, domain.InFlightStall{Holder: 1, Waiter: 3}, true},
-		"longer chain":                  {map[int64][]int64{1: {5}, 2: {3}}, 5, 2, domain.InFlightStall{Holder: 1, Waiter: 3}, true},
-		"lowest holder is named":        {map[int64][]int64{6: {5}, 1: {5}}, 5, 3, domain.InFlightStall{Holder: 1, Waiter: 3}, true},
-		"ordinary chain":                {map[int64][]int64{1: {2}}, 2, 5, domain.InFlightStall{}, false},
-		"no holder upstream":            {map[int64][]int64{5: {2}}, 2, 3, domain.InFlightStall{}, false},
-		"merged ticket ends the chain":  {map[int64][]int64{1: {4}}, 4, 3, domain.InFlightStall{}, false},
-		"merged prerequisite":           {map[int64][]int64{4: {3}}, 1, 4, domain.InFlightStall{}, false},
-		"existing cycle is walked once": {map[int64][]int64{2: {5}, 5: {2}}, 1, 2, domain.InFlightStall{}, false},
-		"unknown ticket ends the chain": {map[int64][]int64{2: {99}, 99: {3}}, 1, 2, domain.InFlightStall{}, false},
+		"direct":                         {nil, 1, 3, domain.InFlightStall{Holder: 1, Waiter: 3}, true},
+		"holder link added last":         {map[int64][]int64{2: {3}}, 1, 2, domain.InFlightStall{Holder: 1, Waiter: 3}, true},
+		"waiter link added last":         {map[int64][]int64{1: {2}}, 2, 3, domain.InFlightStall{Holder: 1, Waiter: 3}, true},
+		"longer chain":                   {map[int64][]int64{1: {5}, 2: {3}}, 5, 2, domain.InFlightStall{Holder: 1, Waiter: 3}, true},
+		"lowest holder is named":         {map[int64][]int64{6: {5}, 1: {5}}, 5, 3, domain.InFlightStall{Holder: 1, Waiter: 3}, true},
+		"ordinary chain":                 {map[int64][]int64{1: {2}}, 2, 5, domain.InFlightStall{}, false},
+		"no holder upstream":             {map[int64][]int64{5: {2}}, 2, 3, domain.InFlightStall{}, false},
+		"merged ticket ends the chain":   {map[int64][]int64{1: {4}}, 4, 3, domain.InFlightStall{}, false},
+		"deployed ticket ends the chain": {map[int64][]int64{1: {7}}, 7, 3, domain.InFlightStall{}, false},
+		"deployed prerequisite":          {map[int64][]int64{7: {3}}, 1, 7, domain.InFlightStall{}, false},
+		"merged prerequisite":            {map[int64][]int64{4: {3}}, 1, 4, domain.InFlightStall{}, false},
+		"existing cycle is walked once":  {map[int64][]int64{2: {5}, 5: {2}}, 1, 2, domain.InFlightStall{}, false},
+		"unknown ticket ends the chain":  {map[int64][]int64{2: {99}, 99: {3}}, 1, 2, domain.InFlightStall{}, false},
 	}
 	for name, c := range cases {
 		got, isStall := domain.DependencyStall(c.edges, tickets, c.from, c.to)

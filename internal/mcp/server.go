@@ -36,7 +36,7 @@ const (
 const serverInstructions = `This is a task board where you are the worker and a human is the product owner. ` +
 	`Call claim_work to get the next ticket; it returns a brief with the request, the history and exact instructions for the action to take. ` +
 	`Follow the brief's "What to do now" section. Ask questions with ask_questions instead of guessing; the human answers from a phone. ` +
-	`Lanes: todo -> in_progress (design, build, PR open) -> merged. ` +
+	`Lanes: todo -> in_progress (design, build, PR open) -> merged -> deployed. Merged PRs reach Deployed unless the repo deploy_mode is agent, in which case they await deployment in Merged. ` +
 	`Agents never choose lanes: save_spec and save_design with submit, ask_questions and mark_blocked hand tickets on, and an agent submits a finished build to the PR stage with move_ticket lane in_progress.`
 
 // Server answers MCP requests by dispatching to its tools.

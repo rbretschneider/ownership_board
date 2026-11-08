@@ -61,7 +61,7 @@ type TicketRepository interface {
 	SetRank(ctx context.Context, id int64, rank float64) error
 	// NextClaimable returns the top claimable ticket in stage matching filter:
 	// unleased, not blocked, with no open questions, and with every ticket it
-	// depends on merged.
+	// depends on completed.
 	NextClaimable(ctx context.Context, stage domain.Stage, filter TicketFilter, now time.Time) (domain.Ticket, bool, error)
 	// CountInFlightAutonomous counts autonomous tickets in design or build,
 	// in any repo, whether leased, blocked or waiting.

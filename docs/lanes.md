@@ -1,6 +1,8 @@
+For the current contract, see [deployment state](#amendment-deployment-state).
+
 ## Amendment: three lanes
 
-The current board lanes are Todo (`todo`), In progress (`in_progress`), and
+This earlier amendment introduced Todo (`todo`), In progress (`in_progress`), and
 Merged (`merged`). This amendment supersedes the historical lane tables,
 PR mappings and command examples below; the original proposal is retained
 for context.
@@ -311,3 +313,36 @@ type Repo = { /* ...existing */ require_spec_approval: boolean; require_design_a
 New timeline types: `stage` (data `{from, to}`), `approved` / `changes_requested`
 (data `{checkpoint, revision}`, body = comment), `blocked` (body = reason),
 `unblocked`, `design`.
+
+## Amendment: deployment state
+
+The lane sequence is now Todo, In Progress, Merged, Deployed. Their IDs are
+`todo`, `in_progress`, `merged`, `deployed`. This amendment replaces earlier
+completion mappings while retaining the PR stage inside In Progress.
+
+A repository's `deploy_mode` selects what happens after a reported PR merge.
+The default, `off`, completes the ticket in `deployed` / `deployed`. The
+`agent` policy keeps it in `merged` / `done` pending deployment. Unassigned
+tickets complete directly in Deployed. Changing this setting applies to later
+PR reports; it does not move existing tickets. Deployment execution is a
+separate operation and is not provided by this change.
+
+Only people may change the setting. People may also drag tickets into either
+completion lane: Merged selects `done`; Deployed selects `deployed` and adds
+`Marked deployed by <person>` to the stage history. Reordering within Deployed
+does not add another deployment entry. Agents continue to submit builds to
+`pr` and report verified PR state; they cannot choose these terminal lanes.
+
+The catalog labels `done` as Merged. Clients may display Awaiting deploy for
+that stage when its repository uses `agent`. The Deployed label is fixed.
+Both completed stages satisfy dependencies and count toward completion
+statistics. A later move from Merged to Deployed preserves the original
+completion time, sequence and dependency-release effects. Deployed sends a
+low-priority completion notification, subject to the usual suppression of a
+person's own actions.
+
+On upgrade, repositories default to `off` and existing Merged/Done tickets
+become Deployed/Deployed. Historical entries and other ticket fields remain
+unchanged. Downgrading maps Deployed back to Merged/Done and removes the
+setting, losing deployment distinctions. This amendment describes the server
+contract; frontend deployment controls are delivered separately.

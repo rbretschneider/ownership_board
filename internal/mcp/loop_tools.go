@@ -87,7 +87,7 @@ func (reportPRState) Definition() Definition {
 	return Definition{
 		Name: "report_pr_state",
 		Description: "For a ticket in stage pr within In Progress with a pull request: report what you found when you checked the PR (for example with gh pr view). " +
-			"merged moves it to Merged, closed (without merging) sends it back to building, blocked until the owner decides, repair returns a conflicted PR, failed check or requested change to the agent work queue without blocking; include evidence in note. open changes nothing. Only report what you verified just now.",
+			"merged moves it to Deployed (or Merged awaiting deployment when the repo deploy_mode is agent), closed (without merging) sends it back to building, blocked until the owner decides, repair returns a conflicted PR, failed check or requested change to the agent work queue without blocking; include evidence in note. open changes nothing. Only report what you verified just now.",
 		InputSchema: object(map[string]any{
 			"id":    ticketIDProp(),
 			"state": map[string]any{"type": "string", "enum": []string{string(app.PullRequestMerged), string(app.PullRequestClosed), string(app.PullRequestOpen), string(app.PullRequestRepair)}},

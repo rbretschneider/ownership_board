@@ -23,7 +23,7 @@ func repoHealth(tickets []history, repos []domain.Repo) map[int64]*RepoHealth {
 				id := ticket.ID
 				status.LastCheckTicket = &id
 			}
-		} else if ticket.Stage == domain.StageDone && ticket.HealthCheckMergeSequence > checkpoints[ticket.RepoID] {
+		} else if ticket.Stage.IsCompleted() && ticket.HealthCheckMergeSequence > checkpoints[ticket.RepoID] {
 			status.MergesSinceCheck++
 		}
 	}

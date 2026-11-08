@@ -17,7 +17,7 @@ const (
 	RelationDuplicateOf RelationKind = "duplicate_of"
 	RelationRelatesTo   RelationKind = "relates_to"
 	// RelationDependsOn means the "from" ticket waits until the "to" ticket
-	// is merged: agents cannot claim it before then.
+	// is completed: agents cannot claim it before then.
 	RelationDependsOn RelationKind = "depends_on"
 )
 

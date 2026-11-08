@@ -87,7 +87,7 @@ func (linkTickets) Definition() Definition {
 	return Definition{
 		Name: "link_tickets",
 		Description: "Relate two tickets, read as \"<id> <kind> <other_id>\", e.g. 57 caused_by 42. You must hold the lease on one of them. " +
-			"For depends_on (57 depends_on 42: agents cannot claim 57 until 42 is merged) you need the lease on <id> or to have filed it; " +
+			"For depends_on (57 depends_on 42: agents cannot claim 57 until 42 reaches done or deployed) you need the lease on <id> or to have filed it; " +
 			"both tickets must be in the same repo and the link must not close a cycle.",
 		InputSchema: object(map[string]any{
 			"id":       ticketIDProp(),
