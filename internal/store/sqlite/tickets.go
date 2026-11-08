@@ -17,7 +17,7 @@ type ticketRepo struct {
 
 const ticketColumns = `id, repo_id, kind, title, body, spec, design, lane, stage, rank, pr_url, branch, blocked_reason,
 	spec_revision, design_revision, approved_spec_revision, approved_design_revision,
-	lease_holder, lease_expires_at, created_by, created_at, updated_at, lane_changed_at, is_autonomous, work_model`
+	lease_holder, lease_expires_at, created_by, created_at, updated_at, lane_changed_at, is_autonomous, work_model, is_health_check, health_check_merge_sequence`
 
 func (r ticketRepo) Get(ctx context.Context, id int64) (domain.Ticket, error) {
 	row := r.q.QueryRowContext(ctx, `SELECT `+ticketColumns+` FROM tickets WHERE id = ?`, id)
@@ -47,8 +47,8 @@ func (r ticketRepo) Insert(ctx context.Context, ticket *domain.Ticket) error {
 	result, err := r.q.ExecContext(ctx,
 		`INSERT INTO tickets (repo_id, kind, title, body, spec, design, lane, stage, rank, pr_url, branch, blocked_reason,
 			spec_revision, design_revision, approved_spec_revision, approved_design_revision,
-			lease_holder, lease_expires_at, created_by, created_at, updated_at, lane_changed_at, is_autonomous, work_model)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			lease_holder, lease_expires_at, created_by, created_at, updated_at, lane_changed_at, is_autonomous, work_model, is_health_check, health_check_merge_sequence)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ticketValues(*ticket)...)
 	if err != nil {
 		return fmt.Errorf("sqlite: insert ticket: %w", err)
@@ -63,7 +63,7 @@ func (r ticketRepo) Update(ctx context.Context, ticket domain.Ticket) error {
 		`UPDATE tickets SET repo_id = ?, kind = ?, title = ?, body = ?, spec = ?, design = ?, lane = ?, stage = ?, rank = ?,
 			pr_url = ?, branch = ?, blocked_reason = ?, spec_revision = ?, design_revision = ?,
 			approved_spec_revision = ?, approved_design_revision = ?, lease_holder = ?, lease_expires_at = ?, created_by = ?,
-			created_at = ?, updated_at = ?, lane_changed_at = ?, is_autonomous = ?, work_model = ?
+			created_at = ?, updated_at = ?, lane_changed_at = ?, is_autonomous = ?, work_model = ?, is_health_check = ?, health_check_merge_sequence = ?
 		 WHERE id = ?`, args...)
 	if err != nil {
 		return fmt.Errorf("sqlite: update ticket %d: %w", ticket.ID, err)
@@ -139,7 +139,7 @@ func ticketValues(t domain.Ticket) []any {
 	return []any{
 		nullableID(t.RepoID), string(t.Kind), t.Title, t.Body, t.Spec, t.Design, string(t.Lane), string(t.Stage), t.Rank,
 		t.PRURL, t.Branch, t.BlockedReason, t.SpecRevision, t.DesignRevision, t.ApprovedSpecRevision, t.ApprovedDesignRevision,
-		holder, expires, t.CreatedBy, formatTime(t.CreatedAt), formatTime(t.UpdatedAt), formatTime(t.LaneChangedAt), t.IsAutonomous, t.WorkModel,
+		holder, expires, t.CreatedBy, formatTime(t.CreatedAt), formatTime(t.UpdatedAt), formatTime(t.LaneChangedAt), t.IsAutonomous, t.WorkModel, t.IsHealthCheck, nullableID(t.HealthCheckMergeSequence),
 	}
 }
 
@@ -199,14 +199,15 @@ type scanner interface {
 func scanTicket(row scanner) (domain.Ticket, error) {
 	var t domain.Ticket
 	var kind, lane, stage, holder, expires, created, updated, laneChanged string
-	var repoID sql.NullInt64
+	var repoID, mergeSequence sql.NullInt64
 	err := row.Scan(&t.ID, &repoID, &kind, &t.Title, &t.Body, &t.Spec, &t.Design, &lane, &stage, &t.Rank, &t.PRURL, &t.Branch,
 		&t.BlockedReason, &t.SpecRevision, &t.DesignRevision, &t.ApprovedSpecRevision, &t.ApprovedDesignRevision,
-		&holder, &expires, &t.CreatedBy, &created, &updated, &laneChanged, &t.IsAutonomous, &t.WorkModel)
+		&holder, &expires, &t.CreatedBy, &created, &updated, &laneChanged, &t.IsAutonomous, &t.WorkModel, &t.IsHealthCheck, &mergeSequence)
 	if err != nil {
 		return domain.Ticket{}, err
 	}
 	t.RepoID = repoID.Int64
+	t.HealthCheckMergeSequence = mergeSequence.Int64
 	t.Kind, t.Lane, t.Stage = domain.Kind(kind), domain.Lane(lane), domain.Stage(stage)
 	if t.Stage.Lane() != t.Lane {
 		return domain.Ticket{}, fmt.Errorf("sqlite: ticket %d has stage %q in lane %q", t.ID, stage, lane)
@@ -238,4 +239,27 @@ func parseTicketTimes(t *domain.Ticket, created, updated, laneChanged string) er
 	}
 	t.LaneChangedAt, err = parseTime(laneChanged)
 	return err
+}
+
+func (r ticketRepo) MergedSinceHealthCheck(ctx context.Context, repoID, afterSequence int64) ([]domain.Ticket, error) {
+	rows, err := r.q.QueryContext(ctx, `SELECT `+ticketColumns+` FROM tickets WHERE repo_id = ? AND stage = 'done' AND is_health_check = 0 AND health_check_merge_sequence > ? ORDER BY health_check_merge_sequence`, repoID, afterSequence)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tickets []domain.Ticket
+	for rows.Next() {
+		ticket, err := scanTicket(rows)
+		if err != nil {
+			return nil, err
+		}
+		tickets = append(tickets, ticket)
+	}
+	return tickets, rows.Err()
+}
+
+func (r ticketRepo) HasOpenHealthCheck(ctx context.Context, repoID int64) (bool, error) {
+	var found bool
+	err := r.q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM tickets WHERE repo_id = ? AND is_health_check = 1 AND stage <> 'done')`, repoID).Scan(&found)
+	return found, err
 }

@@ -64,6 +64,7 @@ type ticketSummaryDTO struct {
 	WorkModel      string        `json:"work_model"`
 	NeedsOwner     bool          `json:"needs_owner"`
 	BlockedReason  string        `json:"blocked_reason"`
+	IsHealthCheck  bool          `json:"is_health_check"`
 	IsAutonomous   bool          `json:"is_autonomous"`
 	SpecRevision   int           `json:"spec_revision"`
 	DesignRevision int           `json:"design_revision"`
@@ -192,7 +193,7 @@ func toSummary(summary app.TicketSummary) ticketSummaryDTO {
 	return ticketSummaryDTO{
 		ID: t.ID, RepoID: repoID, Kind: t.Kind, Title: t.Title, Lane: t.Lane, Stage: t.Stage,
 		WorkModel: t.WorkModel, Owner: t.Owner(summary.OpenQuestions), NeedsOwner: t.NeedsOwner(summary.OpenQuestions), BlockedReason: t.BlockedReason,
-		IsAutonomous: t.IsAutonomous,
+		IsAutonomous: t.IsAutonomous, IsHealthCheck: t.IsHealthCheck,
 		SpecRevision: t.SpecRevision, DesignRevision: t.DesignRevision,
 		PRURL: t.PRURL, Branch: t.Branch, OpenQuestions: summary.OpenQuestions, WaitingOn: nonNilIDs(summary.WaitingOn), Lease: activeLease(t),
 		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, LaneChangedAt: t.LaneChangedAt,

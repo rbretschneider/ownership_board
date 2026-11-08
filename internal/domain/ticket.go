@@ -36,11 +36,15 @@ type Ticket struct {
 	// checkpoints, and agents decide instead of asking. A delegate agent files
 	// one with a spec agreed in a chat, or a person starts one on autopilot;
 	// only a person changes the flag afterwards.
-	IsAutonomous  bool
-	CreatedBy     string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	LaneChangedAt time.Time
+	IsAutonomous bool
+	// IsHealthCheck identifies a scheduled architecture review. The sequence
+	// orders an ordinary ticket's first completion within its current repo.
+	IsHealthCheck            bool
+	HealthCheckMergeSequence int64
+	CreatedBy                string
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
+	LaneChangedAt            time.Time
 }
 
 // TicketDraft is the input for a new ticket. Every ticket starts in Todo,
@@ -275,6 +279,7 @@ func applyRepo(t *Ticket, edit TicketEdit) (string, error) {
 		return "", Invalidf("repo_id must be positive")
 	}
 	t.RepoID = *edit.RepoID
+	t.HealthCheckMergeSequence = 0
 	return "repo", nil
 }
 

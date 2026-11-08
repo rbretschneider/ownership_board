@@ -34,8 +34,10 @@ type Repo struct {
 	// green and no review asks for changes. Off by default; only a person
 	// can turn it on, per repo.
 	AllowAgentMerge bool
-	// HealthCheckEvery is how many merges pass between architecture health
-	// checks; 0 turns the check off.
+	// Merge sequences order ordinary completions independently of ticket IDs.
+	MergeSequence                     int64
+	HealthCheckedThroughMergeSequence int64
+	// HealthCheckEvery is the merge interval; 0 disables scheduling.
 	HealthCheckEvery int
 	// HealthCheckedThroughTicket and HealthCheckedAt record where the last
 	// health check ended. Both are empty until the first check.

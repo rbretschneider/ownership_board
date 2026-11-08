@@ -46,6 +46,8 @@ type TicketFilter struct {
 
 // TicketRepository persists tickets.
 type TicketRepository interface {
+	MergedSinceHealthCheck(ctx context.Context, repoID, afterSequence int64) ([]domain.Ticket, error)
+	HasOpenHealthCheck(ctx context.Context, repoID int64) (bool, error)
 	Get(ctx context.Context, id int64) (domain.Ticket, error)
 	List(ctx context.Context, filter TicketFilter) ([]domain.Ticket, error)
 	Insert(ctx context.Context, ticket *domain.Ticket) error
@@ -117,8 +119,10 @@ type RepoRepository interface {
 	SetGates(ctx context.Context, repo domain.Repo) error
 	// SetHealthCheck writes the health check interval.
 	SetHealthCheck(ctx context.Context, repo domain.Repo) error
-	// RecordHealthCheck stores the last merged ticket a health check covered.
-	RecordHealthCheck(ctx context.Context, repoID, throughTicket int64, at time.Time) error
+	// NextMergeSequence allocates the next repository-local completion position.
+	NextMergeSequence(ctx context.Context, repoID int64) (int64, error)
+	// RecordHealthCheck stores the last covered ticket and merge position together.
+	RecordHealthCheck(ctx context.Context, repoID, throughTicket, throughSequence int64, at time.Time) error
 }
 
 // SourceStatusRepository persists the outcome of the last sync per provider.

@@ -434,3 +434,35 @@ func TestHealthCheckIntervalOverTheAPI(t *testing.T) {
 		t.Fatalf("repo after refused edits: %v", got)
 	}
 }
+
+func TestHealthCheckMarkerIsReadOnlyInSummaryAndDetail(t *testing.T) {
+	browser, _ := signedIn(t)
+	repoID := jsonNumber(browser.expect(http.StatusCreated, "POST", "/api/v1/repos", `{"full_name":"acme/api"}`)["id"])
+	browser.expect(http.StatusOK, "PATCH", "/api/v1/repos/"+repoID, `{"health_check_every":1}`)
+	ticket := browser.expect(http.StatusCreated, "POST", "/api/v1/tickets", `{"kind":"story","title":"delivery","repo_id":`+repoID+`}`)
+	if ticket["is_health_check"] != false {
+		t.Fatal("ordinary marker missing")
+	}
+	path := "/api/v1/tickets/" + jsonNumber(ticket["id"])
+	browser.expect(http.StatusBadRequest, "POST", "/api/v1/tickets", `{"kind":"story","title":"forged","is_health_check":true}`)
+	browser.expect(http.StatusBadRequest, "PATCH", path, `{"is_health_check":true}`)
+	browser.expect(http.StatusOK, "POST", path+"/move", `{"lane":"merged"}`)
+	board := browser.expect(http.StatusOK, "GET", "/api/v1/board", "")
+	found := false
+	for _, value := range board["tickets"].([]any) {
+		summary := value.(map[string]any)
+		if summary["is_health_check"] != true {
+			continue
+		}
+		found = true
+		detailPath := "/api/v1/tickets/" + jsonNumber(summary["id"])
+		detail := browser.expect(http.StatusOK, "GET", detailPath, "")
+		if detail["is_health_check"] != true || detail["is_autonomous"] != true || detail["stage"] != "ready" {
+			t.Fatal(detail)
+		}
+		browser.expect(http.StatusBadRequest, "PATCH", detailPath, `{"is_health_check":false}`)
+	}
+	if !found {
+		t.Fatal("generated marker missing from board")
+	}
+}
