@@ -9,6 +9,14 @@ on:
 permissions:
   contents: read
 
+env:
+  GOMAXPROCS: 3
+  GOFLAGS: -p=3
+  MAKEFLAGS: -j3
+  CMAKE_BUILD_PARALLEL_LEVEL: 3
+  CTEST_PARALLEL_LEVEL: 3
+  OMP_NUM_THREADS: 3
+
 jobs:
   server:
     runs-on: ubuntu-latest
@@ -17,7 +25,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: test -z "$(gofmt -l cmd internal)" || (gofmt -l cmd internal && exit 1)
+      - run: test -z "$(gofmt -l cmd internal agent/build_host)" || (gofmt -l cmd internal agent/build_host && exit 1)
       - run: go vet ./...
       - run: go test -race ./...
 
@@ -36,3 +44,34 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+
+  agent-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.10', '3.14']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install --require-hashes -r agent/build_host/requirements.txt
+      - run: sh -n agent/build_host/install/build-host.sh
+      - run: python -m unittest discover -s agent/build_host/tests -v
+      - uses: actions/setup-go@v5
+        if: matrix.python == '3.14'
+        with:
+          go-version-file: go.mod
+      - if: matrix.python == '3.14'
+        run: BUILD_HOST_PYTHON="$(command -v python)" go test -race ./internal/httpapi -run TestBuildHostPythonInterop -count=1
+
+  agent-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - run: python -m pip install --require-hashes -r agent/build_host/requirements.txt
+      - run: sh -n agent/build_host/install/build-host.sh
+      - run: python -m unittest discover -s agent/build_host/tests -v

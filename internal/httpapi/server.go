@@ -78,6 +78,7 @@ func New(deps Deps) http.Handler {
 func (s *server) routes(rt *router) {
 	rt.public("GET /health", s.health)
 	rt.public("GET /api/v1/health", s.health)
+	s.installRoutes(rt)
 	s.authRoutes(rt)
 	s.boardRoutes(rt)
 	s.repoRoutes(rt)

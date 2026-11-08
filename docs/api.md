@@ -656,6 +656,16 @@ windows and does not repeat dependency release or health-check scheduling.
 The schema upgrade converts existing Merged/Done tickets to Deployed without
 rewriting history; downgrade collapses deployment state back to Merged/Done.
 
+### Build worker downloads
+
+`GET /install/build-host.sh` and `GET /install/build-host.ps1` anonymously serve
+fixed installers, including the Python runtime embedded in the server binary.
+`HEAD` returns the same download metadata without a body. Responses are UTF-8
+plain text with `Cache-Control: no-store`. No board address, enrollment code or
+other caller data is injected into downloads. Pass the origin and code as
+installer arguments. See [build worker operations](../agent/build_host/README.md)
+for prerequisites, services, resource limits and uninstall instructions.
+
 ### Build-host presentation
 
 Human sessions can manage registered hosts in Settings. The legacy

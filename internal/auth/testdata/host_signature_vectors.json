@@ -1,0 +1,32 @@
+[
+  {
+    "seed": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "public_key": "A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=",
+    "method": "GET",
+    "path": "/api/v1/build-host/status",
+    "timestamp": "1760000000",
+    "body": "",
+    "message": "GET\n/api/v1/build-host/status\n1760000000\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "signature": "sMpPiOBntF1uJARsHxD9jxM7NtT1EfdvqW817valoWbGGBIcUI9XqyCMRQpqeZuFY2iuW6G2eH6ZcfPwMmhpAg=="
+  },
+  {
+    "seed": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "public_key": "A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=",
+    "method": "POST",
+    "path": "/api/v1/build-host/claim",
+    "timestamp": "1760000000",
+    "body": "{}",
+    "message": "POST\n/api/v1/build-host/claim\n1760000000\n44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "signature": "lkiTB6FFrfCwizoG+UJ93cP3GVfaHucPpcRv1lex6VmAroSROSiJJsvs38PrWtV+vpvli3p5lCfTXIxMfISZBg=="
+  },
+  {
+    "seed": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "public_key": "A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=",
+    "method": "POST",
+    "path": "/api/v1/build-host/jobs/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/progress",
+    "timestamp": "1760000000",
+    "body": "{ \"attempt\":1,\"phase\":\"building\",\"detail\":\"Grüße 🌍\" }",
+    "message": "POST\n/api/v1/build-host/jobs/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/progress\n1760000000\ne3b7b81a137888c6c7eefd64bd4cd8c2ef74017e1eaea08da2ccc5195cffff40",
+    "signature": "pa6EaAFgiL26+2eHD1+UKoQqQadcos/dvqYOq36it8ZqW69/JLGUxuo2hoptOm5KbUjX3koXp0ElAbbh8t8DDA=="
+  }
+]
