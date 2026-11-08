@@ -30,7 +30,7 @@ var ignoredExtensions = map[string]bool{".md": true, ".sln": true, ".csproj": tr
 var ignoredPrefixes = []string{".ownership/", ".github/", "docs/", "origin/"}
 
 // DesignFiles returns the files a design names that matter for conflicts.
-func DesignFiles(design string) map[string]bool {
+func DesignFiles(design string, overlapIgnore ...string) map[string]bool {
 	files := map[string]bool{}
 	for _, match := range designPath.FindAllStringSubmatch(design, -1) {
 		file := strings.TrimPrefix(match[1], "./")
@@ -39,7 +39,7 @@ func DesignFiles(design string) map[string]bool {
 		if ignoredNames[name] || ignoredExtensions[strings.ToLower(path.Ext(name))] || len(stem) < 2 || strings.Contains(file, "..") {
 			continue
 		}
-		if hasAnyPrefix(file, ignoredPrefixes) {
+		if hasAnyPrefix(file, ignoredPrefixes) || matchesOverlapIgnore(file, overlapIgnore) {
 			continue
 		}
 		files[file] = true
