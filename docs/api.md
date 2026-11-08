@@ -57,7 +57,7 @@ type User = { id: number; name: string; email: string; is_admin: boolean; sso_li
 | POST   | `/api/v1/tickets` | `CreateTicket` | `TicketDetail`. The ticket starts in `todo` / `refine`. |
 | GET    | `/api/v1/tickets/{id}` | | `TicketDetail` |
 | PATCH  | `/api/v1/tickets/{id}` | `EditTicket` | `TicketDetail` |
-| POST   | `/api/v1/tickets/{id}/move` | `{lane, after_id}` | `TicketDetail`. The server picks the stage. Agents may only move a finished build to `review`. |
+| POST   | `/api/v1/tickets/{id}/move` | `{lane, after_id}` | `TicketDetail`. The server picks the stage. Agents may only submit a finished build to stage `pr` with `lane: "in_progress"`. |
 | POST   | `/api/v1/tickets/{id}/comments` | `{body}` | `TicketDetail` |
 | PUT    | `/api/v1/tickets/{id}/spec` | `{spec, submit?}` | `TicketDetail` |
 | PUT    | `/api/v1/tickets/{id}/design` | `{design, submit?}` | `TicketDetail` |
@@ -84,8 +84,13 @@ The spec and design endpoints behave differently by caller:
 It records the reason (up to 1,000 characters), ends the lease, and makes the
 ticket unclaimable until a person unblocks it.
 
-Agents move a ticket to `review` only from `build`, with `pr_url` set, no open
-questions and no block. Every other `lane` from an agent answers `403`.
+Agents submit a ticket from `build` to `pr` with `lane: "in_progress"`, with
+`pr_url` set, no open questions and no block. The ticket stays in In Progress
+and the lease ends. Deprecated agent input `lane: "review"` is an alias for
+this handoff; it is not a valid lane for lists or human moves. Other valid
+lane targets from an agent answer `403`. People dropping within In Progress
+only reorder; a cross-lane drop selects build if the design is cleared under
+the repo approval rules, otherwise design. No human drop target selects PR.
 
 ## Human only
 
@@ -158,16 +163,17 @@ same actor and is claimable from the next claim on.
 `409`. `merged` moves it to `merged` / `done`. `closed` moves it to
 `in_progress` / `build` and blocks it with the reason "The pull request was
 closed without merging", so a person decides what happens next. `open`
-changes nothing. People get `403`: they move review tickets by dragging.
+changes nothing. People get `403`: they move tickets by dragging. `repair` returns a PR-stage
+ticket to `in_progress` / `build` without a block and requires evidence.
 
 ## Types
 
 ```ts
-type LaneId = "todo" | "in_progress" | "review" | "merged";
+type LaneId = "todo" | "in_progress" | "merged";
 type StageId =
   | "refine" | "spec_review" | "ready"      // todo
   | "design" | "design_review" | "build"    // in_progress
-  | "pr"                                     // review
+  | "pr"                                     // in_progress
   | "done";                                  // merged
 type Owner = "agent" | "human" | "nobody";
 type Kind = "story" | "bug";
@@ -225,7 +231,7 @@ type StageAttempts = {
   test_failures: number;  // Windows runs that failed ("· awaiting repair")
   review: number;         // fresh-context adversarial review rounds
   review_fixes: number;   // review rounds after which the author resumed work
-  pr: number;             // entries into the review lane
+  pr: number;             // entries into the PR stage
   pr_repairs: number;     // returns from an open PR to build
 };
 

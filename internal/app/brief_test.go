@@ -56,3 +56,12 @@ func TestOrdinaryBriefArchitectureGuidance(t *testing.T) {
 		}
 	}
 }
+
+func TestImplementationBriefUsesPRStageHandoff(t *testing.T) {
+	for _, health := range []bool{false, true} {
+		brief := app.RenderBrief(app.BriefInput{Action: domain.ActionImplement, Detail: app.TicketDetail{TicketSummary: app.TicketSummary{Ticket: domain.Ticket{IsHealthCheck: health}}}})
+		if !strings.Contains(brief, `move_ticket with lane "in_progress"`) || !strings.Contains(brief, `stage "pr"`) || strings.Contains(brief, `to "review"`) {
+			t.Fatal("incorrect PR handoff guidance")
+		}
+	}
+}

@@ -1,3 +1,29 @@
+## Amendment: three lanes
+
+The current board lanes are Todo (`todo`), In progress (`in_progress`), and
+Merged (`merged`). This amendment supersedes the historical lane tables,
+PR mappings and command examples below; the original proposal is retained
+for context.
+
+PR open (`pr`) is an owner-review stage within In Progress. Agents submit a
+finished build with `move_ticket` and `lane: "in_progress"`, after setting
+`pr_url`, resolving questions and clearing any block. This ends the lease.
+Deprecated agent-only input `lane: "review"` remains an alias for that handoff;
+Review is not a lane or a valid filter or human drop target.
+
+People reorder PR cards within In Progress without changing their stage.
+Cross-lane drops into In Progress choose build when the design clears the
+repo's approval rules, otherwise design. No human drop target selects PR.
+
+For PR monitoring, list In Progress candidates with PR URLs, then use
+`get_ticket` to confirm stage `pr` before reporting provider state. A repair
+may still have a PR URL while in build. `report_pr_state` handles merged as
+Merged/done, closed as blocked build, repair as unblocked build, and open
+without changes. Ordinary PR-stage tickets need owner attention; autonomous
+PR tickets retain their existing suppression of owner-review alerts.
+
+---
+
 # Four lanes with stages (design)
 
 Status: approved with changes, 2026-10-21. Replaces the six lanes in

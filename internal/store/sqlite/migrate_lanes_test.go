@@ -61,7 +61,7 @@ func TestLanesMigrationMapsEveryOldLane(t *testing.T) {
 	}
 	want := map[string][2]string{
 		"new": {"todo", "refine"}, "answers": {"todo", "refine"}, "ready": {"todo", "spec_review"},
-		"in_progress": {"in_progress", "build"}, "review": {"review", "pr"}, "done": {"merged", "done"},
+		"in_progress": {"in_progress", "build"}, "review": {"in_progress", "pr"}, "done": {"merged", "done"},
 	}
 	rows, err := db.Query(`SELECT title, lane, stage, lease_holder, spec_revision FROM tickets ORDER BY lane, rank`)
 	if err != nil {

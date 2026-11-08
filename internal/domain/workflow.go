@@ -163,17 +163,16 @@ func (t *Ticket) HandOffForQuestions(now time.Time, escalation bool) error {
 	return nil
 }
 
-// SubmitForReview is the agent's only lane move: a finished build with an open
-// pull request goes to Review.
+// SubmitForReview hands a finished build with an open pull request to the PR stage.
 func (t *Ticket) SubmitForReview(openQuestions int) (Stage, error) {
 	if t.Stage != StageBuild {
-		return "", Conflictf("only a ticket being built can go to review")
+		return "", Conflictf("only a ticket being built can enter the PR stage")
 	}
 	if err := t.requireHandOff(openQuestions); err != nil {
 		return "", err
 	}
 	if t.PRURL == "" {
-		return "", Invalidf("set pr_url before moving ticket %d to review", t.ID)
+		return "", Invalidf("set pr_url before submitting ticket %d to the PR stage", t.ID)
 	}
 	return StagePR, nil
 }
@@ -199,8 +198,6 @@ func (t *Ticket) DropStage(lane Lane, gates Gates) Stage {
 			return StageBuild
 		}
 		return StageDesign
-	case LaneReview:
-		return StagePR
 	default:
 		return StageDone
 	}

@@ -136,8 +136,8 @@ func TestAgentsOnlyMoveAFinishedBuildToReview(t *testing.T) {
 	id := f.ticket("skip ahead", api.ID)
 	f.mustClaim(agent, app.ClaimInput{})
 	_, err := f.board.Move(f.ctx, agent, id, app.MoveInput{Lane: string(domain.LaneInProgress)})
-	requireErrorKind(t, err, domain.KindForbidden)
-	_, err = f.board.Move(f.ctx, agent, id, app.MoveInput{Lane: string(domain.LaneReview)})
+	requireErrorKind(t, err, domain.KindConflict)
+	_, err = f.board.Move(f.ctx, agent, id, app.MoveInput{Lane: "review"})
 	requireErrorKind(t, err, domain.KindConflict)
 }
 
@@ -217,8 +217,112 @@ func TestAgentCannotChangeATicketItDoesNotHold(t *testing.T) {
 	_, editErr := f.board.Edit(f.ctx, agent, id, domain.TicketEdit{Title: &title})
 	_, specErr := f.board.SaveSpec(f.ctx, agent, id, app.SaveTextInput{Text: "new spec"})
 	_, commentErr := f.board.Comment(f.ctx, agent, id, "hello")
-	_, moveErr := f.board.Move(f.ctx, agent, id, app.MoveInput{Lane: string(domain.LaneReview)})
+	_, moveErr := f.board.Move(f.ctx, agent, id, app.MoveInput{Lane: "review"})
 	for _, err := range []error{editErr, specErr, commentErr, moveErr} {
 		requireErrorKind(t, err, domain.KindForbidden)
+	}
+}
+
+func TestPRSubmissionKeepsLaneAndReleasesLease(t *testing.T) {
+	for _, lane := range []string{"in_progress", "review"} {
+		t.Run(lane, func(t *testing.T) {
+			f := newFixture(t)
+			repo := f.syncedRepo("acme/api", "https://git.example.com/acme/api", true)
+			id := f.ticket("complete", repo.ID)
+			f.toBuild(id)
+			f.mustClaim(agent, app.ClaimInput{})
+			pr := "https://git.example.com/acme/api/pulls/9"
+			if _, err := f.board.Edit(f.ctx, agent, id, domain.TicketEdit{PRURL: &pr}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.agents.SetWorkModel(f.ctx, agent, id, "gpt-6.1-sol"); err != nil {
+				t.Fatal(err)
+			}
+			before := f.detail(id)
+			detail, err := f.board.Move(f.ctx, agent, id, app.MoveInput{Lane: lane})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := detail.Ticket
+			if got.Stage != domain.StagePR || got.Lane != domain.LaneInProgress || got.Lease != nil || got.WorkModel != "" || got.Rank != before.Ticket.Rank || !got.LaneChangedAt.Equal(before.Ticket.LaneChangedAt) {
+				t.Fatalf("handoff: %+v", got)
+			}
+			stages := 0
+			for _, e := range detail.Timeline[len(before.Timeline):] {
+				if e.Type == domain.TimelineMoved {
+					t.Fatal("same-lane handoff recorded a lane move")
+				}
+				if e.Type == domain.TimelineStage {
+					stages++
+					if e.Data["from"] != "build" || e.Data["to"] != "pr" {
+						t.Fatal(e)
+					}
+				}
+			}
+			if stages != 1 {
+				t.Fatalf("stage events: %d", stages)
+			}
+			notified := false
+			for _, e := range f.events.events {
+				if e.TicketID == id && e.Type == domain.TimelineStage && e.Stage == domain.StagePR {
+					_, notified = policy().Evaluate(e)
+				}
+			}
+			if !notified {
+				t.Fatal("PR stage entry did not notify")
+			}
+			f.move(owner, id, domain.LaneInProgress, nil)
+			f.requireStage(id, domain.StagePR)
+		})
+	}
+}
+
+func TestPersonCannotDropIntoRetiredLane(t *testing.T) {
+	f := newFixture(t)
+	id := f.ticket("idea", 0)
+	_, err := f.board.Move(f.ctx, owner, id, app.MoveInput{Lane: "review"})
+	requireErrorKind(t, err, domain.KindInvalid)
+}
+
+func TestPRSubmissionGuards(t *testing.T) {
+	for _, lane := range []string{"in_progress", "review"} {
+		for _, guard := range []string{"missing PR", "questions", "block", "wrong lease", "target"} {
+			t.Run(lane+"/"+guard, func(t *testing.T) {
+				f := newFixture(t)
+				repo := f.syncedRepo("acme/api", "https://git.example.com/acme/api", true)
+				id := f.ticket("build", repo.ID)
+				f.toBuild(id)
+				f.mustClaim(agent, app.ClaimInput{})
+				if guard != "missing PR" {
+					pr := "https://git.example.com/acme/api/pulls/9"
+					if _, err := f.board.Edit(f.ctx, agent, id, domain.TicketEdit{PRURL: &pr}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if guard == "questions" {
+					if _, err := f.board.Ask(f.ctx, agent, id, ask("Which option?")); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if guard == "block" {
+					if _, err := f.board.Block(f.ctx, agent, id, "needs decision"); err != nil {
+						t.Fatal(err)
+					}
+				}
+				actor := agent
+				if guard == "wrong lease" {
+					actor = other
+				}
+				target := lane
+				if guard == "target" {
+					target = "merged"
+				}
+				_, err := f.board.Move(f.ctx, actor, id, app.MoveInput{Lane: target})
+				if err == nil {
+					t.Fatal("guard accepted submission")
+				}
+				f.requireStage(id, domain.StageBuild)
+			})
+		}
 	}
 }
