@@ -310,3 +310,11 @@ func limitDocument(field, text string, maxRunes int) (string, error) {
 	}
 	return value, err
 }
+
+// CheckDeployRequest validates a person-requested release against repository policy.
+func (t *Ticket) CheckDeployRequest(repo *Repo) error {
+	if t.Stage != StageDone || t.Lane != LaneMerged || t.IsBlocked() || t.RepoID == 0 || repo == nil || repo.ID != t.RepoID || repo.DeployMode != DeployModeAgent {
+		return Conflictf("ticket %d must be unblocked and merged in a repository with agent deployment enabled", t.ID)
+	}
+	return nil
+}

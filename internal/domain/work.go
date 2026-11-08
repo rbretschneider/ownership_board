@@ -5,20 +5,22 @@ type WorkAction string
 
 // The agent actions.
 const (
+	ActionDeploy    WorkAction = "deploy"
 	ActionRefine    WorkAction = "refine"
 	ActionDesign    WorkAction = "design"
 	ActionImplement WorkAction = "implement"
 )
 
-// ClaimOrder lists the stages an agent claims from, most urgent first: finish
-// started work, then refine (cheap, and it unblocks the owner soonest), then
-// start designing what is ready.
-var ClaimOrder = []Stage{StageBuild, StageDesign, StageRefine, StageReady}
+// ClaimOrder prioritizes requested deployments, then started builds/designs,
+// refinement and finally new design work.
+var ClaimOrder = []Stage{StageDeploying, StageBuild, StageDesign, StageRefine, StageReady}
 
 // ActionFor returns the action for a ticket claimed in stage, and the stage it
 // should be in while the agent works on it.
 func ActionFor(stage Stage) (WorkAction, Stage, bool) {
 	switch stage {
+	case StageDeploying:
+		return ActionDeploy, StageDeploying, true
 	case StageRefine:
 		return ActionRefine, StageRefine, true
 	case StageReady, StageDesign:

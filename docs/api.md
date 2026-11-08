@@ -176,7 +176,7 @@ type StageId =
   | "refine" | "spec_review" | "ready"      // todo
   | "design" | "design_review" | "build"    // in_progress
   | "pr"                                     // in_progress
-  | "done"                                   // merged
+  | "done" | "deploying"                     // merged
   | "deployed";                              // deployed
 type Owner = "agent" | "human" | "nobody";
 type Kind = "story" | "bug";
@@ -220,7 +220,7 @@ type TicketSummary = {
   spec_revision: number; design_revision: number;
   pr_url: string; branch: string;
   open_questions: number;
-  waiting_on: number[];      // depends_on targets outside done and deployed; [] when none
+  waiting_on: number[];      // depends_on targets outside done, deploying and deployed; [] when none
   lease: Lease | null;
   created_at: string; updated_at: string; lane_changed_at: string;
   attempts: StageAttempts;
@@ -311,7 +311,7 @@ type Token = {
 };
 
 type Work = {
-  action: "refine" | "design" | "implement";
+  action: "refine" | "design" | "implement" | "deploy";
   ticket: TicketDetail;
   repo: Repo | null;
   brief: string;           // markdown written for an LLM
@@ -649,8 +649,8 @@ adds no deployment entry. Deployed is not claimable or an agent work stage.
 The stage catalog's `done` label remains Merged; clients derive Awaiting deploy
 when the associated repository's mode is `agent`.
 
-Dependencies are satisfied by either `done` or `deployed`. Completion metrics
-retain their existing `merged` field names and count either terminal state.
+Dependencies are satisfied by `done`, `deploying` and `deployed`. Completion metrics
+retain their existing `merged` field names and count all merge-complete stages.
 A move between those states does not reset lead/cycle time or throughput
 windows and does not repeat dependency release or health-check scheduling.
 The schema upgrade converts existing Merged/Done tickets to Deployed without
@@ -697,3 +697,24 @@ events in descending ID order. The optional limit is 1–200 (default 100).
 `latest` accepts `true` or `false`; it cannot accompany `after_id`. Duplicate
 or invalid pagination arguments are rejected. Without `latest=true`, the
 existing ascending `after_id` cursor behavior remains available.
+
+### Queue deployment
+
+`POST /api/v1/tickets/{id}/deploy` requires a signed-in person and the standard
+Origin protection. The body may be empty or `{}`; unknown fields are invalid.
+The ticket must be unblocked at `merged/done` with an assigned repository
+using `deploy_mode=agent`. A successful response is the standard ticket detail
+(200), with stage `deploying`, agent ownership and no lease until claimed.
+The requester is recorded in a binding decision. It returns 401 without
+authentication, 403 for agents or invalid Origin, 404 for a missing ticket,
+400 for invalid input/ID, and 409 for all ineligible states, including a
+request already queued. Requests create no commands or deployment credentials.
+
+`deploying` is an additive stage ID in Merged, labelled Deploying. It remains
+merge-complete for dependencies/statistics while allowing claims and leases.
+Claim responses use action `deploy`; priority is deploying, build, design,
+refine, ready. MCP `report_deploy {id, outcome, summary}` requires the live
+lease: `deployed` enters Deployed; `failed` returns to Done blocked. Both save
+the summary and clear the lease. Summary is required, trimmed, limited to
+1,000 characters and subject to the agent text rules. No REST reporting or
+agent deployment-request endpoint is exposed.

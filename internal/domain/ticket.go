@@ -190,6 +190,8 @@ func (t *Ticket) Owner(openQuestions int) Owner {
 	switch {
 	case t.NeedsOwner(openQuestions):
 		return OwnerHuman
+	case t.Stage.IsAgentStage():
+		return OwnerAgent
 	case t.Stage.IsCompleted():
 		return OwnerNobody
 	default:

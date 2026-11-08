@@ -28,7 +28,7 @@ func BoardTools(services Services) []Tool {
 		saveSpec{services}, saveDesign{services}, markBlocked{services}, moveTicket{services}, addComment{services}, updateTicket{services},
 		heartbeat{services}, releaseTicket{services}, createTicket{services}, createAutonomousTicket{services},
 		addWorkLink{services}, recordDecision{services}, linkTickets{services}, findTicketsForWork{services},
-		listTickets{services}, reportPRState{services}, setWorkModel{services},
+		listTickets{services}, reportPRState{services}, reportDeploy{services}, setWorkModel{services},
 	}
 }
 
@@ -37,7 +37,7 @@ type claimWork struct{ s Services }
 func (claimWork) Definition() Definition {
 	return Definition{
 		Name: "claim_work",
-		Description: "Claim the next ticket that needs an agent and get its brief. Order: tickets being built, then being designed, then Todo tickets to refine, then Ready tickets to design. " +
+		Description: "Claim the next ticket that needs an agent and get its brief. Order: person-requested deployments, then tickets being built, then being designed, then Todo tickets to refine, then Ready tickets to design. " +
 			"Set wait_seconds to block until work appears instead of polling. Returns 'No work' when there is nothing to do.",
 		InputSchema: object(map[string]any{
 			"repo":          prop("string", "Full name of the repo you are working in, such as acme/api. Omit to take work for any repo."),

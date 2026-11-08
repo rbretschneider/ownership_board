@@ -76,6 +76,7 @@ The MCP server offers these tools:
 | `link_tickets` | Relates two tickets (`caused_by`, `follow_up_of`, `duplicate_of`, `relates_to`, `depends_on`). |
 | `find_tickets_for_work` | Commit sha or PR URL → the tickets it was recorded on. |
 | `list_tickets` | Read-only overview, optionally by lane or repo. Each line shows what the ticket is waiting on, if anything. |
+| `report_deploy` | Requires a live deployment lease. Takes `id`, `outcome` (`deployed` or `failed`) and a nonblank `summary` of up to 1,000 characters. Success needs runtime identity and health evidence; failure blocks the merged ticket. Both clear the lease. |
 | `report_pr_state` | For a ticket in stage `pr` within In Progress: `merged` → Deployed by default (Merged when `deploy_mode=agent`), `closed` → back to build, blocked until the owner decides, `open` → no change. The only agent write that needs no lease, and it only reconciles PR-stage tickets; `repair` returns to build without a block and needs evidence. |
 
 **Traceability rules agents follow** (they are also in every brief): end each
@@ -92,7 +93,9 @@ the whole board each time it runs:
 
 1. Lists In Progress tickets with PR URLs, confirms stage `pr` with `get_ticket`, then checks those PRs with `gh` and reports merged (→ Deployed, or Merged awaiting deployment) or closed
    (→ build, blocked).
-2. Claims one ticket. Tickets to refine go to a `business_developer`
+2. Claims one ticket. A `deploy` action follows the repository release
+   procedure, verifies runtime identity/health and calls `report_deploy`,
+   bypassing the code pipeline. Tickets to refine go to a `business_developer`
    subagent on a model sized to the ticket (haiku, sonnet or opus). It asks
    questions, or the loop saves the spec with `submit: true`.
 3. Tickets to design (claimed from Ready, or resumed) go to `architect`, then
@@ -134,8 +137,9 @@ clones. Copy it to `~/.claude/commands/` and run:
 /loop /board-loop
 ```
 
-With no interval, Claude paces itself. It never merges, deploys or pushes to a
-default branch. Deploys happen through the repo's CI/CD.
+With no interval, Claude paces itself. A claimed, person-requested `deploy`
+action is the only deployment exception; use the repo's documented release
+process. Ordinary work grants no deployment permission.
 
 To let Codex build instead of Claude, pass the builder before the optional
 repo name:
@@ -274,7 +278,7 @@ branch, where you have it, makes it one.
 ## Dependencies
 
 `A depends_on B` means agents cannot claim A, in any stage, until B is in
-**Merged** (`done`) or **Deployed** (`deployed`). A keeps its lane and stage
+**Merged** (`done` or `deploying`) or **Deployed** (`deployed`). A keeps its lane and stage
 (a Ready ticket stays in Ready) and a person can still move it. A pull request closed without
 merging does not satisfy a dependency.
 
@@ -309,7 +313,7 @@ merging does not satisfy a dependency.
   what you verified.
 - **Reading it.** Every ticket on `GET /api/v1/board` and
   `GET /api/v1/tickets/{id}` has `waiting_on`, the ids of its dependencies
-  that are outside Done and Deployed (always an array, `[]` when free). Briefs list
+  that are outside Done, Deploying and Deployed (always an array, `[]` when free). Briefs list
   "Depends on" and "Needed by" with each ticket's state. A runner that picks
   its own work from the board (an `actionable` filter) should skip tickets
   whose `waiting_on` is not empty, as `claim_work` does.
@@ -348,7 +352,32 @@ newly synchronized repositories. Provider refresh never changes it.
 
 Report PR merges using the existing `merged` state. The server selects Done
 in Merged for agent-mode repositories, otherwise Deployed. The `done` label
-can be shown as Awaiting deploy for agent-mode repositories. Neither completed
-stage is claimable, and either satisfies dependencies. Moving from Done to
+can be shown as Awaiting deploy for agent-mode repositories. Done and
+Deployed are not claimable. Deploying is active agent work in Merged while
+remaining complete for dependencies and metrics. Moving from Done to
 Deployed does not release dependencies or count throughput a second time.
-Deployment execution and agent deployment briefs are separate features.
+
+A signed-in person queues deployment with `POST /api/v1/tickets/{id}/deploy`
+for an unblocked Done ticket in a repo using `agent` mode. It records the
+requester's decision and enters `deploying`. Duplicate requests conflict.
+Agents cannot queue this operation. Claims select deploying before build,
+design, refine and ready, preserving rank order within each stage. Deploying
+does not use an autonomous design/build slot.
+
+The deploy brief directs the worker to inspect current state, find and follow
+the repository's documented release process, resolve the merged delivery's
+identity, and verify the running version/digest and documented health checks.
+The board does not execute commands or attest to external runtime evidence.
+Missing documentation, access or verifiable identity must be reported as a
+failure, rather than improvised around. Merge-report evidence is pinned in
+the brief even when other context is shortened.
+
+`report_deploy` success stores the summary and enters Deployed; failure stores
+the summary and returns to Done, blocked with the reason. `mark_blocked` in
+deploying has the same failure behavior. A person unblocks, then requests a
+new attempt; unblocking alone does not queue it. Failure sends a high-priority
+alert; success sends a quiet completion note. Neither includes worker text.
+Lease expiry/release leaves deploying unchanged; the next worker must inspect
+for partial effects. Losing a lease requires stopping further mutations.
+Repository settings changes do not cancel queued attempts, while a person's
+move out of deploying clears the lease and prevents a stale report.
