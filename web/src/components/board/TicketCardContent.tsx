@@ -1,4 +1,5 @@
 import { Bot, CircleAlert, CircleCheck, CircleX, GitPullRequest, Hand, HeartPulse, Hourglass, MessageCircleQuestion, Server, Zap } from "lucide-react";
+import { isCompletedStage } from "../../lib/stages";
 import { windowsStatus } from "../../lib/progress";
 import type { Repo, Stage, TicketSummary } from "../../api/types";
 import { useLeaseClock } from "../../hooks/useLeaseClock";
@@ -41,9 +42,9 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
   const at = now ?? clock;
   const liveLease = hasLiveLease(ticket, at);
   const activity = cardActivity(ticket, at);
-  const showActivity = ticket.stage !== "done" && (ticket.is_autonomous || ticket.lease !== null || ticket.lane !== "todo" || activity.blocked);
+  const showActivity = !isCompletedStage(ticket.stage) && (ticket.is_autonomous || ticket.lease !== null || ticket.lane !== "todo" || activity.blocked);
   const model = parseWorkModel(ticket.work_model);
-  const showModel = ticket.stage !== "done" && (liveLease || (activity.buildServer === true && model !== undefined));
+  const showModel = !isCompletedStage(ticket.stage) && (liveLease || (activity.buildServer === true && model !== undefined));
   const isBlocked = ticket.blocked_reason !== "";
   const isWaiting = ticket.waiting_on.length > 0;
   // The build host's live view beats the worker's coarse signal: it knows the
@@ -119,7 +120,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
           </span>
         )}
         {/* Without a status pill, the stage and owner signals still need a place. */}
-        {!showActivity && ticket.stage !== "done" && <StageChip stage={ticket.stage} stages={stages} />}
+        {!showActivity && (!isCompletedStage(ticket.stage) || (ticket.stage === "done" && repo?.deploy_mode === "agent")) && <StageChip stage={ticket.stage} stages={stages} repo={repo} />}
         {ticket.needs_owner && (!showActivity || ticket.stage === "pr") && (
           <span className="badge badge--needs">
             <Hand size={13} aria-hidden="true" />

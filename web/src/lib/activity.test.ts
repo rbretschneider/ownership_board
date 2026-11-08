@@ -39,3 +39,8 @@ describe("card activity", () => {
 it("labels completed work Merged", () => {
  expect(cardActivity({...ticket, stage: "done"}).label).toBe("Merged");
 });
+
+it("keeps deployed work completed even if old worker metadata remains", () => {
+ expect(cardActivity({...ticket, lane: "deployed", stage: "deployed"})).toEqual({label: "Deployed", working: false, blocked: false});
+ expect(cardTone({...ticket, lane: "deployed", stage: "deployed"})).toBe("");
+});

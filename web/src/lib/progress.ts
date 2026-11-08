@@ -50,6 +50,7 @@ export function currentStepIndex(ticket: Pick<TicketSummary, "stage" | "work_mod
     }
     case "pr":
       return 3;
+    case "deployed":
     case "done":
       return 4;
     default:

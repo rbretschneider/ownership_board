@@ -41,7 +41,9 @@ it("keeps owner PRs in Your move and sends lane and ordering without a stage ove
   expect(host.textContent).not.toContain("Other work");
   await act(async () => mock.drop!(1, {kind: "list", lane: "in_progress", index: 1}));
   expect(mock.move).toHaveBeenLastCalledWith(1, "in_progress", 2);
-  await act(async () => mock.drop!(4, {kind: "pill", lane: "in_progress"}));
-  expect(mock.move).toHaveBeenLastCalledWith(4, "in_progress", null);
+  await act(async () => mock.drop!(4, {kind: "pill", lane: "deployed"}));
+  expect(mock.move).toHaveBeenLastCalledWith(4, "deployed", null);
+  await act(async () => mock.drop!(1, {kind: "list", lane: "deployed", index: 0}));
+  expect(mock.move).toHaveBeenLastCalledWith(1, "deployed", null);
  } finally {await act(async () => root.unmount()); host.remove();}
 });

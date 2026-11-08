@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "../api/ApiError";
-import type { Stage, StageId, TicketDetail, TicketSummary } from "../api/types";
+import type { Repo, Stage, StageId, TicketDetail, TicketSummary } from "../api/types";
 import { COLUMN_GAP_PX, COLUMN_MIN_WIDTH_PX, COLUMNS_PADDING_PX, DESKTOP_MIN_WIDTH_PX } from "./constants";
 import {
   checkpointDocument,
   checkpointFor,
   isApprovedRevision,
+  isCompletedStage,
   isStaleConflict,
   needsOwner,
   requestChangesError,
@@ -109,8 +110,8 @@ describe("checkpoints", () => {
 });
 
 describe("desktop layout", () => {
-  it("fits three columns side by side on a vertical 1080p monitor", () => {
-    const needed = 3 * COLUMN_MIN_WIDTH_PX + 2 * COLUMN_GAP_PX + 2 * COLUMNS_PADDING_PX;
+  it("fits four columns side by side on a vertical 1080p monitor", () => {
+    const needed = 4 * COLUMN_MIN_WIDTH_PX + 3 * COLUMN_GAP_PX + 2 * COLUMNS_PADDING_PX;
     expect(needed).toBeLessThanOrEqual(DESKTOP_MIN_WIDTH_PX);
     expect(DESKTOP_MIN_WIDTH_PX).toBeLessThanOrEqual(1080);
   });
@@ -118,4 +119,17 @@ describe("desktop layout", () => {
 
 it("includes PR work in the in-progress stage summary", () => {
  expect(stageSummary(stageCounts(STAGES, [ticket(1, "pr"), ticket(2, "build")], "in_progress"))).toBe("Building 1 · PR open 1");
+});
+
+it("labels deployment waits using the current repo policy", () => {
+ expect(stageLabel(STAGES, "done", {deploy_mode: "agent"} as Repo)).toBe("Awaiting deploy");
+ expect(stageLabel(STAGES, "done", {deploy_mode: "off"} as Repo)).toBe("Merged");
+ expect(stageLabel(STAGES, "done")).toBe("Merged");
+ expect(stageLabel([], "deployed")).toBe("Deployed");
+});
+
+it("recognizes both completion stages", () => {
+ expect(isCompletedStage("done")).toBe(true);
+ expect(isCompletedStage("deployed")).toBe(true);
+ expect(isCompletedStage("pr")).toBe(false);
 });

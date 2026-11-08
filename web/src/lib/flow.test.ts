@@ -202,3 +202,16 @@ describe("forecastLane", () => {
     expect(formatDays(42)).toBe("6 wk");
   });
 });
+
+it("groups deployed work as completed and excludes it from open dependencies", () => {
+ const done = ticket(1, {stage: "deployed", lane: "deployed", lane_changed_at: new Date(NOW).toISOString()});
+ const open = ticket(2, {waiting_on: [1]});
+ expect(flowStage(done)).toBe("merged");
+ expect(nodeStatus(done, NOW)).toEqual({tone: "done", label: "Deployed"});
+ expect(buildGraph([done, open]).deps.get(2)).toEqual([]);
+ expect(laneOptions([done], [])).toEqual([]);
+ const layout = layoutFlow([done, open], [], NOW);
+ expect(layout.nodes.get(1)?.columnKey).toBe("merged");
+ expect(layout.lanes[0]?.open).toBe(1);
+ expect(flowInsights([done], new Map(), NOW).progress).toMatchObject({idle: 0, working: 0, merged24h: 1});
+});

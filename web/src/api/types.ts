@@ -1,10 +1,12 @@
 /** Wire types for the ownership_board HTTP API (see docs/api.md). */
 
-/** The three fixed lane ids. Finer progress lives in a ticket's stage. */
-export type LaneId = "todo" | "in_progress" | "merged";
+/** The four fixed lane ids. Finer progress lives in a ticket's stage. */
+export type LaneId = "todo" | "in_progress" | "merged" | "deployed";
 
 /** A ticket's place within its lane (each stage belongs to one lane). */
-export type StageId = "refine" | "spec_review" | "ready" | "design" | "design_review" | "build" | "pr" | "done";
+export type StageId = "refine" | "spec_review" | "ready" | "design" | "design_review" | "build" | "pr" | "done" | "deployed";
+
+export type DeployMode = "off" | "agent";
 
 /** Who holds the ball for a ticket. */
 export type Owner = "agent" | "human" | "nobody";
@@ -90,6 +92,7 @@ export interface Repo {
   require_design_approval: boolean;
   /** The owner lets agents merge this repo's green, review-clean PRs themselves. */
   allow_agent_merge: boolean;
+  deploy_mode: DeployMode;
   /** Merges between architecture health checks; 0 turns the check off. */
   health_check_every: number;
   /** The last merged ticket a health check covered; null before the first check. */
@@ -117,6 +120,7 @@ export type RepoEdit = Partial<{
   require_spec_approval: boolean;
   require_design_approval: boolean;
   allow_agent_merge: boolean;
+  deploy_mode: DeployMode;
   health_check_every: number;
 }>;
 

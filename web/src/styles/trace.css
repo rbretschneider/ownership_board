@@ -378,3 +378,17 @@
     transition: none;
   }
 }
+
+.repo-deploys {
+  display: grid;
+  grid-template-columns: auto minmax(0, 160px);
+  align-items: center;
+  gap: 4px 12px;
+  padding-block: 8px;
+  max-width: 100%;
+  font-size: 0.8125rem;
+}
+
+.repo-deploys .field__hint {
+  grid-column: 1 / -1;
+}

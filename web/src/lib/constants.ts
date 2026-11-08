@@ -10,8 +10,8 @@ export const COLUMN_GAP_PX = 12;
 export const COLUMNS_PADDING_PX = 16;
 
 /**
- * Viewport width at which the board switches from one lane to three columns.
- * Three columns at their minimum width fit below this, so there is no
+ * Viewport width at which the board switches from one lane to four columns.
+ * Four columns at their minimum width fit below this, so there is no
  * horizontal scroll (layout.css `.columns` uses the same numbers).
  */
 export const DESKTOP_MIN_WIDTH_PX = 1000;
@@ -36,6 +36,7 @@ export const LANE_SHORT_LABELS: Record<LaneId, string> = {
   todo: "Todo",
   in_progress: "In progress",
   merged: "Merged",
+  deployed: "Deployed",
 };
 
 /** One-line hints shown in empty lanes. */
@@ -43,6 +44,7 @@ export const LANE_EMPTY_HINTS: Record<LaneId, string> = {
   todo: "Drop an idea here — the AI will refine it.",
   in_progress: "No active work or pull requests right now.",
   merged: "Work integrated into the project lands here.",
+  deployed: "Deployed work lands here.",
 };
 
 /** Text labels for ticket owners, so ownership is never conveyed by color alone. */
