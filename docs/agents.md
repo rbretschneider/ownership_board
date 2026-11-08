@@ -66,7 +66,7 @@ The MCP server offers these tools:
 | `save_design` | Saves the design while designing. With `submit: true` the ticket goes to the owner for approval (or straight to build when the repo has Approve design off) and your lease ends. |
 | `mark_blocked` | Stops work when you cannot go on and no question would help. Takes a short reason. The owner is notified, your lease ends, and nobody claims the ticket until a person unblocks it. |
 | `update_ticket` | Sets `repo_id`, `pr_url`, `branch` or `title`. `title` and `repo_id` only while refining; `pr_url` and `branch` only while building. |
-| `move_ticket` | Moves a finished build to `review`. Needs `pr_url` set, no open questions and no block. This is the only lane move an agent makes, and it ends your lease. |
+| `move_ticket` | Submits a finished build to stage `pr` with `lane: "in_progress"`, keeping it in In Progress. Needs `pr_url` set, no open questions and no block. This stage handoff ends your lease. Deprecated agent input `lane: "review"` remains an alias; Review is not a list filter or human drop target. |
 | `add_comment` | Adds a comment. |
 | `heartbeat` / `release_ticket` | Keeps or gives up the lease. |
 | `create_ticket` | Files a follow-up story or bug, optionally already linked (`relation` + `related_ticket_id`). `depends_on: [ids]` lists tickets in the same repo it waits for. |
@@ -76,7 +76,7 @@ The MCP server offers these tools:
 | `link_tickets` | Relates two tickets (`caused_by`, `follow_up_of`, `duplicate_of`, `relates_to`, `depends_on`). |
 | `find_tickets_for_work` | Commit sha or PR URL → the tickets it was recorded on. |
 | `list_tickets` | Read-only overview, optionally by lane or repo. Each line shows what the ticket is waiting on, if anything. |
-| `report_pr_state` | For a ticket in review: `merged` → Merged, `closed` → back to build, blocked until the owner decides, `open` → no change. The only agent write that needs no lease, and it only ever moves review tickets along those two edges. |
+| `report_pr_state` | For a ticket in stage `pr` within In Progress: `merged` → Merged, `closed` → back to build, blocked until the owner decides, `open` → no change. The only agent write that needs no lease, and it only reconciles PR-stage tickets; `repair` returns to build without a block and needs evidence. |
 
 **Traceability rules agents follow** (they are also in every brief): end each
 commit with the trailer `Ownership-Ticket: <id>`, record commits and PRs with
@@ -90,7 +90,7 @@ enforcement: review each PR before merging.
 **The full pipeline loop.** `agent/claude/board-loop.md` does one pass over
 the whole board each time it runs:
 
-1. Checks every PR in review with `gh` and reports merged (→ Merged) or closed
+1. Lists In Progress tickets with PR URLs, confirms stage `pr` with `get_ticket`, then checks those PRs with `gh` and reports merged (→ Merged) or closed
    (→ build, blocked).
 2. Claims one ticket. Tickets to refine go to a `business_developer`
    subagent on a model sized to the ticket (haiku, sonnet or opus). It asks
@@ -116,7 +116,7 @@ the whole board each time it runs:
    security, the GPT review (by tier) and the final Claude review run. Claude
    opens the PR.
 5. Reports work links, the PR and a summary to the board and moves the ticket
-   to review.
+   to stage `pr` within In Progress using `lane: "in_progress"`.
 
 The pass itself only coordinates: it calls board tools and `gh pr view`, and
 hands all repo work to subagents. So it can run on a small model, for example
@@ -204,7 +204,7 @@ have no repo yet, because working out the repo is part of refinement.
    on, with the same Approve and Request changes choices (a rejected design
    returns to `design`). With Approve design off, it goes straight to `build`.
 7. The agent claims it from `build` with action `implement`. It opens a pull
-   request, links it, comments, and calls `move_ticket` to `review`. The human
+   request, links it, comments, and calls `move_ticket` with `lane: "in_progress"` to enter stage `pr`. The human
    is notified with a button to open the PR.
 8. The human merges. The agent's next pass sees the merge and calls
    `report_pr_state` with `merged`, which moves the ticket to **Merged**. The
@@ -243,7 +243,7 @@ request, and the PR is your only review.
    chat". Both checkpoints are off for it, whatever its repo says. The board
    refuses `ask_questions` on it, and every brief tells the agent to decide,
    record the choice with `record_decision`, and carry on. `mark_blocked` is
-   the only way it stops before Review. You are notified ("filed as
+   the only way it stops before the PR stage. You are notified ("filed as
    autonomous") every time one is filed, so a ticket from a leaked token does
    not go unseen. The queue has no length limit, but one token can file at
    most 50 autonomous tickets an hour; the 51st is refused with a conflict.
@@ -327,7 +327,7 @@ a person. Repository permission to merge remains separate from autonomy.
 
 Agents report current provider evidence with `report_pr_state` state `repair`
 (or the REST `pr-state` endpoint) for conflicts, failed checks and requested
-changes. This moves Review back to Build without a blocker, preserving the PR
+changes. This moves PR back to Build within In Progress without a blocker, preserving the PR
 and branch. A worker must claim the story before changing code or its record.
 Healthy pending checks and unknown mergeability do not trigger repairs.
 

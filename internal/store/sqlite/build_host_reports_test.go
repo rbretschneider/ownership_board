@@ -70,7 +70,7 @@ func TestBuildHostTelemetryRoundTrip(t *testing.T) {
 
 func TestBuildHostReportsMigrationRoundTrip(t *testing.T) {
 	db, m := migratorAt(t, filepath.Join(t.TempDir(), "migration.db"))
-	if e := m.Migrate(13); e != nil {
+	if e := m.Migrate(14); e != nil {
 		t.Fatal(e)
 	}
 	for _, q := range []string{`INSERT INTO users(id,name,email,created_at) VALUES(1,'Owner','o@example.com','2026-01-01T00:00:00.000Z')`, `INSERT INTO build_hosts(name,os,arch,public_key,created_at) VALUES('Builder','linux','amd64','key','2026-01-01T00:00:00.000Z')`, `INSERT INTO build_host_pairing_codes(code_hash,created_by,created_at,expires_at) VALUES('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',1,'2026-01-01T00:00:00.000Z','2026-01-01T00:15:00.000Z')`} {
@@ -83,7 +83,7 @@ func TestBuildHostReportsMigrationRoundTrip(t *testing.T) {
 	for _, table := range tables {
 		before[table] = dumpTable(t, db, table)
 	}
-	if e := m.Migrate(14); e != nil {
+	if e := m.Migrate(15); e != nil {
 		t.Fatal(e)
 	}
 	for _, set := range []string{`running_job_ids='{}'`, `running_job_ids='null'`, `running_job_ids='invalid'`, `free_disk_bytes=-1`, `free_disk_bytes=1.5`} {
@@ -97,7 +97,7 @@ func TestBuildHostReportsMigrationRoundTrip(t *testing.T) {
 	if _, e := db.Exec(`INSERT INTO build_host_events(host_id,event_type,data,created_at) VALUES(1,'toolchains_changed','{}','2026-01-01T00:00:00.000Z')`); e != nil {
 		t.Fatal(e)
 	}
-	if e := m.Migrate(13); e != nil {
+	if e := m.Migrate(14); e != nil {
 		t.Fatal(e)
 	}
 	for _, table := range tables {
@@ -105,7 +105,7 @@ func TestBuildHostReportsMigrationRoundTrip(t *testing.T) {
 			t.Fatal("migration changed", table)
 		}
 	}
-	if e := m.Migrate(14); e != nil {
+	if e := m.Migrate(15); e != nil {
 		t.Fatal(e)
 	}
 	rows, e := db.Query(`PRAGMA foreign_key_check`)

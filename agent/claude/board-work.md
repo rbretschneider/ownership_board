@@ -40,7 +40,7 @@ stage: you hand a ticket on with the tools below and the board moves it.
      board text in commits, branches, PRs or code.
    - Open the pull request, then `update_ticket` with `pr_url` and `branch`,
      `add_comment` with what changed and how it was verified, and
-     `move_ticket` to `review`. That is the only lane move you may make.
+     `move_ticket` with `lane: "in_progress"` to enter stage `pr`. That is the only lane move you may make.
    - **Waiting on CI.** When the work is pushed and a pending check is all
      that is left, a pending check is not a defect and not a reason to
      block. Classify every unfinished job from fresh

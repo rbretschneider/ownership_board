@@ -275,3 +275,18 @@ func TestWindowStartsAtLocalMidnight(t *testing.T) {
 	}
 	expectEqual(t, "start", window.Start().UTC(), time.Date(2026, 3, 3, 23, 0, 0, 0, time.UTC))
 }
+
+func TestPRStageCountsOwnerWorkWithinInProgress(t *testing.T) {
+	b := newBoard(t)
+	b.ticket(1, false, day).to(domain.StageBuild, 2*hour).to(domain.StagePR, hour)
+	b.ticket(2, true, day).to(domain.StageBuild, 2*hour).to(domain.StagePR, hour)
+	report := b.report(7)
+	expectEqual(t, "ordinary PR needs owner", report.Owner.NeedsOwner, 1)
+	expectEqual(t, "autonomous PR needs owner", report.Autonomous.NeedsOwner, 0)
+	expectEqual(t, "PRs opened", report.All.PRsOpened, 2)
+	for _, count := range report.All.WIP {
+		if count.Stage == domain.StagePR && (count.Lane != domain.LaneInProgress || count.Count != 2) {
+			t.Fatalf("PR WIP: %+v", count)
+		}
+	}
+}

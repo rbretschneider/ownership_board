@@ -288,3 +288,43 @@ func TestPairInputDoesNotFormatCredentials(t *testing.T) {
 		}
 	}
 }
+
+// A store may reject finalization even after every repository operation succeeds.
+type rejectedHostWrite struct{ app.Store }
+
+func (s rejectedHostWrite) Write(ctx context.Context, fn func(app.Repos) error) error {
+	return s.Store.Write(ctx, func(r app.Repos) error {
+		if e := fn(r); e != nil {
+			return e
+		}
+		return errors.New("transaction finalization rejected")
+	})
+}
+func TestEnrollmentRejectedTransactionDoesNotNotify(t *testing.T) {
+	f := newFixture(t)
+	if _, e := f.store.SQL().Exec(`INSERT INTO users(id,name,email,created_at) VALUES(1,'Owner','o@example.com','2026-01-01T00:00:00.000Z')`); e != nil {
+		t.Fatal(e)
+	}
+	notify := &hostNotifier{}
+	s := app.NewBuildHostService(f.store, f.clock, nil, notify)
+	code, e := s.CreatePairingCode(f.ctx, owner)
+	if e != nil {
+		t.Fatal(e)
+	}
+	key := ed25519.NewKeyFromSeed(make([]byte, 32))
+	in := app.BuildHostPairInput{Code: code.Code.Reveal(), PublicKey: base64.StdEncoding.EncodeToString(key.Public().(ed25519.PublicKey)), Name: "Builder", Facts: []byte(machineFacts)}
+	failing := app.NewBuildHostService(rejectedHostWrite{f.store}, f.clock, nil, notify)
+	if _, e = failing.Pair(f.ctx, in); e == nil {
+		t.Fatal("failed transaction succeeded")
+	}
+	hosts, e := s.List(f.ctx, owner)
+	if e != nil || len(hosts) != 0 || notify.n != 0 {
+		t.Fatal(hosts, e, notify.n)
+	}
+	if _, e = s.Pair(f.ctx, in); e != nil {
+		t.Fatal("code consumed by rolled-back transaction", e)
+	}
+	if notify.n != 1 {
+		t.Fatal(notify.n)
+	}
+}

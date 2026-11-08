@@ -9,7 +9,6 @@ type Lane string
 const (
 	LaneTodo       Lane = "todo"
 	LaneInProgress Lane = "in_progress"
-	LaneReview     Lane = "review"
 	LaneMerged     Lane = "merged"
 )
 
@@ -21,10 +20,9 @@ type LaneInfo struct {
 }
 
 var laneCatalog = []LaneInfo{
-	{LaneTodo, "Ideas & plans", "Capture an idea, agree the outcome, and queue it for delivery."},
-	{LaneInProgress, "In progress", "Agents are planning, building or repairing the work."},
-	{LaneReview, "Delivery", "Checks, feedback and integration. Autopilot work stays with agents."},
-	{LaneMerged, "Delivered", "Integrated into the project; deployment follows the project’s release process."},
+	{LaneTodo, "Todo", "Capture an idea, agree the outcome, and queue the work."},
+	{LaneInProgress, "In progress", "Work is being designed, built, repaired or reviewed."},
+	{LaneMerged, "Merged", "Integrated into the project; deployment follows the project’s release process."},
 }
 
 // Lanes returns every lane in board order.

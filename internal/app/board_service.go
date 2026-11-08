@@ -290,10 +290,14 @@ func editText(edit domain.TicketEdit) map[string]string {
 }
 
 // Move puts a ticket in a lane at a position. The server picks the stage. An
-// agent's only move is a finished build into Review; a person may drag
+// agent's only move submits a finished build to the PR stage; a person may drag
 // anywhere, landing on the first stage whose checkpoints are met, and dragging
 // to another lane clears a block because the person has decided.
 func (s *BoardService) Move(ctx context.Context, actor domain.Actor, id int64, input MoveInput) (TicketDetail, error) {
+	// Deprecated agent input: Review is no longer a board lane.
+	if actor.IsAgent() && input.Lane == "review" {
+		input.Lane = string(domain.LaneInProgress)
+	}
 	lane, err := domain.ParseLane(input.Lane)
 	if err != nil {
 		return TicketDetail{}, err
@@ -323,8 +327,8 @@ func (s *BoardService) Move(ctx context.Context, actor domain.Actor, id int64, i
 }
 
 func (s *BoardService) submitForReview(ctx context.Context, repos Repos, ticket *domain.Ticket, lane domain.Lane, open int, actor domain.Actor) ([]domain.TimelineEntry, error) {
-	if lane != domain.LaneReview {
-		return nil, domain.Forbiddenf("agents only move a finished build to review; use save_spec, save_design, ask_questions or mark_blocked")
+	if lane != domain.LaneInProgress {
+		return nil, domain.Forbiddenf("agents only submit a finished build to the PR stage in in_progress; use save_spec, save_design, ask_questions or mark_blocked")
 	}
 	next, err := ticket.SubmitForReview(open)
 	if err != nil {

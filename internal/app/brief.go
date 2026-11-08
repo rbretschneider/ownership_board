@@ -79,7 +79,7 @@ var actionInstructions = map[domain.WorkAction]string{
 - Record each significant choice with record_decision: approach, trade-off, scope cut, new dependency, or any deviation from the spec or design.
 - Send a heartbeat well before the lease expires while you work.
 - If you reach a decision only the human can make, ask questions; that pauses the ticket and releases your lease. If you cannot go on at all, call mark_blocked.
-- When the pull request is open: set pr_url and branch on the ticket, comment with what changed and how you verified it, and move the ticket to "review". That is the only lane move you make.`,
+- When the pull request is open: set pr_url and branch on the ticket, comment with what changed and how you verified it, and call move_ticket with lane "in_progress" to submit the ticket to stage "pr". This ends your lease.`,
 }
 
 // healthCheckReviewInstructions bound scheduled reviews to their recorded changes.
@@ -104,7 +104,7 @@ const healthCheckImplementInstructions = `Perform the architecture review and pr
 
 - Read the newest comments before resuming existing work. Work on the indicated branch and commit the documentation with the trailer "Ownership-Ticket: <ticket id>" (number only). Do not commit private board documents.
 - Complete the bounded review, update the baseline and file justified follow-ups. Record significant choices with record_decision and keep the lease alive with heartbeats.
-- After pushing, record commits and the PR with add_work_link. Set pr_url and branch, report the evidence and verification performed, and move the completed ticket to review. If work cannot continue, use mark_blocked with the concrete reason.`
+- After pushing, record commits and the PR with add_work_link. Set pr_url and branch, report the evidence and verification performed, and call move_ticket with lane "in_progress" to submit the completed ticket to stage "pr". If work cannot continue, use mark_blocked with the concrete reason.`
 
 const architectureBaselineInstructions = "If docs/architecture.md exists in the checkout, follow its current architecture baseline and reuse the shared abstractions it lists."
 

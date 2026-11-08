@@ -29,11 +29,11 @@ var stageCatalog = []StageInfo{
 	{StageRefine, LaneTodo, "Shaping the idea", false},
 	{StageSpecReview, LaneTodo, "Approve the plan", true},
 	{StageReady, LaneTodo, "Ready to start", false},
-	{StageDesign, LaneInProgress, "Planning delivery", false},
+	{StageDesign, LaneInProgress, "Designing", false},
 	{StageDesignReview, LaneInProgress, "Approve the approach", true},
 	{StageBuild, LaneInProgress, "Making it happen", false},
-	{StagePR, LaneReview, "Delivery checks", true},
-	{StageDone, LaneMerged, "Delivered", false},
+	{StagePR, LaneInProgress, "PR open", true},
+	{StageDone, LaneMerged, "Merged", false},
 }
 
 // Stages returns every stage in workflow order.

@@ -192,3 +192,14 @@ func TestClaimOrderAndActions(t *testing.T) {
 		}
 	}
 }
+
+func TestPRHandoffRefusesQuestionsAndBlocks(t *testing.T) {
+	ticket := refinedTicket(t)
+	ticket.MoveToStage(domain.StageBuild, 1, now)
+	ticket.PRURL = "https://example.com/pr/1"
+	_, err := ticket.SubmitForReview(1)
+	requireKind(t, err, domain.KindConflict)
+	ticket.BlockedReason = "needs a decision"
+	_, err = ticket.SubmitForReview(0)
+	requireKind(t, err, domain.KindConflict)
+}

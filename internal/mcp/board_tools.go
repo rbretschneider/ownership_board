@@ -251,11 +251,11 @@ type moveTicket struct{ s Services }
 func (moveTicket) Definition() Definition {
 	return Definition{
 		Name: "move_ticket",
-		Description: "Move a finished build to review once its pull request is open and pr_url is set. " +
-			"This is the only lane move an agent makes; it ends your lease.",
+		Description: "Submit a finished build to the PR stage within In Progress once its pull request is open and pr_url is set. " +
+			"This stage handoff keeps the ticket in In Progress and ends your lease.",
 		InputSchema: object(map[string]any{
 			"id":   ticketIDProp(),
-			"lane": map[string]any{"type": "string", "enum": []string{string(domain.LaneReview)}},
+			"lane": map[string]any{"type": "string", "enum": []string{string(domain.LaneInProgress)}},
 		}, "id", "lane"),
 	}
 }
@@ -269,7 +269,7 @@ func (t moveTicket) Call(ctx context.Context, actor domain.Actor, raw json.RawMe
 		return "", err
 	}
 	detail, err := t.s.Board.Move(ctx, actor, args.ID, app.MoveInput{Lane: args.Lane})
-	return outcome(detail, "moved to review.", err)
+	return outcome(detail, "submitted to PR stage in In Progress.", err)
 }
 
 type addComment struct{ s Services }
