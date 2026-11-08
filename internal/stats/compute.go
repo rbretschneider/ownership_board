@@ -56,10 +56,13 @@ func Compute(input Input, w Window) Report {
 	}
 }
 
-// repoBreakdowns lists every repo with merged, opened or open work, busiest
-// first.
+// repoBreakdowns lists configured repos and unassigned or unresolved activity, busiest first.
 func repoBreakdowns(tickets []history, repos []domain.Repo, w Window) []RepoBreakdown {
 	byRepo := map[int64]*RepoBreakdown{}
+	health := repoHealth(tickets, repos)
+	for _, repo := range repos {
+		byRepo[repo.ID] = &RepoBreakdown{RepoID: repo.ID, Name: repo.FullName, Health: health[repo.ID]}
+	}
 	for _, h := range tickets {
 		breakdown, isSeen := byRepo[h.Ticket.RepoID]
 		if !isSeen {
@@ -74,12 +77,12 @@ func repoBreakdowns(tickets []history, repos []domain.Repo, w Window) []RepoBrea
 	}
 	out := make([]RepoBreakdown, 0, len(byRepo))
 	for _, breakdown := range byRepo {
-		if breakdown.hasActivity() {
+		if breakdown.Health != nil || breakdown.hasActivity() {
 			out = append(out, *breakdown)
 		}
 	}
 	slices.SortFunc(out, func(a, b RepoBreakdown) int {
-		return cmp.Or(cmp.Compare(b.total(), a.total()), cmp.Compare(a.Name, b.Name))
+		return cmp.Or(cmp.Compare(b.total(), a.total()), cmp.Compare(a.Name, b.Name), cmp.Compare(a.RepoID, b.RepoID))
 	})
 	return out
 }

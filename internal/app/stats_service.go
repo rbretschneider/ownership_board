@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	"github.com/rbretschneider/ownership_board/internal/domain"
 	"github.com/rbretschneider/ownership_board/internal/stats"
 )
 
@@ -20,16 +21,43 @@ func (s *BoardService) Stats(ctx context.Context, query StatsQuery) (stats.Repor
 	if err != nil {
 		return stats.Report{}, err
 	}
-	var input stats.Input
+	var report stats.Report
 	err = s.store.Read(ctx, func(repos Repos) error {
-		var err error
-		input, err = loadStatsInput(ctx, repos)
-		return err
+		input, err := loadStatsInput(ctx, repos)
+		if err != nil {
+			return err
+		}
+		report = stats.Compute(input, window)
+		tickets := make(map[int64]domain.Ticket, len(input.Tickets))
+		for _, ticket := range input.Tickets {
+			tickets[ticket.ID] = ticket
+		}
+		for _, repo := range report.Repos {
+			health := repo.Health
+			if health == nil || health.LastCheckTicket == nil {
+				continue
+			}
+			relations, err := repos.Relations().ForTicket(ctx, *health.LastCheckTicket)
+			if err != nil {
+				return err
+			}
+			open := make(map[int64]bool)
+			for _, relation := range relations {
+				if relation.Kind != domain.RelationFollowUpOf || relation.ToID != *health.LastCheckTicket {
+					continue
+				}
+				if ticket, exists := tickets[relation.FromID]; exists && ticket.Stage != domain.StageDone {
+					open[ticket.ID] = true
+				}
+			}
+			health.OpenFollowUps = len(open)
+		}
+		return nil
 	})
 	if err != nil {
 		return stats.Report{}, err
 	}
-	return stats.Compute(input, window), nil
+	return report, nil
 }
 
 func loadStatsInput(ctx context.Context, repos Repos) (stats.Input, error) {
