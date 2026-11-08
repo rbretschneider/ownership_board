@@ -1,4 +1,5 @@
 import type { Repo, TicketSummary } from "../api/types";
+import { isCompletedStage } from "./stages";
 import { cardActivity, hasLiveLease } from "./activity";
 import { currentStepIndex, onWindows } from "./progress";
 
@@ -66,6 +67,7 @@ export function flowStage(t: Pick<TicketSummary, "stage" | "work_model">): FlowS
     }
     case "pr":
       return "pr";
+    case "deployed":
     case "done":
       return "merged";
   }
@@ -97,7 +99,7 @@ export type NodeTone = "working" | "owner" | "stuck" | "windows" | "waiting" | "
 export function nodeStatus(t: TicketSummary, now: number): { tone: NodeTone; label: string } {
   const activity = cardActivity(t, now);
   const label = activity.label;
-  if (t.stage === "done") return { tone: "done", label };
+  if (isCompletedStage(t.stage)) return { tone: "done", label };
   if (t.blocked_reason !== "") return { tone: "stuck", label };
   if (t.needs_owner) return { tone: "owner", label };
   if (activity.buildServer === true) return { tone: label.startsWith("Paused") ? "stuck" : "windows", label };
@@ -131,8 +133,8 @@ export function buildGraph(tickets: readonly TicketSummary[]): FlowGraph {
   const deps = new Map<number, number[]>();
   const dependents = new Map<number, number[]>();
   for (const t of tickets) {
-    if (t.stage === "done") continue;
-    const present = t.waiting_on.filter((id) => byId.has(id) && byId.get(id)?.stage !== "done");
+    if (isCompletedStage(t.stage)) continue;
+    const present = t.waiting_on.filter((id) => byId.has(id) && !isCompletedStage(byId.get(id)!.stage));
     deps.set(t.id, present);
     for (const dep of present) {
       dependents.set(dep, [...(dependents.get(dep) ?? []), t.id]);
@@ -294,7 +296,7 @@ export function stageColumnKey(t: Pick<TicketSummary, "stage" | "work_model">, i
 
 function columnKeyOf(t: TicketSummary, graph: FlowGraph, isDetailed: boolean): string {
   const depth = graph.depth.get(t.id) ?? 0;
-  return t.stage !== "done" && depth > 0 ? `queue-${depth}` : stageColumnKey(t, isDetailed);
+  return !isCompletedStage(t.stage) && depth > 0 ? `queue-${depth}` : stageColumnKey(t, isDetailed);
 }
 
 /** A repo the filter can show or hide. */
@@ -310,7 +312,7 @@ export function laneOptions(tickets: readonly TicketSummary[], repos: readonly R
   const repoById = new Map(repos.map((r) => [r.id, r]));
   const open = new Map<string, number>();
   for (const t of tickets) {
-    if (t.stage !== "done") open.set(laneKeyOf(t), (open.get(laneKeyOf(t)) ?? 0) + 1);
+    if (!isCompletedStage(t.stage)) open.set(laneKeyOf(t), (open.get(laneKeyOf(t)) ?? 0) + 1);
   }
   return [...open.entries()]
     .map(([key, count]) => ({
@@ -356,10 +358,10 @@ export function layoutFlow(tickets: readonly TicketSummary[], repos: readonly Re
   interface LaneDraft { key: string; drawn: TicketSummary[]; open: TicketSummary[]; merged: number }
   const drafts: LaneDraft[] = [];
   for (const [key, laneTickets] of byLane) {
-    const open = laneTickets.filter((t) => t.stage !== "done");
+    const open = laneTickets.filter((t) => !isCompletedStage(t.stage));
     if (open.length === 0 || (laneKeys !== null && !laneKeys.has(key))) continue;
     const merged = laneTickets
-      .filter((t) => t.stage === "done" && now - Date.parse(t.lane_changed_at) <= MERGED_WINDOW_MS)
+      .filter((t) => isCompletedStage(t.stage) && now - Date.parse(t.lane_changed_at) <= MERGED_WINDOW_MS)
       .sort((a, b) => Date.parse(b.lane_changed_at) - Date.parse(a.lane_changed_at));
     drafts.push({ key, drawn: [...open, ...merged.slice(0, MERGED_SHOWN)], open, merged: merged.length });
   }
@@ -508,7 +510,7 @@ function stuckNote(t: TicketSummary, now: number): Callout | null {
 
 /** The summary cards above the canvas. */
 export function flowInsights(tickets: readonly TicketSummary[], gates: Map<number, number>, now: number): FlowInsights {
-  const open = tickets.filter((t) => t.stage !== "done");
+  const open = tickets.filter((t) => !isCompletedStage(t.stage));
   const gateNote = (t: TicketSummary) => ((gates.get(t.id) ?? 0) > 0 ? ` · gates ${gates.get(t.id)}` : "");
 
   const byStage = new Map<string, Callout[]>();
@@ -549,7 +551,7 @@ export function flowInsights(tickets: readonly TicketSummary[], gates: Map<numbe
   }
 
   const merges = tickets
-    .filter((t) => t.stage === "done")
+    .filter((t) => isCompletedStage(t.stage))
     .map((t) => Date.parse(t.lane_changed_at))
     .filter((at) => !Number.isNaN(at));
   let totalRetries = 0;

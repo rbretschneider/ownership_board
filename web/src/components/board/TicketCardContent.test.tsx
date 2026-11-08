@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PRStatusContext } from "../../hooks/usePRStatus";
-import type { PRStatusSnapshot, TicketSummary } from "../../api/types";
+import type { Repo, PRStatusSnapshot, TicketSummary } from "../../api/types";
 import { modelFamily, parseWorkModel, shortTarget } from "../../lib/workModel";
 import { TicketCardContent } from "./TicketCardContent";
 
@@ -173,4 +173,16 @@ it("keeps blockers ahead of PR status and falls back for stale or mismatched sna
   expect(prDom({}, snapshot).querySelector(".badge--pr")).toBeNull();
   expect(prDom({}, snapshot).querySelector(".stepper")).not.toBeNull();
  }
+});
+
+it("shows deployment waits only for agent deployment and hides completed worker activity", () => {
+ for (const mode of ["off", "agent"] as const) {
+  const html = renderToStaticMarkup(<TicketCardContent ticket={{...story, lane: "merged", stage: "done"}} stages={[]} repo={{deploy_mode: mode} as Repo} />);
+  expect(html.includes("Awaiting deploy")).toBe(mode === "agent");
+ }
+ expect(render({lane: "merged", stage: "done"})).not.toContain("Awaiting deploy");
+ const html = render({lane: "deployed", stage: "deployed"});
+ expect(html).not.toContain("card__activity");
+ expect(html).not.toContain("card__model");
+ expect(html).not.toContain('aria-current=');
 });

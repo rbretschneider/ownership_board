@@ -4,6 +4,7 @@ export const lanes: Lane[] = [
   { id: "todo", label: "Todo", description: "Ideas" },
   { id: "in_progress", label: "In progress", description: "Active work" },
   { id: "merged", label: "Merged", description: "Integrated work" },
+  { id: "deployed", label: "Deployed", description: "Released work" },
 ];
 export const prTicket: TicketSummary = {
   id: 1, repo_id: null, kind: "story", title: "Improve navigation", lane: "in_progress", stage: "pr",
