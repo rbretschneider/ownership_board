@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 
 	"github.com/rbretschneider/ownership_board/internal/domain"
@@ -46,6 +48,7 @@ func (s *server) restyleRepo(w http.ResponseWriter, r *http.Request, who caller)
 		return err
 	}
 	var body struct {
+		BuildTargets     json.RawMessage    `json:"build_targets"`
 		Color            *string            `json:"color"`
 		TreatAsPublic    *bool              `json:"treat_as_public"`
 		Description      *string            `json:"description"`
@@ -58,7 +61,36 @@ func (s *server) restyleRepo(w http.ResponseWriter, r *http.Request, who caller)
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
 	}
-	style := domain.RepoStyle{
+	var targets *[]domain.RepoBuildTarget
+	if body.BuildTargets != nil {
+		var entries []json.RawMessage
+		if err := json.Unmarshal(body.BuildTargets, &entries); err != nil || entries == nil {
+			return domain.Invalidf("build_targets must be an array")
+		}
+		parsed := make([]domain.RepoBuildTarget, 0, len(entries))
+		for _, entry := range entries {
+			var item struct {
+				OS           *domain.BuildHostOS `json:"os"`
+				Preset       *string             `json:"preset"`
+				Capabilities *[]*string          `json:"capabilities"`
+			}
+			decoder := json.NewDecoder(bytes.NewReader(entry))
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&item); err != nil || item.OS == nil || item.Preset == nil || item.Capabilities == nil {
+				return domain.Invalidf("each build target requires os, preset and capabilities")
+			}
+			caps := make([]string, 0, len(*item.Capabilities))
+			for _, c := range *item.Capabilities {
+				if c == nil {
+					return domain.Invalidf("capabilities must contain strings")
+				}
+				caps = append(caps, *c)
+			}
+			parsed = append(parsed, domain.RepoBuildTarget{OS: *item.OS, Preset: *item.Preset, Capabilities: caps})
+		}
+		targets = &parsed
+	}
+	style := domain.RepoStyle{BuildTargets: targets,
 		Color: body.Color, Description: body.Description, TreatAsPublic: body.TreatAsPublic, DeployMode: body.DeployMode,
 		RequireSpecApproval: body.RequireSpec, RequireDesignApproval: body.RequireDesign,
 		AllowAgentMerge: body.AllowAgentMerge, HealthCheckEvery: body.HealthCheckEvery,

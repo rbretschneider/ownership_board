@@ -116,3 +116,33 @@ func TestOnlyPeopleChangeTheHealthCheckInterval(t *testing.T) {
 		t.Fatalf("interval %d after owner change and sync, want 12", got.HealthCheckEvery)
 	}
 }
+
+func TestRepoBuildTargetsSurviveProviderChanges(t *testing.T) {
+	source := &scriptedSource{names: []string{"example/app"}}
+	f := newFixture(t, source)
+	if err := f.repos.Sync(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	repo := f.repoNamed("example/app")
+	targets := []domain.RepoBuildTarget{{OS: "linux", Preset: "cmake"}}
+	if _, err := f.repos.Restyle(f.ctx, agent, repo.ID, domain.RepoStyle{BuildTargets: &targets}); err == nil {
+		t.Fatal("agent edit")
+	}
+	if _, err := f.repos.Restyle(f.ctx, owner, repo.ID, domain.RepoStyle{BuildTargets: &targets}); err != nil {
+		t.Fatal(err)
+	}
+	for _, names := range [][]string{{"example/app"}, {}, {"example/app"}} {
+		source.names = names
+		if err := f.repos.Sync(f.ctx); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.repoNamed("example/app"); len(got.BuildTargets) != 1 || got.BuildTargets[0].Preset != "cmake" {
+			t.Fatal(got)
+		}
+	}
+	empty := []domain.RepoBuildTarget{}
+	got, err := f.repos.Restyle(f.ctx, owner, repo.ID, domain.RepoStyle{BuildTargets: &empty})
+	if err != nil || len(got.BuildTargets) != 0 {
+		t.Fatal(got, err)
+	}
+}

@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -15,7 +16,7 @@ type codeRepoRepo struct {
 
 const repoColumns = `id, provider, full_name, url, description, color, default_branch, is_private, is_archived, synced_at, created_at, missing_since, treat_as_public,
 	require_spec_approval, require_design_approval, allow_agent_merge,
-	health_check_every, health_checked_through_ticket, health_checked_at, merge_sequence, health_checked_through_merge_sequence, deploy_mode`
+	health_check_every, health_checked_through_ticket, health_checked_at, merge_sequence, health_checked_through_merge_sequence, deploy_mode, build_targets`
 
 func (r codeRepoRepo) List(ctx context.Context) ([]domain.Repo, error) {
 	return r.query(ctx, `SELECT `+repoColumns+` FROM repos ORDER BY full_name COLLATE NOCASE, provider`)
@@ -35,13 +36,22 @@ func (r codeRepoRepo) ByProvider(ctx context.Context, provider domain.Provider) 
 }
 
 func (r codeRepoRepo) Insert(ctx context.Context, repo *domain.Repo) error {
+	targets, err := domain.NormalizeRepoBuildTargets(repo.BuildTargets)
+	if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(targets)
+	if err != nil {
+		return err
+	}
+	repo.BuildTargets = targets
 	result, err := r.q.ExecContext(ctx,
 		`INSERT INTO repos (provider, full_name, url, description, color, default_branch, is_private, is_archived, synced_at, created_at, missing_since, treat_as_public,
-			require_spec_approval, require_design_approval, allow_agent_merge, health_check_every, deploy_mode)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			require_spec_approval, require_design_approval, allow_agent_merge, health_check_every, deploy_mode, build_targets)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		string(repo.Provider), repo.FullName, repo.URL, repo.Description, repo.Color, repo.DefaultBranch,
 		boolToInt(repo.IsPrivate), boolToInt(repo.IsArchived), formatOptionalTime(repo.SyncedAt), formatTime(repo.CreatedAt), formatOptionalTime(repo.MissingSince), boolToInt(repo.TreatAsPublic),
-		boolToInt(repo.RequireSpecApproval), boolToInt(repo.RequireDesignApproval), boolToInt(repo.AllowAgentMerge), repo.HealthCheckEvery, repo.DeployMode)
+		boolToInt(repo.RequireSpecApproval), boolToInt(repo.RequireDesignApproval), boolToInt(repo.AllowAgentMerge), repo.HealthCheckEvery, repo.DeployMode, string(raw))
 	if err != nil {
 		return conflictOr(err, "repo %s is already on the board", repo.FullName)
 	}
@@ -111,15 +121,21 @@ func (r codeRepoRepo) query(ctx context.Context, query string, args ...any) ([]d
 
 func scanRepo(row scanner) (domain.Repo, error) {
 	var repo domain.Repo
-	var provider, created string
+	var provider, created, targets string
 	var isPrivate, isArchived, treatAsPublic, requireSpec, requireDesign, allowAgentMerge int
 	var synced, missing, checkedAt sql.NullString
 	var checkedThrough sql.NullInt64
 	err := row.Scan(&repo.ID, &provider, &repo.FullName, &repo.URL, &repo.Description, &repo.Color, &repo.DefaultBranch,
 		&isPrivate, &isArchived, &synced, &created, &missing, &treatAsPublic, &requireSpec, &requireDesign, &allowAgentMerge,
-		&repo.HealthCheckEvery, &checkedThrough, &checkedAt, &repo.MergeSequence, &repo.HealthCheckedThroughMergeSequence, &repo.DeployMode)
+		&repo.HealthCheckEvery, &checkedThrough, &checkedAt, &repo.MergeSequence, &repo.HealthCheckedThroughMergeSequence, &repo.DeployMode, &targets)
 	if err != nil {
 		return domain.Repo{}, err
+	}
+	if err := json.Unmarshal([]byte(targets), &repo.BuildTargets); err != nil {
+		return domain.Repo{}, fmt.Errorf("sqlite: repo %d build targets: %w", repo.ID, err)
+	}
+	if repo.BuildTargets, err = domain.NormalizeRepoBuildTargets(repo.BuildTargets); err != nil {
+		return domain.Repo{}, fmt.Errorf("sqlite: repo %d build targets: %w", repo.ID, err)
 	}
 	repo.Provider, repo.IsPrivate, repo.IsArchived = domain.Provider(provider), isPrivate == 1, isArchived == 1
 	repo.TreatAsPublic = treatAsPublic == 1
@@ -145,4 +161,17 @@ func (r codeRepoRepo) NextMergeSequence(ctx context.Context, repoID int64) (int6
 	var sequence int64
 	err := r.q.QueryRowContext(ctx, `UPDATE repos SET merge_sequence = merge_sequence + 1 WHERE id = ? RETURNING merge_sequence`, repoID).Scan(&sequence)
 	return sequence, err
+}
+
+func (r codeRepoRepo) SetBuildTargets(ctx context.Context, repo domain.Repo) error {
+	targets, err := domain.NormalizeRepoBuildTargets(repo.BuildTargets)
+	if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(targets)
+	if err != nil {
+		return err
+	}
+	_, err = r.q.ExecContext(ctx, `UPDATE repos SET build_targets = ? WHERE id = ?`, string(raw), repo.ID)
+	return err
 }
