@@ -55,9 +55,9 @@ describe("why slots are idle", () => {
  });
 });
 
-describe("Delivery card pill follows the merge sweep", () => {
+describe("PR card pill follows the merge sweep", () => {
  const ticket: TicketSummary = {
-  id: 92, repo_id: null, kind: "story", title: "Flyout", lane: "review", stage: "pr", owner: "human", needs_owner: true,
+  id: 92, repo_id: null, kind: "story", title: "Flyout", lane: "in_progress", stage: "pr", owner: "human", needs_owner: true,
   blocked_reason: "", is_autonomous: true, spec_revision: 1, design_revision: 1, pr_url: "https://github.com/acme/mix/pull/25", branch: "b",
   open_questions: 0, waiting_on: [], lease: null, work_model: "", created_at: "", updated_at: "", lane_changed_at: "",
  };

@@ -2,7 +2,7 @@ import { useStats } from "../../hooks/useStats";
 import { STATS_HASH } from "../../lib/hashRoute";
 import { formatMedian, SUMMARY_PERIOD, SUMMARY_REFRESH_MS } from "../../lib/stats";
 
-/** Compact delivery stats for the top bar; each one opens the stats page. */
+/** Compact throughput stats for the top bar; each one opens the stats page. */
 export function StatsSummary() {
   const { report, error } = useStats(SUMMARY_PERIOD, SUMMARY_REFRESH_MS);
   if (report === null) {
@@ -24,7 +24,7 @@ export function StatsSummary() {
     },
   ];
   return (
-    <div className="stats-summary" role="group" aria-label="Delivery summary">
+    <div className="stats-summary" role="group" aria-label="Throughput summary">
       {items.map((item) => (
         <a key={item.label} href={STATS_HASH} className="stats-summary__item" title={`${item.title}. Open stats.`}>
           <span className="stats-summary__value">{item.value}</span>

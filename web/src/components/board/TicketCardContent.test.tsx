@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { TicketSummary } from "../../api/types";
+import { PRStatusContext } from "../../hooks/usePRStatus";
+import type { PRStatusSnapshot, TicketSummary } from "../../api/types";
 import { modelFamily, parseWorkModel, shortTarget } from "../../lib/workModel";
 import { TicketCardContent } from "./TicketCardContent";
 
 const story: TicketSummary = {
- id: 9, repo_id: null, kind: "story", title: "A product outcome", lane: "review", stage: "pr",
+ id: 9, repo_id: null, kind: "story", title: "A product outcome", lane: "in_progress", stage: "pr",
  owner: "agent", needs_owner: false, blocked_reason: "", is_autonomous: true,
  spec_revision: 1, design_revision: 1, pr_url: "https://github.com/acme/app/pull/9", branch: "feature",
  open_questions: 0, waiting_on: [], lease: {holder: "runner-2", expires_at: "2099-01-01T00:00:00Z"},
@@ -24,7 +25,7 @@ describe("owner-facing story status", () => {
   expect(render()).toContain("gpt-6.1-sol");
   expect(render()).not.toContain("AI working");
  });
- it("keeps autonomous delivery off the owner's action list", () => {
+ it("keeps autonomous work off the owner's action list", () => {
   expect(render()).toContain("On autopilot");
   expect(render()).not.toContain("Needs you");
  });
@@ -110,12 +111,12 @@ it("replaces the step count with a stage stepper showing retries", () => {
 });
 
 it("shows the Windows result as a status once verification is over", () => {
- const passed = dom({stage: "pr", lane: "review", attempts: {build: 2, test: 2, test_failures: 1, review: 1, review_fixes: 0, pr: 1, pr_repairs: 0}});
+ const passed = dom({stage: "pr", lane: "in_progress", attempts: {build: 2, test: 2, test_failures: 1, review: 1, review_fixes: 0, pr: 1, pr_repairs: 0}});
  const chip = passed.querySelector(".badge--windows-passed");
  expect(chip?.textContent).toBe("Windows passed");
  expect(chip?.getAttribute("title")).toBe("Windows verification passed · 2 Windows runs, 1 failed");
  // A repo without Windows checks shows nothing.
- const none = dom({stage: "pr", lane: "review", attempts: {build: 1, test: 0, test_failures: 0, review: 1, review_fixes: 0, pr: 1, pr_repairs: 0}});
+ const none = dom({stage: "pr", lane: "in_progress", attempts: {build: 1, test: 0, test_failures: 0, review: 1, review_fixes: 0, pr: 1, pr_repairs: 0}});
  expect(none.querySelector('[class*="badge--windows"]')).toBeNull();
 });
 
@@ -145,4 +146,31 @@ it("marks scheduled reviews independently of work status", () => {
   }
   expect(dom({ is_health_check: false }).textContent).not.toContain("Health check");
   expect(dom().textContent).not.toContain("Health check");
+});
+
+const prNow = Date.parse("2026-11-08T12:00:00Z");
+const prSnapshot: PRStatusSnapshot = { observed_at: new Date(prNow).toISOString(), prs: [{
+ ticket_id: story.id, url: story.pr_url, verdict: "green_owner", reason: "", may_merge: false, acts: false,
+ gl_waived: false, draft: false, mergeable: "MERGEABLE", review: "", head: "abc123", unresolved: false, manual_check: false, checks: [],
+}] };
+function prDom(overrides: Partial<TicketSummary> = {}, snapshot = prSnapshot) {
+ const host = document.createElement("div");
+ host.innerHTML = renderToStaticMarkup(<PRStatusContext.Provider value={{snapshot, now: prNow}}><TicketCardContent ticket={{...story, ...overrides}} stages={[]} repo={undefined} now={prNow} /></PRStatusContext.Provider>);
+ return host;
+}
+it.each([true, false])("shows a PR pill, owner badge and current PR step together (autonomous=%s)", autonomous => {
+ const card = prDom({needs_owner: true, is_autonomous: autonomous});
+ expect(card.querySelector(".badge--pr-owner")?.textContent).toBe("Green · needs your merge");
+ expect(card.querySelectorAll(".badge--needs")).toHaveLength(1);
+ expect(card.querySelector(".badge--needs")?.textContent).toBe("Needs you");
+ expect(card.querySelector('[aria-current="step"]')?.textContent).toBe("PR");
+ expect(prDom({needs_owner: false, is_autonomous: autonomous}).querySelector(".badge--needs")).toBeNull();
+});
+it("keeps blockers ahead of PR status and falls back for stale or mismatched snapshots", () => {
+ expect(prDom({blocked_reason: "Access needed"}).querySelector(".badge--pr")).toBeNull();
+ expect(prDom({blocked_reason: "Access needed"}).querySelector(".badge--blocked")?.getAttribute("title")).toBe("Blocked: Access needed");
+ for (const snapshot of [{...prSnapshot, observed_at: "2000-01-01"}, {...prSnapshot, prs: [{...prSnapshot.prs[0]!, url: "https://github.com/acme/app/pull/99"}]}, {observed_at: null, prs: []}]) {
+  expect(prDom({}, snapshot).querySelector(".badge--pr")).toBeNull();
+  expect(prDom({}, snapshot).querySelector(".stepper")).not.toBeNull();
+ }
 });

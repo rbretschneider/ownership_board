@@ -6,7 +6,7 @@ import { LaneList } from "./LaneList";
 const tickets = Array.from({length: 8}, (_, i) => ({id: i + 1, repo_id: null, kind: "story", title: `Outcome ${i + 1}`, lane: "merged", stage: "done", needs_owner: false, blocked_reason: "", is_autonomous: true, waiting_on: [], open_questions: 0, pr_url: "", lease: null} as unknown as TicketSummary));
 (globalThis as unknown as {IS_REACT_ACT_ENVIRONMENT: boolean}).IS_REACT_ACT_ENVIRONMENT = true;
 afterEach(() => { document.body.innerHTML = ""; });
-it("keeps five Delivered cards and expands without affecting other lanes", async () => {
+it("keeps five Merged cards and expands without affecting other lanes", async () => {
  const host = document.createElement("div"); document.body.append(host);
  const root = createRoot(host);
  const props = {tickets, stages: [], reposById: new Map(), draggedId: null, target: null, onPointerDown: () => {}, shouldIgnoreClick: () => false};
@@ -14,12 +14,14 @@ it("keeps five Delivered cards and expands without affecting other lanes", async
  expect(host.querySelectorAll("[data-card-id]")).toHaveLength(5);
  const button = host.querySelector("button")!;
  expect(button.textContent).toBe("See 3 more");
+ expect(button.getAttribute("aria-expanded")).toBe("false");
  await act(async () => { button.click(); });
  expect(host.querySelectorAll("[data-card-id]")).toHaveLength(8);
  expect(button.getAttribute("aria-expanded")).toBe("true");
+ expect(button.textContent).toBe("Show fewer");
  await act(async () => { button.click(); });
  expect(host.querySelectorAll("[data-card-id]")).toHaveLength(5);
- await act(async () => { root.render(<LaneList lane="todo" {...props} />); });
+ await act(async () => { root.render(<LaneList lane="in_progress" {...props} tickets={tickets.map(t => ({...t, lane: "in_progress", stage: "pr"}))} />); });
  expect(host.querySelectorAll("[data-card-id]")).toHaveLength(8);
  await act(async () => { root.unmount(); });
 });

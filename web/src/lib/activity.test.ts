@@ -35,3 +35,7 @@ describe("card activity", () => {
     expect(cardTone({...ticket, stage: "done"})).toBe("");
   });
 });
+
+it("labels completed work Merged", () => {
+ expect(cardActivity({...ticket, stage: "done"}).label).toBe("Merged");
+});

@@ -2,7 +2,7 @@ import type { BoardViewProps } from "./BoardViewProps";
 import { LaneList } from "./LaneList";
 import { StageSummary } from "./StageSummary";
 
-/** Four lane columns side by side. */
+/** Three lane columns side by side. */
 export function DesktopBoard({ lanes, stages, ticketsByLane, ...listProps }: BoardViewProps) {
   return (
     <div className="columns">

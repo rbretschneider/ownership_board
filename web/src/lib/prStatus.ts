@@ -47,7 +47,7 @@ export function prsAwaitingOwner(snapshot: PRStatusSnapshot, tickets: TicketSumm
   return tickets.filter((t) => t.stage === "pr" && ticketPR(snapshot, t, now)?.verdict === "green_owner");
 }
 
-/** One pill that says what a PR in Delivery is waiting for, and who moves next. */
+/** One pill that says what a PR is waiting for, and who moves next. */
 export function prPill(status: PRStatus, observedAt: string | null, now: number): PRPill {
   const total = status.checks.length;
   const done = status.checks.filter(isDone).length;
