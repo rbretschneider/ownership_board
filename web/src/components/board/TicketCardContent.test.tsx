@@ -135,3 +135,14 @@ describe("work model signal", () => {
   expect(modelFamily(undefined)).toBeUndefined();
  });
 });
+
+it("marks scheduled reviews independently of work status", () => {
+  for (const stage of ["build", "done"] as const) {
+    const card = dom({ is_health_check: true, stage });
+    expect(card.querySelectorAll(".badge--health-check")).toHaveLength(1);
+    expect(card.querySelector(".badge--health-check")?.textContent).toBe("Health check");
+    expect(card.querySelector('.badge--health-check svg[aria-hidden="true"]')).not.toBeNull();
+  }
+  expect(dom({ is_health_check: false }).textContent).not.toContain("Health check");
+  expect(dom().textContent).not.toContain("Health check");
+});

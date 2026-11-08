@@ -222,6 +222,11 @@ func (s *BoardService) linkInTx(ctx context.Context, repos Repos, actor domain.A
 	if err := requireLeaseOnEither(ticket, other, actor, s.clock.Now()); err != nil {
 		return TicketDetail{}, nil, err
 	}
+	if kind == domain.RelationFollowUpOf {
+		if err := requireHealthCheckFollowUpRoom(ctx, repos, other, ticket.ID, actor); err != nil {
+			return TicketDetail{}, nil, err
+		}
+	}
 	relation, err := domain.NewRelation(ticket.ID, other.ID, kind, actor, s.clock.Now())
 	if err != nil {
 		return TicketDetail{}, nil, err
@@ -390,39 +395,69 @@ func (s *BoardService) CreateRelated(ctx context.Context, actor domain.Actor, dr
 	if relationKind == domain.RelationDependsOn {
 		return TicketDetail{}, domain.Invalidf("relation cannot be depends_on; list the tickets the new one waits for in depends_on instead")
 	}
-	related, err := s.Ticket(ctx, relatedID)
-	if err != nil {
-		return TicketDetail{}, err
-	}
-	if err := requireLeaseForAgent(related.Ticket, actor, s.clock.Now()); err != nil {
-		return TicketDetail{}, err
-	}
-	var created TicketDetail
-	if strings.TrimSpace(spec) != "" && actor.IsAgent() && related.Ticket.IsAutonomous && relationKind == domain.RelationFollowUpOf {
-		created, err = s.createInheritedAutonomous(ctx, actor, draft, spec, related.Ticket)
-	} else {
-		created, err = s.Create(ctx, actor, draft)
-	}
-	if err != nil {
-		return TicketDetail{}, err
-	}
-	return s.LinkTickets(ctx, actor, created.Ticket.ID, kind, relatedID)
-}
-
-func (s *BoardService) createInheritedAutonomous(ctx context.Context, actor domain.Actor, draft domain.TicketDraft, spec string, parent domain.Ticket) (TicketDetail, error) {
-	if err := rejectHiddenFromAgent(actor, map[string]string{"title": draft.Title, "body": draft.Body, "spec": spec}); err != nil {
-		return TicketDetail{}, err
-	}
-	if err := domain.RejectConcealedMarkdown("spec", spec); err != nil {
-		return TicketDetail{}, err
-	}
-	ticket, err := domain.NewInheritedAutonomousTicket(domain.AutonomousDraft{TicketDraft: draft, Spec: spec}, parent, actor, s.clock.Now())
-	if err != nil {
-		return TicketDetail{}, err
-	}
-	return s.insertAutonomous(ctx, actor, ticket, draft.DependsOn, func(id int64) domain.Decision {
-		return domain.DecisionFromInheritedAutonomy(id, parent.ID, actor, ticket.CreatedAt)
+	var detail TicketDetail
+	var events []Event
+	err = s.store.Write(ctx, func(repos Repos) error {
+		parent, err := repos.Tickets().Get(ctx, relatedID)
+		if err != nil {
+			return err
+		}
+		if err := requireLeaseForAgent(parent, actor, s.clock.Now()); err != nil {
+			return err
+		}
+		if relationKind == domain.RelationFollowUpOf {
+			if err := requireHealthCheckFollowUpRoom(ctx, repos, parent, 0, actor); err != nil {
+				return err
+			}
+		}
+		if err := rejectHiddenFromAgent(actor, map[string]string{"title": draft.Title, "body": draft.Body}); err != nil {
+			return err
+		}
+		inherited := strings.TrimSpace(spec) != "" && actor.IsAgent() && parent.IsAutonomous && relationKind == domain.RelationFollowUpOf
+		var ticket domain.Ticket
+		if inherited {
+			if err := rejectHiddenFromAgent(actor, map[string]string{"spec": spec}); err != nil {
+				return err
+			}
+			if err := domain.RejectConcealedMarkdown("spec", spec); err != nil {
+				return err
+			}
+			ticket, err = domain.NewInheritedAutonomousTicket(domain.AutonomousDraft{TicketDraft: draft, Spec: spec}, parent, actor, s.clock.Now())
+		} else {
+			ticket, err = domain.NewTicket(draft, actor, s.clock.Now())
+		}
+		if err != nil {
+			return err
+		}
+		dependsOn, err := parseDependencies(ticket, draft.DependsOn)
+		if err != nil {
+			return err
+		}
+		var created TicketDetail
+		if inherited {
+			place := atBottom
+			if parent.IsHealthCheck {
+				place = atTop
+			}
+			created, events, err = s.insertAutonomousInTx(ctx, repos, actor, ticket, dependsOn, func(id int64) domain.Decision {
+				return domain.DecisionFromInheritedAutonomy(id, parent.ID, actor, ticket.CreatedAt)
+			}, place)
+		} else {
+			created, events, err = s.insertCreatedInTx(ctx, repos, actor, ticket, dependsOn)
+		}
+		if err != nil {
+			return err
+		}
+		var linkEvents []Event
+		detail, linkEvents, err = s.linkInTx(ctx, repos, actor, created.Ticket.ID, relationKind, parent.ID)
+		events = append(events, linkEvents...)
+		return err
 	})
+	if err != nil {
+		return TicketDetail{}, err
+	}
+	s.writer.sink.Publish(ctx, events)
+	return detail, nil
 }
 
 // rejoinChain closes the gap a removed decision leaves in a replacement chain.

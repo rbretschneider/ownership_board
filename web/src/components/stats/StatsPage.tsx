@@ -6,6 +6,7 @@ import { periodFromParam, STATS_PERIODS, throughputDays } from "../../lib/stats"
 import { ErrorState } from "../common/ErrorState";
 import { LoadingState } from "../common/LoadingState";
 import { PageShell } from "../common/PageShell";
+import { HealthTable } from "./HealthTable";
 import { CompareTable } from "./CompareTable";
 import { deliveryRows, mixRows, nowRows, qualityRows, stageTimeRows, wipRows } from "./statsRows";
 import { ThroughputChart } from "./ThroughputChart";
@@ -88,6 +89,9 @@ function StatsReportView({ report, isRefreshing }: { report: StatsReport; isRefr
       </StatsSection>
       <StatsSection title="By repository">
         <RepoTable report={report} />
+      </StatsSection>
+      <StatsSection title="Architecture health" note="Current status, independent of the selected delivery period. Last-check time records when the review was filed.">
+        <HealthTable repos={report.repos} />
       </StatsSection>
       <StatsSection title="Not recorded yet">
         <ul className="stats__gaps">

@@ -159,6 +159,11 @@
   white-space: nowrap;
 }
 
+.badge--health-check {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
 .badge--agent {
   background: var(--agent-soft);
   color: var(--agent);
