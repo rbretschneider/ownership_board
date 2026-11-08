@@ -11,6 +11,7 @@ import { LoadingState } from "./components/common/LoadingState";
 import { FlowPage } from "./components/flow/FlowPage";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { StatsPage } from "./components/stats/StatsPage";
+import { CurrentUserContext } from "./hooks/useCurrentUser";
 import { useHashRoute } from "./hooks/useHashRoute";
 import { BOARD_HASH, navigate } from "./lib/hashRoute";
 
@@ -50,7 +51,9 @@ export function App() {
 
   return (
     <ApiContext.Provider value={api}>
-      {renderScreen()}
+      <CurrentUserContext.Provider value={status?.user ?? null}>
+        {renderScreen()}
+      </CurrentUserContext.Provider>
     </ApiContext.Provider>
   );
 

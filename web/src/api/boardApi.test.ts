@@ -20,3 +20,10 @@ it("uses session-aware host endpoints and preserves omitted versus empty edits",
     ["GET", "/build-hosts/runners"],
   ]);
 });
+
+it("requests deployment and forwards the authoritative detail", async () => {
+  const detail = {id: 7, stage: "deploying"};
+  const request = vi.fn().mockResolvedValue(detail);
+  expect(await createBoardApi({request}).deployTicket(7)).toBe(detail);
+  expect(request).toHaveBeenCalledExactlyOnceWith("POST", "/tickets/7/deploy", {});
+});

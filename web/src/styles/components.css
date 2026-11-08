@@ -1428,3 +1428,23 @@ a.runners__next:hover { color: var(--text); }
 .build-host-pairing.sheet { padding: 0; }
 .build-host-pairing .sheet__body { gap: .75rem; }
 .build-host-pairing .sheet__header { padding-inline: 1rem; }
+
+/* Keep the card identity on the container and give navigation its own focus target. */
+.card--linked { padding: 0; gap: 0; }
+.card__link {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: var(--card-pad-y) var(--card-pad-x);
+  color: inherit;
+  text-decoration: none;
+  border-radius: inherit;
+}
+.card__link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card__actions:empty { display: none; }
+.card__actions:not(:empty) { padding: 8px var(--card-pad-x); }
+.card__actions .button { width: 100%; }
+.card__link:has(+ .card__actions:not(:empty)) .stepper { border-radius: 0; }
+.card__top-right--deploying { max-width: 100%; flex-wrap: wrap; justify-content: flex-end; }
+.card__lease-holder { min-width: 0; max-width: 10rem; color: var(--text-muted); font-size: 0.6875rem; overflow-wrap: anywhere; white-space: normal; }

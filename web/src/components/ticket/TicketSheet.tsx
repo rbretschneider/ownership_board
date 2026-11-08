@@ -1,3 +1,4 @@
+import { DeployButton } from "./DeployButton";
 import { ArrowLeft, CircleCheck } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 import { useApi } from "../../api/ApiContext";
@@ -89,6 +90,7 @@ export function TicketSheet({ ticketId, lanes, stages, repos, tickets, refreshSi
           </button>
           <h2 className="sheet__title">#{ticketId}</h2>
           <span className="topbar__spacer" />
+          {ticket !== null && <DeployButton ticket={ticket} repo={repos.find(repo => repo.id === ticket.repo_id)} onDeploy={() => run(() => api.deployTicket(ticket.id))} />}
           {ticket !== null && (
             <TicketMenu
               ticketId={ticketId}

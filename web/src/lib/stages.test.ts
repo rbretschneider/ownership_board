@@ -137,3 +137,8 @@ it("recognizes both completion stages", () => {
 it("keeps active deployment merge-complete", () => {
  expect(isCompletedStage("deploying")).toBe(true);
 });
+
+it("labels deployment without metadata and preserves merge-level completion", () => {
+ expect(stageLabel([], "deploying")).toBe("Deploying");
+ expect(isCompletedStage("deploying")).toBe(true);
+});
