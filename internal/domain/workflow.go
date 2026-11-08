@@ -198,6 +198,8 @@ func (t *Ticket) DropStage(lane Lane, gates Gates) Stage {
 			return StageBuild
 		}
 		return StageDesign
+	case LaneDeployed:
+		return StageDeployed
 	default:
 		return StageDone
 	}

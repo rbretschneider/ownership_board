@@ -10,6 +10,7 @@ const (
 	LaneTodo       Lane = "todo"
 	LaneInProgress Lane = "in_progress"
 	LaneMerged     Lane = "merged"
+	LaneDeployed   Lane = "deployed"
 )
 
 // LaneInfo describes a lane for display and for agents.
@@ -23,6 +24,7 @@ var laneCatalog = []LaneInfo{
 	{LaneTodo, "Todo", "Capture an idea, agree the outcome, and queue the work."},
 	{LaneInProgress, "In progress", "Work is being designed, built, repaired or reviewed."},
 	{LaneMerged, "Merged", "Integrated into the project; deployment follows the project’s release process."},
+	{LaneDeployed, "Deployed", "Released or complete without deployment."},
 }
 
 // Lanes returns every lane in board order.

@@ -15,7 +15,7 @@ type codeRepoRepo struct {
 
 const repoColumns = `id, provider, full_name, url, description, color, default_branch, is_private, is_archived, synced_at, created_at, missing_since, treat_as_public,
 	require_spec_approval, require_design_approval, allow_agent_merge,
-	health_check_every, health_checked_through_ticket, health_checked_at, merge_sequence, health_checked_through_merge_sequence`
+	health_check_every, health_checked_through_ticket, health_checked_at, merge_sequence, health_checked_through_merge_sequence, deploy_mode`
 
 func (r codeRepoRepo) List(ctx context.Context) ([]domain.Repo, error) {
 	return r.query(ctx, `SELECT `+repoColumns+` FROM repos ORDER BY full_name COLLATE NOCASE, provider`)
@@ -37,11 +37,11 @@ func (r codeRepoRepo) ByProvider(ctx context.Context, provider domain.Provider) 
 func (r codeRepoRepo) Insert(ctx context.Context, repo *domain.Repo) error {
 	result, err := r.q.ExecContext(ctx,
 		`INSERT INTO repos (provider, full_name, url, description, color, default_branch, is_private, is_archived, synced_at, created_at, missing_since, treat_as_public,
-			require_spec_approval, require_design_approval, allow_agent_merge, health_check_every)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			require_spec_approval, require_design_approval, allow_agent_merge, health_check_every, deploy_mode)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		string(repo.Provider), repo.FullName, repo.URL, repo.Description, repo.Color, repo.DefaultBranch,
 		boolToInt(repo.IsPrivate), boolToInt(repo.IsArchived), formatOptionalTime(repo.SyncedAt), formatTime(repo.CreatedAt), formatOptionalTime(repo.MissingSince), boolToInt(repo.TreatAsPublic),
-		boolToInt(repo.RequireSpecApproval), boolToInt(repo.RequireDesignApproval), boolToInt(repo.AllowAgentMerge), repo.HealthCheckEvery)
+		boolToInt(repo.RequireSpecApproval), boolToInt(repo.RequireDesignApproval), boolToInt(repo.AllowAgentMerge), repo.HealthCheckEvery, repo.DeployMode)
 	if err != nil {
 		return conflictOr(err, "repo %s is already on the board", repo.FullName)
 	}
@@ -62,11 +62,11 @@ func (r codeRepoRepo) Update(ctx context.Context, repo domain.Repo) error {
 	return nil
 }
 
-// SetGates writes the checkpoint and agent-merge settings. Update never
+// SetGates writes the checkpoint, agent-merge and deployment settings. Update never
 // touches them, so a repo sync can never switch one.
 func (r codeRepoRepo) SetGates(ctx context.Context, repo domain.Repo) error {
-	_, err := r.q.ExecContext(ctx, `UPDATE repos SET require_spec_approval = ?, require_design_approval = ?, allow_agent_merge = ? WHERE id = ?`,
-		boolToInt(repo.RequireSpecApproval), boolToInt(repo.RequireDesignApproval), boolToInt(repo.AllowAgentMerge), repo.ID)
+	_, err := r.q.ExecContext(ctx, `UPDATE repos SET require_spec_approval = ?, require_design_approval = ?, allow_agent_merge = ?, deploy_mode = ? WHERE id = ?`,
+		boolToInt(repo.RequireSpecApproval), boolToInt(repo.RequireDesignApproval), boolToInt(repo.AllowAgentMerge), repo.DeployMode, repo.ID)
 	if err != nil {
 		return fmt.Errorf("sqlite: set gates of repo %d: %w", repo.ID, err)
 	}
@@ -117,7 +117,7 @@ func scanRepo(row scanner) (domain.Repo, error) {
 	var checkedThrough sql.NullInt64
 	err := row.Scan(&repo.ID, &provider, &repo.FullName, &repo.URL, &repo.Description, &repo.Color, &repo.DefaultBranch,
 		&isPrivate, &isArchived, &synced, &created, &missing, &treatAsPublic, &requireSpec, &requireDesign, &allowAgentMerge,
-		&repo.HealthCheckEvery, &checkedThrough, &checkedAt, &repo.MergeSequence, &repo.HealthCheckedThroughMergeSequence)
+		&repo.HealthCheckEvery, &checkedThrough, &checkedAt, &repo.MergeSequence, &repo.HealthCheckedThroughMergeSequence, &repo.DeployMode)
 	if err != nil {
 		return domain.Repo{}, err
 	}

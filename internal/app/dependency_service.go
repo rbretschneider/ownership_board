@@ -224,7 +224,7 @@ func requireDependenciesFollowRepo(ctx context.Context, repos Repos, ticket doma
 	return nil
 }
 
-// releaseDependants runs when merged has just reached Merged. Each ticket
+// releaseDependants runs when merged has just reached a completed stage. Each ticket
 // that depended on it and now waits for nothing gets a line saying so,
 // attributed to whoever merged it; its event also wakes waiting claims.
 func releaseDependants(ctx context.Context, repos Repos, merged domain.Ticket, mergedBy domain.Actor, now time.Time) ([]Event, error) {
@@ -241,7 +241,7 @@ func releaseDependants(ctx context.Context, repos Repos, merged domain.Ticket, m
 		if err != nil {
 			return nil, err
 		}
-		if dependant.Stage == domain.StageDone {
+		if dependant.Stage.IsCompleted() {
 			continue
 		}
 		waiting, err := repos.Relations().WaitingOn(ctx, dependant.ID)
@@ -262,11 +262,11 @@ func releaseDependants(ctx context.Context, repos Repos, merged domain.Ticket, m
 	return events, nil
 }
 
-// mergedBy is the actor of the stage entry that moved a ticket to Merged, or
+// mergedBy is the actor of the stage entry that moved a ticket to a completed stage, or
 // the board itself when there is none.
 func mergedBy(entries []domain.TimelineEntry) domain.Actor {
 	for _, entry := range entries {
-		if entry.Type == domain.TimelineStage && entry.Data["to"] == string(domain.StageDone) {
+		if entry.Type == domain.TimelineStage && (entry.Data["to"] == string(domain.StageDone) || entry.Data["to"] == string(domain.StageDeployed)) {
 			return entry.Actor
 		}
 	}

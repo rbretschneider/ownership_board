@@ -46,7 +46,7 @@ func (s *BoardService) Stats(ctx context.Context, query StatsQuery) (stats.Repor
 				if relation.Kind != domain.RelationFollowUpOf || relation.ToID != *health.LastCheckTicket {
 					continue
 				}
-				if ticket, exists := tickets[relation.FromID]; exists && ticket.Stage != domain.StageDone {
+				if ticket, exists := tickets[relation.FromID]; exists && !ticket.Stage.IsCompleted() {
 					open[ticket.ID] = true
 				}
 			}

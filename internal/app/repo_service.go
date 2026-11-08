@@ -100,7 +100,7 @@ func (s *RepoService) Restyle(ctx context.Context, actor domain.Actor, id int64,
 	if err == nil && style.ChangesGates() {
 		s.logger.Info("repo checkpoints changed", "repo", repo.FullName, "by", actor.Name,
 			"require_spec_approval", repo.RequireSpecApproval, "require_design_approval", repo.RequireDesignApproval,
-			"allow_agent_merge", repo.AllowAgentMerge)
+			"allow_agent_merge", repo.AllowAgentMerge, "deploy_mode", repo.DeployMode)
 	}
 	return repo, err
 }

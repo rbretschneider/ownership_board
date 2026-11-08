@@ -514,15 +514,15 @@ func TestThreeLaneCatalogAndPRSubmission(t *testing.T) {
 				var catalog []map[string]any
 				err = json.NewDecoder(response.Body).Decode(&catalog)
 				response.Body.Close()
-				if err != nil || response.StatusCode != http.StatusOK || len(catalog) != 3 {
+				if err != nil || response.StatusCode != http.StatusOK || len(catalog) != 4 {
 					t.Fatalf("lane endpoint: %v %v", catalog, err)
 				}
 				board := browser.expect(http.StatusOK, "GET", "/api/v1/board", "")
 				lanes := board["lanes"].([]any)
-				if len(lanes) != 3 {
+				if len(lanes) != 4 {
 					t.Fatalf("lanes: %v", lanes)
 				}
-				for i, id := range []string{"todo", "in_progress", "merged"} {
+				for i, id := range []string{"todo", "in_progress", "merged", "deployed"} {
 					if lanes[i].(map[string]any)["id"] != id {
 						t.Fatal(lanes)
 					}

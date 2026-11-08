@@ -322,7 +322,15 @@ func (s *BoardService) Move(ctx context.Context, actor domain.Actor, id int64, i
 		ticket.ClearBlockForDrop()
 		from, fromLane := ticket.Stage, ticket.Lane
 		isLaneChange := ticket.MoveToStage(ticket.DropStage(lane, gates), rank, s.clock.Now())
-		return stageEntries(*ticket, from, fromLane, actor, isLaneChange), nil
+		entries := stageEntries(*ticket, from, fromLane, actor, isLaneChange)
+		if lane == domain.LaneDeployed && actor.IsHuman() {
+			for i := range entries {
+				if entries[i].Type == domain.TimelineStage {
+					entries[i].Body = "Marked deployed by " + actor.Name
+				}
+			}
+		}
+		return entries, nil
 	})
 }
 
