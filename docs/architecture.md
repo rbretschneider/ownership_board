@@ -2,7 +2,7 @@
 
 This baseline describes the ticket workflow and the repository-review and
 build-host features at `38c3a173fb022ea214d3ec76189f3392066a93e8`.
-The current workflow contract is the [three-lane amendment](lanes.md#amendment-three-lanes).
+The current workflow contract is the [deployment-state amendment](lanes.md#amendment-deployment-state).
 The older tables in [design.md](design.md) describe an earlier workflow.
 
 ## Module boundaries

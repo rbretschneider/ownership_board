@@ -1,3 +1,6 @@
+Current workflow: see the [deployment-state amendment](lanes.md#amendment-deployment-state).
+The lane tables and workflow examples below are historical.
+
 # Design
 
 ownership_board is a private task board where an AI agent is the primary worker

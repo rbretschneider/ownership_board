@@ -76,7 +76,7 @@ The MCP server offers these tools:
 | `link_tickets` | Relates two tickets (`caused_by`, `follow_up_of`, `duplicate_of`, `relates_to`, `depends_on`). |
 | `find_tickets_for_work` | Commit sha or PR URL → the tickets it was recorded on. |
 | `list_tickets` | Read-only overview, optionally by lane or repo. Each line shows what the ticket is waiting on, if anything. |
-| `report_pr_state` | For a ticket in stage `pr` within In Progress: `merged` → Merged, `closed` → back to build, blocked until the owner decides, `open` → no change. The only agent write that needs no lease, and it only reconciles PR-stage tickets; `repair` returns to build without a block and needs evidence. |
+| `report_pr_state` | For a ticket in stage `pr` within In Progress: `merged` → Deployed by default (Merged when `deploy_mode=agent`), `closed` → back to build, blocked until the owner decides, `open` → no change. The only agent write that needs no lease, and it only reconciles PR-stage tickets; `repair` returns to build without a block and needs evidence. |
 
 **Traceability rules agents follow** (they are also in every brief): end each
 commit with the trailer `Ownership-Ticket: <id>`, record commits and PRs with
@@ -90,7 +90,7 @@ enforcement: review each PR before merging.
 **The full pipeline loop.** `agent/claude/board-loop.md` does one pass over
 the whole board each time it runs:
 
-1. Lists In Progress tickets with PR URLs, confirms stage `pr` with `get_ticket`, then checks those PRs with `gh` and reports merged (→ Merged) or closed
+1. Lists In Progress tickets with PR URLs, confirms stage `pr` with `get_ticket`, then checks those PRs with `gh` and reports merged (→ Deployed, or Merged awaiting deployment) or closed
    (→ build, blocked).
 2. Claims one ticket. Tickets to refine go to a `business_developer`
    subagent on a model sized to the ticket (haiku, sonnet or opus). It asks
@@ -207,8 +207,10 @@ have no repo yet, because working out the repo is part of refinement.
    request, links it, comments, and calls `move_ticket` with `lane: "in_progress"` to enter stage `pr`. The human
    is notified with a button to open the PR.
 8. The human merges. The agent's next pass sees the merge and calls
-   `report_pr_state` with `merged`, which moves the ticket to **Merged**. The
-   repo's own CI/CD deploys it. A person can also drag the ticket to Merged.
+   `report_pr_state` with `merged`. Repositories using `deploy_mode=off` and
+   unassigned tickets reach **Deployed**; `deploy_mode=agent` leaves work in
+   **Merged** awaiting deployment. People can mark deployment by dragging
+   to Deployed.
 9. If the PR is closed without merging, the ticket returns to `build`,
    blocked. The human comments and unblocks it to have the agent rebuild, or
    drags it elsewhere.
@@ -272,8 +274,8 @@ branch, where you have it, makes it one.
 ## Dependencies
 
 `A depends_on B` means agents cannot claim A, in any stage, until B is in
-**Merged**. Nothing else changes: A keeps its lane and stage (a Ready ticket
-stays in Ready) and a person can still move it. A pull request closed without
+**Merged** (`done`) or **Deployed** (`deployed`). A keeps its lane and stage
+(a Ready ticket stays in Ready) and a person can still move it. A pull request closed without
 merging does not satisfy a dependency.
 
 - **Adding.** `create_ticket` and `create_autonomous_ticket` take
@@ -284,7 +286,7 @@ merging does not satisfy a dependency.
   or longer) is refused with the path, for example `#3 -> #5 -> #3`.
 - **In flight.** An autonomous ticket in design or build cannot be made to
   depend on an autonomous ticket that has not reached design yet, either
-  directly or through a chain of other tickets that are not merged (A on B
+  directly or through a chain of other tickets that are not completed (A on B
   and B on C, with A in flight and C autonomous in Ready): the link that
   would complete such a chain is refused with a conflict, whichever link it
   is. The waiting ticket would keep its in-flight slot, and the cap would
@@ -299,15 +301,15 @@ merging does not satisfy a dependency.
 - **Who filed it.** The board matches the filing agent by token name. Token
   names are unique and are never reused, even after a token is revoked, so a
   new token cannot take over an old token's tickets.
-- **Unblocking.** When B reaches Merged, through `report_pr_state merged` or
+- **Unblocking.** When B first reaches Done or Deployed, through `report_pr_state merged` or
   a person moving it, every ticket that was waiting only on B gets a timeline
-  line saying who merged B, and becomes claimable on the next `claim_work`.
+  line saying who completed B, and becomes claimable on the next `claim_work`.
   The line sends no notification. `report_pr_state merged` is the agent's
   report, so a false report would release the dependants early: only report
   what you verified.
 - **Reading it.** Every ticket on `GET /api/v1/board` and
   `GET /api/v1/tickets/{id}` has `waiting_on`, the ids of its dependencies
-  that are not merged yet (always an array, `[]` when free). Briefs list
+  that are outside Done and Deployed (always an array, `[]` when free). Briefs list
   "Depends on" and "Needed by" with each ticket's state. A runner that picks
   its own work from the board (an `actionable` filter) should skip tickets
   whose `waiting_on` is not empty, as `claim_work` does.
@@ -316,7 +318,6 @@ merging does not satisfy a dependency.
 
 Everything the MCP tools do is also in the REST API ([api.md](api.md)) with
 the same token as a bearer token, for agents that do not speak MCP.
-
 
 ## Delivery ownership and working models
 
@@ -337,3 +338,17 @@ After claiming and at each author/reviewer handoff, call `set_work_model` with
 Only the current lease holder can update it. Heartbeats preserve it; release
 and stage handoffs clear it. Active cards show the model, with an honest
 "Agent working" fallback for clients that have not reported it yet.
+
+## Deployment policy visibility
+
+`list_repos` shows `deploy_mode=off` or `deploy_mode=agent`. This setting is
+readable by agents but only people may change it using repository settings;
+agent repository writes are rejected. Off is the default, including for
+newly synchronized repositories. Provider refresh never changes it.
+
+Report PR merges using the existing `merged` state. The server selects Done
+in Merged for agent-mode repositories, otherwise Deployed. The `done` label
+can be shown as Awaiting deploy for agent-mode repositories. Neither completed
+stage is claimable, and either satisfies dependencies. Moving from Done to
+Deployed does not release dependencies or count throughput a second time.
+Deployment execution and agent deployment briefs are separate features.
