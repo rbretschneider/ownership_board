@@ -81,23 +81,7 @@ func (s *BoardService) Create(ctx context.Context, actor domain.Actor, draft dom
 	var detail TicketDetail
 	var events []Event
 	err = s.store.Write(ctx, func(repos Repos) error {
-		if err := requireRepo(ctx, repos, ticket.RepoID); err != nil {
-			return err
-		}
-		if ticket.Rank, err = rankFor(ctx, repos.Tickets(), ticket.Lane, 0, atBottom); err != nil {
-			return err
-		}
-		if err := repos.Tickets().Insert(ctx, &ticket); err != nil {
-			return err
-		}
-		if ticket.IsAutonomous {
-			decision := domain.DecisionFromAutonomySwitch(ticket.ID, true, actor, ticket.CreatedAt)
-			if err := repos.Decisions().Insert(ctx, &decision); err != nil {
-				return err
-			}
-		}
-		entries := []domain.TimelineEntry{domain.NewEntry(ticket.ID, domain.TimelineCreated, actor, ticket.CreatedAt)}
-		detail, events, err = s.recordCreated(ctx, repos, actor, ticket, entries, dependsOn)
+		detail, events, err = s.insertCreatedInTx(ctx, repos, actor, ticket, dependsOn)
 		return err
 	})
 	if err != nil {
@@ -105,6 +89,28 @@ func (s *BoardService) Create(ctx context.Context, actor domain.Actor, draft dom
 	}
 	s.writer.sink.Publish(ctx, events)
 	return detail, nil
+}
+
+// insertCreatedInTx saves an ordinary ticket in the caller's transaction.
+func (s *BoardService) insertCreatedInTx(ctx context.Context, repos Repos, actor domain.Actor, ticket domain.Ticket, dependsOn []int64) (TicketDetail, []Event, error) {
+	var err error
+	if err := requireRepo(ctx, repos, ticket.RepoID); err != nil {
+		return TicketDetail{}, nil, err
+	}
+	if ticket.Rank, err = rankFor(ctx, repos.Tickets(), ticket.Lane, 0, atBottom); err != nil {
+		return TicketDetail{}, nil, err
+	}
+	if err := repos.Tickets().Insert(ctx, &ticket); err != nil {
+		return TicketDetail{}, nil, err
+	}
+	if ticket.IsAutonomous {
+		decision := domain.DecisionFromAutonomySwitch(ticket.ID, true, actor, ticket.CreatedAt)
+		if err := repos.Decisions().Insert(ctx, &decision); err != nil {
+			return TicketDetail{}, nil, err
+		}
+	}
+	entries := []domain.TimelineEntry{domain.NewEntry(ticket.ID, domain.TimelineCreated, actor, ticket.CreatedAt)}
+	return s.recordCreated(ctx, repos, actor, ticket, entries, dependsOn)
 }
 
 // CreateAutonomous files a ticket whose spec the owner agreed in a chat with a
@@ -139,24 +145,7 @@ func (s *BoardService) insertAutonomous(ctx context.Context, actor domain.Actor,
 	var detail TicketDetail
 	var events []Event
 	err = s.store.Write(ctx, func(repos Repos) error {
-		if err := requireFilingRoom(ctx, repos, actor, ticket.CreatedAt); err != nil {
-			return err
-		}
-		if ticket.Rank, err = rankFor(ctx, repos.Tickets(), ticket.Lane, 0, atBottom); err != nil {
-			return err
-		}
-		if err := repos.Tickets().Insert(ctx, &ticket); err != nil {
-			return err
-		}
-		decision := why(ticket.ID)
-		if err := repos.Decisions().Insert(ctx, &decision); err != nil {
-			return err
-		}
-		entries := []domain.TimelineEntry{
-			domain.NewEntry(ticket.ID, domain.TimelineCreated, actor, ticket.CreatedAt).With("autonomous", true),
-			domain.NewEntry(ticket.ID, domain.TimelineSpec, actor, ticket.CreatedAt).With("revision", ticket.SpecRevision).With("submitted", true),
-		}
-		detail, events, err = s.recordCreated(ctx, repos, actor, ticket, entries, dependsOn)
+		detail, events, err = s.insertAutonomousInTx(ctx, repos, actor, ticket, dependsOn, why, atBottom)
 		return err
 	})
 	if err != nil {
@@ -164,6 +153,29 @@ func (s *BoardService) insertAutonomous(ctx context.Context, actor domain.Actor,
 	}
 	s.writer.sink.Publish(ctx, events)
 	return detail, nil
+}
+
+// insertAutonomousInTx saves a ready ticket without publishing before commit.
+func (s *BoardService) insertAutonomousInTx(ctx context.Context, repos Repos, actor domain.Actor, ticket domain.Ticket, dependsOn []int64, why func(int64) domain.Decision, place placement) (TicketDetail, []Event, error) {
+	var err error
+	if err := requireFilingRoom(ctx, repos, actor, ticket.CreatedAt); err != nil {
+		return TicketDetail{}, nil, err
+	}
+	if ticket.Rank, err = rankFor(ctx, repos.Tickets(), ticket.Lane, 0, place); err != nil {
+		return TicketDetail{}, nil, err
+	}
+	if err := repos.Tickets().Insert(ctx, &ticket); err != nil {
+		return TicketDetail{}, nil, err
+	}
+	decision := why(ticket.ID)
+	if err := repos.Decisions().Insert(ctx, &decision); err != nil {
+		return TicketDetail{}, nil, err
+	}
+	entries := []domain.TimelineEntry{
+		domain.NewEntry(ticket.ID, domain.TimelineCreated, actor, ticket.CreatedAt).With("autonomous", true),
+		domain.NewEntry(ticket.ID, domain.TimelineSpec, actor, ticket.CreatedAt).With("revision", ticket.SpecRevision).With("submitted", true),
+	}
+	return s.recordCreated(ctx, repos, actor, ticket, entries, dependsOn)
 }
 
 // recordCreated adds a new ticket's dependencies and records its first

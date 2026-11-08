@@ -82,6 +82,32 @@ var actionInstructions = map[domain.WorkAction]string{
 - When the pull request is open: set pr_url and branch on the ticket, comment with what changed and how you verified it, and move the ticket to "review". That is the only lane move you make.`,
 }
 
+// healthCheckReviewInstructions bound scheduled reviews to their recorded changes.
+const healthCheckReviewInstructions = `- Limit the review to the merged range enumerated in the Refined spec and the modules modified by those changes. Resolve changes through repository history and recorded work links, not title or ticket-number arithmetic. A recorded checkpoint is not a verified merge base. Reconstruct the listed changes if the base is unknown and disclose evidence limitations; do not expand to the whole repository.
+- Run available repository static tools first: duplication and complexity detectors and lint tools where configured. Record commands and results, and report missing tools without installing them.
+- Rank findings with concrete evidence and affected modules: duplication/DRY, SOLID, layering and dependency direction against existing design documentation, dead code, and missing tests on new code.
+- The build deliverable is a documentation-only PR creating or updating docs/architecture.md. Write a concise baseline of current modules, permitted dependency directions and shared abstractions to reuse, then a dated "Health check after #a..#b" section describing the reviewed changes and findings. No product-code changes belong in this PR.
+- Select at most 3 refactor follow-ups, including none when unwarranted. Each must cover one subsystem, fewer than about ten files, with its own spec and numbered acceptance criteria. Search open tickets before filing to avoid duplicate coverage. Link each child to this review with follow_up_of. When the parent is autonomous, include the complete spec in the related-creation request so the child inherits autonomy and starts Ready.
+- A change of architectural direction, a new pattern or a large migration belongs in the PR body as a recommendation for the owner, not an autonomous refactor ticket.
+- Public repo rules govern every artifact: use public PR identifiers for range labels where possible, otherwise public commit references with equivalent wording. Never publish private board range identifiers or copy private text. Independently write the baseline and findings from repository evidence.`
+
+const healthCheckDesignInstructions = `Plan a bounded architecture review; do not implement repository changes or open the deliverable PR during design.
+
+` + healthCheckReviewInstructions + `
+
+- Provide the review and documentation plan, evidence sources, baseline outline, follow-up selection criteria, risks and verification steps.
+- Read the newest comments for requested revisions. Record significant choices with record_decision and submit the finished plan using save_design with submit: true.`
+
+const healthCheckImplementInstructions = `Perform the architecture review and prepare its documentation PR.
+
+` + healthCheckReviewInstructions + `
+
+- Read the newest comments before resuming existing work. Work on the indicated branch and commit the documentation with the trailer "Ownership-Ticket: <ticket id>" (number only). Do not commit private board documents.
+- Complete the bounded review, update the baseline and file justified follow-ups. Record significant choices with record_decision and keep the lease alive with heartbeats.
+- After pushing, record commits and the PR with add_work_link. Set pr_url and branch, report the evidence and verification performed, and move the completed ticket to review. If work cannot continue, use mark_blocked with the concrete reason.`
+
+const architectureBaselineInstructions = "If docs/architecture.md exists in the checkout, follow its current architecture baseline and reuse the shared abstractions it lists."
+
 // decisionAuthority explains how to weigh the decision log.
 const decisionAuthority = `Decisions marked [binding] are the owner's own choices: follow them, and never contradict one without asking a question first. [delegated] means the owner left it to the agent, and [agent] decisions were recorded by an agent; both are context you may revisit with a new decision and a reason.`
 
@@ -184,6 +210,16 @@ func instructionsFor(input BriefInput) string {
 		fmt.Fprintf(&b, "## Public repo rules\n\n%s\n\n", publicRepoRules)
 	}
 	if instructions, isKnown := actionInstructions[input.Action]; isKnown {
+		if input.Detail.Ticket.IsHealthCheck {
+			switch input.Action {
+			case domain.ActionDesign:
+				instructions = healthCheckDesignInstructions
+			case domain.ActionImplement:
+				instructions = healthCheckImplementInstructions
+			}
+		} else if input.Action == domain.ActionDesign || input.Action == domain.ActionImplement {
+			instructions += "\n\n" + architectureBaselineInstructions
+		}
 		fmt.Fprintf(&b, "## What to do now\n\n%s\n\n%s\n\n%s\n\n", instructions, decisionAuthority, tracingInstructions)
 		if input.Detail.Ticket.IsAutonomous {
 			fmt.Fprintf(&b, "## Autonomous ticket\n\n%s\n\n", autonomousRules)

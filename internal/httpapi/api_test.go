@@ -466,3 +466,36 @@ func TestHealthCheckMarkerIsReadOnlyInSummaryAndDetail(t *testing.T) {
 		t.Fatal("generated marker missing from board")
 	}
 }
+
+func TestHealthCheckFollowUpHTTPQuota(t *testing.T) {
+	browser, token := signedIn(t)
+	repo := jsonNumber(browser.expect(http.StatusCreated, "POST", "/api/v1/repos", `{"full_name":"acme/api"}`)["id"])
+	browser.expect(http.StatusOK, "PATCH", "/api/v1/repos/"+repo, `{"health_check_every":1}`)
+	delivery := jsonNumber(browser.expect(http.StatusCreated, "POST", "/api/v1/tickets", `{"kind":"story","title":"delivery","repo_id":`+repo+`}`)["id"])
+	browser.expect(http.StatusOK, "POST", "/api/v1/tickets/"+delivery+"/move", `{"lane":"merged"}`)
+	board := browser.expect(http.StatusOK, "GET", "/api/v1/board", "")
+	parent := ""
+	for _, raw := range board["tickets"].([]any) {
+		item := raw.(map[string]any)
+		if item["is_health_check"] == true {
+			parent = jsonNumber(item["id"])
+		}
+	}
+	if parent == "" {
+		t.Fatal("missing generated review")
+	}
+	agent := browser.asAgent(token)
+	agent.expect(http.StatusOK, "POST", "/api/v1/agent/claim", "")
+	body := `{"kind":"story","title":"Simplify module","relation":"follow_up_of","related_ticket_id":` + parent + `,"spec":"Small refactor."}`
+	for i := 0; i < 3; i++ {
+		agent.expect(http.StatusCreated, "POST", "/api/v1/tickets", body)
+	}
+	reply := agent.expect(http.StatusBadRequest, "POST", "/api/v1/tickets", body)
+	if message := reply["error"].(map[string]any)["message"].(string); !strings.Contains(message, "health check "+parent) || !strings.Contains(message, "at most 3") {
+		t.Fatal(message)
+	}
+	board = browser.expect(http.StatusOK, "GET", "/api/v1/board", "")
+	if len(board["tickets"].([]any)) != 5 {
+		t.Fatal("refused request left an orphan")
+	}
+}
