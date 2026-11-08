@@ -1251,6 +1251,27 @@
 @keyframes pixel-build { 0%, 70% { opacity: 0.22; } 25%, 55% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .pixel-loader i { animation: none; opacity: 0.65; } }
 
+/* Build-stage miner: a Claude crab or a Codex terminal swinging a T pickaxe. */
+.miner { flex-shrink: 0; overflow: visible; shape-rendering: crispEdges; }
+.miner__ground { fill: color-mix(in srgb, currentColor 35%, transparent); }
+.miner__rock { fill: #888780; }
+.miner__handle { fill: #8a5a3c; }
+.miner__head { fill: #b4b2a9; }
+.miner__dirt { fill: #ba7517; opacity: 0; animation: miner-dirt 1s infinite; }
+.miner__dirt--2 { fill: #888780; --miner-dx: -2px; animation-delay: 0.03s; }
+.miner--claude .miner__shell { fill: #d97757; }
+.miner--claude .miner__eye { fill: #141413; }
+.miner--codex .miner__shell { fill: var(--text); }
+.miner--codex .miner__glyph { fill: var(--surface-2); }
+.miner__cursor { animation: miner-blink 1s steps(1) infinite; }
+.miner__pick { transform-origin: 16.5px 6.5px; animation: miner-swing 1s cubic-bezier(0.5, 0, 0.6, 1) infinite; }
+.miner__body { animation: miner-bob 1s infinite; }
+@keyframes miner-swing { 0% { transform: rotate(25deg); } 55% { transform: rotate(13deg); } 70% { transform: rotate(129deg); } 80% { transform: rotate(123deg); } 100% { transform: rotate(25deg); } }
+@keyframes miner-bob { 0%, 66%, 100% { transform: translateY(0); } 72% { transform: translateY(0.6px); } }
+@keyframes miner-dirt { 0%, 68% { opacity: 0; transform: translate(0, 0); } 72% { opacity: 1; } 96% { opacity: 0; transform: translate(var(--miner-dx, 2px), -3px); } 100% { opacity: 0; } }
+@keyframes miner-blink { 0% { opacity: 1; } 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .miner *, .miner { animation: none !important; } .miner__dirt { opacity: 0; } }
+
 .card.card--idle { background: color-mix(in srgb, var(--human) 7%, var(--surface-2)); border-color: color-mix(in srgb, var(--human) 22%, var(--border)); }
 
 .usage-bars { display: flex; gap: 14px; flex-shrink: 0; }

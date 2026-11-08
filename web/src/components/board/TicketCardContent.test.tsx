@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { TicketSummary } from "../../api/types";
-import { parseWorkModel, shortTarget } from "../../lib/workModel";
+import { modelFamily, parseWorkModel, shortTarget } from "../../lib/workModel";
 import { TicketCardContent } from "./TicketCardContent";
 
 const story: TicketSummary = {
@@ -55,12 +55,25 @@ describe("card top row", () => {
   let card = dom({stage: "ready", lane: "todo", lease: null});
   expect(card.querySelector(".card__top .card__activity-label")?.textContent).toBe("Autopilot");
   expect(card.querySelector(".pixel-loader")).toBeNull();
-  card = dom({stage: "build", lane: "in_progress", work_model: "gpt-6.1-sol · adversarial review"});
+  card = dom({stage: "build", lane: "in_progress", work_model: "mystery-model · adversarial review"});
   expect(card.querySelector(".card__top .card__activity-label")?.textContent).toBe("Reviewing");
   expect(card.querySelectorAll(".pixel-loader i")).toHaveLength(9);
+  expect(card.querySelector(".miner")).toBeNull();
   card = dom({stage: "build", work_model: "gpt-6.1-sol · build-server:queued:Windows x64 · awaiting Windows"});
   expect(card.querySelector(".pixel-loader")).toBeNull();
   expect(card.querySelector(".card__activity")?.className).toContain("badge--build-target");
+ });
+ it("shows a Claude crab or a Codex terminal mining while a model builds", () => {
+  let card = dom({stage: "build", lane: "in_progress", work_model: "opus · preparing workspace"});
+  expect(card.querySelector(".card__activity .miner")?.getAttribute("data-family")).toBe("claude");
+  expect(card.querySelector(".pixel-loader")).toBeNull();
+  card = dom({stage: "build", lane: "in_progress", work_model: "gpt-6.1-sol · adversarial review"});
+  expect(card.querySelector(".card__activity .miner")?.getAttribute("data-family")).toBe("codex");
+  // Not while the Windows build server has it, without a live lease, or outside build.
+  expect(dom({stage: "build", lane: "in_progress", work_model: "opus · build-server:testing:Windows x64 · awaiting Windows"}).querySelector(".miner")).toBeNull();
+  expect(dom({stage: "build", lane: "in_progress", lease: null, work_model: "opus"}).querySelector(".miner")).toBeNull();
+  expect(dom({stage: "design", lane: "in_progress", work_model: "opus"}).querySelector(".miner")).toBeNull();
+  expect(dom({work_model: "opus"}).querySelector(".miner")).toBeNull();
  });
  it("names what a waiting ticket waits on in its status pill", () => {
   const card = dom({stage: "ready", lane: "todo", lease: null, waiting_on: [20, 25]});
@@ -114,5 +127,11 @@ describe("work model signal", () => {
   expect(parseWorkModel(undefined)).toBeUndefined();
   expect(shortTarget("Windows x64")).toBe("Win x64");
   expect(shortTarget("Linux arm64")).toBe("Linux arm64");
+ });
+ it("tells Claude models from Codex models", () => {
+  for (const name of ["opus", "sonnet", "haiku", "fable", "Claude Opus", "claude-opus-5-5"]) expect(modelFamily(name)).toBe("claude");
+  for (const name of ["gpt-6.1-sol", "gpt-6-astra", "Codex (model unavailable)", "o4-mini"]) expect(modelFamily(name)).toBe("codex");
+  expect(modelFamily("mystery-model")).toBeUndefined();
+  expect(modelFamily(undefined)).toBeUndefined();
  });
 });

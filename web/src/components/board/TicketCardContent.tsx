@@ -4,7 +4,8 @@ import type { Repo, Stage, TicketSummary } from "../../api/types";
 import { useLeaseClock } from "../../hooks/useLeaseClock";
 import { cardActivity, hasLiveLease } from "../../lib/activity";
 import { ticketRefs } from "../../lib/relations";
-import { parseWorkModel, shortTarget } from "../../lib/workModel";
+import { modelFamily, parseWorkModel, shortTarget } from "../../lib/workModel";
+import { MiningSprite } from "./MiningSprite";
 import { useRunners } from "../../hooks/useRunners";
 import { slotStep, slotTone, ticketRun } from "../../lib/runners";
 import { usePRStatus } from "../../hooks/usePRStatus";
@@ -74,6 +75,8 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
     : isWaiting ? "Agents cannot claim this until these tickets are merged"
     : `${ticket.is_autonomous ? "On autopilot · " : ""}${activity.label === "Queued" ? "Waiting for a worker" : activity.label}`;
   const escalated = model?.escalatedAfter !== undefined;
+  // A model building the ticket itself (not the Windows build server, not a PR wait) mines.
+  const miner = !pr && !activity.buildServer && ticket.stage === "build" && liveLease && activity.working ? modelFamily(model?.name) : undefined;
   const windows = windowsStatus(ticket);
   return (
     <>
@@ -97,7 +100,8 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
                   : isBlocked ? <CircleAlert size={12} aria-hidden="true" />
                   : isWaiting ? <Hourglass size={12} aria-hidden="true" />
                   : ticket.is_autonomous && <Zap className="autopilot-spark" size={12} aria-hidden="true" />}
-                {(pr ? pr.tone === "running" : activity.working || activeBuild) && <span className="pixel-loader" aria-hidden="true">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</span>}
+                {miner ? <MiningSprite family={miner} />
+                  : (pr ? pr.tone === "running" : activity.working || activeBuild) && <span className="pixel-loader" aria-hidden="true">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</span>}
                 <span className="card__activity-label">{label}</span>
                 {!pr && activity.buildServer && activity.target && <span className="card__activity-target">{shortTarget(activity.target)}</span>}
               </span>

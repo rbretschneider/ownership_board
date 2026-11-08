@@ -17,6 +17,16 @@ export function parseWorkModel(workModel: string | undefined): WorkModel | undef
   return { name: head };
 }
 
+export type ModelFamily = "claude" | "codex";
+
+/** Which model family a reported model name belongs to, or undefined when unknown. */
+export function modelFamily(name: string | undefined): ModelFamily | undefined {
+  if (!name) return undefined;
+  if (/\b(claude|opus|sonnet|haiku|fable)\b/i.test(name)) return "claude";
+  if (/\b(codex|gpt)\b|^gpt-|^o\d/i.test(name)) return "codex";
+  return undefined;
+}
+
 /** "Windows x64" reads as "Win x64" inside a compact status pill. */
 export function shortTarget(target: string): string {
   return target.replace(/^Windows\b/, "Win");
