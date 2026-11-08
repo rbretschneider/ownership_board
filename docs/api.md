@@ -334,6 +334,53 @@ empty account list, never an invented zero. Responses exclude credentials
 and identity details. UI marks old, unknown-age and reset-expired readings
 stale; the sampler refreshes independently every five minutes.
 
+## Build hosts
+
+Registry management requires a signed-in person. Agent credentials receive
+`403`; missing or invalid credentials receive `401`. Browser mutations retain
+the Origin requirement. Responses use `Cache-Control: no-store`.
+
+| Method | Path | Body | Result |
+|--------|------|------|--------|
+| GET | `/api/v1/build-hosts` | | Host array, ordered by ID (possibly empty) |
+| GET | `/api/v1/build-hosts/{id}` | | Host |
+| POST | `/api/v1/build-hosts/pairing-codes` | Empty or `{}` | `201 {code, expires_at}` |
+| POST | `/api/v1/build-hosts/{id}/approve` | Empty or `{name?, capabilities?, max_parallel?}` | Approved host |
+| PATCH | `/api/v1/build-hosts/{id}` | `{name?, capabilities?, max_parallel?, enabled?}` | Updated host |
+| POST | `/api/v1/build-hosts/{id}/revoke` | Empty or `{}` | Revoked host |
+
+A host response contains `id`, `name`, `os`, `arch`, `status`, `capabilities`,
+`max_parallel`, `enabled`, `public_key`, `facts`, `agent_version`,
+`last_seen_at`, `created_at`, `approved_at`, `approved_by`, and `revoked_at`.
+Capabilities are an array; facts are an object; unavailable timestamps and
+approving user IDs are `null`. Timestamps use UTC with millisecond precision.
+
+Approval applies only to pending hosts, records the approving user and time,
+and preserves the independent enabled setting. Repeated approval returns
+`409`. Revocation disables a host permanently and preserves earlier approval
+information. Repeated revocation returns the original revocation time.
+Revoked hosts can have metadata edited but cannot be enabled or approved.
+An unchanged metadata update succeeds without recording another mutation.
+
+Names are required and limited to 200 characters. `max_parallel` accepts
+integers 1 through 8. Capabilities accept up to 32 strings matching
+`^[a-z][a-z0-9_-]{0,31}$`; duplicates are removed and values sorted. An empty
+array clears capabilities, and `enabled: false` disables a host. Omitted
+fields retain their values. Nulls, unknown fields, duplicate keys, non-object
+bodies, and additional JSON values are rejected with `400`. Missing hosts
+return `404`.
+
+Pairing codes contain 26 cryptographically random characters using
+`23456789ABCDEFGHJKLMNPQRSTUVWXYZ`. The response is the only plaintext
+readback; persistence retains a SHA-256 digest and a 15-minute expiry.
+Issuance and actual host-management changes produce structured audit logs
+without codes, digests, keys, or self-reported facts.
+
+There is currently no host enrollment or code-redemption endpoint. Enrollment
+must eventually consume an unused, unexpired code and insert its pending host
+atomically. Host execution, heartbeats, and scheduling are separate features;
+`enabled` alone does not establish approval or eligibility for execution.
+
 ## Delivery statistics (human only)
 
 `GET /api/v1/stats?days=7&tz_offset=0` returns delivery metrics for the selected

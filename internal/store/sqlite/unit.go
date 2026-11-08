@@ -16,3 +16,8 @@ func (r repos) WorkLinks() app.WorkLinkRepository          { return workLinkRepo
 func (r repos) Decisions() app.DecisionRepository          { return decisionRepo{q: r.q} }
 func (r repos) Relations() app.RelationRepository          { return relationRepo{q: r.q} }
 func (r repos) Settings() app.SettingsRepository           { return settingsRepo{q: r.q} }
+
+func (r repos) BuildHosts() app.BuildHostRepository { return buildHostRepo{q: r.q} }
+func (r repos) BuildHostPairingCodes() app.BuildHostPairingCodeRepository {
+	return buildHostPairingCodeRepo{q: r.q}
+}
