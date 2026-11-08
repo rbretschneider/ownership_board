@@ -1,9 +1,14 @@
 package sqlite
 
 import (
+	"context"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/rbretschneider/ownership_board/internal/app"
+	"github.com/rbretschneider/ownership_board/internal/domain"
 )
 
 func TestBuildJobsMigrationPreservesHosts(t *testing.T) {
@@ -26,5 +31,30 @@ func TestBuildJobsMigrationPreservesHosts(t *testing.T) {
 	}
 	if !reflect.DeepEqual(before, dumpTable(t, db, "build_hosts")) {
 		t.Fatal("downgrade changed hosts")
+	}
+}
+
+func TestBuildHostHashTelemetryRoundTrip(t *testing.T) {
+	db, h := hostFixture(t)
+	ctx := context.Background()
+	h.RunningJobIDs = []domain.BuildHostJobID{"7", domain.BuildHostJobID(strings.Repeat("a", 64))}
+	if e := db.Write(ctx, func(r app.Repos) error { return r.BuildHosts().Insert(ctx, &h) }); e != nil {
+		t.Fatal(e)
+	}
+	if e := db.Read(ctx, func(r app.Repos) error {
+		got, e := r.BuildHosts().Get(ctx, h.ID)
+		if e == nil && !reflect.DeepEqual(got.RunningJobIDs, h.RunningJobIDs) {
+			t.Fatal(got.RunningJobIDs)
+		}
+		return e
+	}); e != nil {
+		t.Fatal(e)
+	}
+	var raw string
+	if e := db.db.QueryRow(`SELECT running_job_ids FROM build_hosts WHERE id=?`, h.ID).Scan(&raw); e != nil {
+		t.Fatal(e)
+	}
+	if raw != `[7,"`+strings.Repeat("a", 64)+`"]` {
+		t.Fatal("scalar form changed", raw)
 	}
 }

@@ -68,7 +68,9 @@ func (s *Store) PayloadSizes() (map[string]int64, error) {
 			return fmt.Errorf("unexpected bundle file type")
 		}
 		base := filepath.Base(p)
-		if base != "commit.bundle" && !(len(base) == 72 && base[64:] == ".partial" && domain.ValidBuildJobID(base[:64])) {
+		isBundle := base == "commit.bundle" && domain.ValidBuildJobID(filepath.Dir(p))
+		isPartial := filepath.Dir(p) == "." && len(base) == 72 && base[64:] == ".partial" && domain.ValidBuildJobID(base[:64])
+		if !isBundle && !isPartial {
 			return fmt.Errorf("unexpected bundle file")
 		}
 		out[p] = info.Size()
@@ -142,6 +144,13 @@ func (s *Store) Promote(token string, m domain.BuildJobSubmission) error {
 		return nil
 	} else if !errors.Is(e, os.ErrNotExist) {
 		return e
+	}
+	staged, e := r.Lstat(token + ".partial")
+	if e != nil {
+		return e
+	}
+	if !staged.Mode().IsRegular() {
+		return fmt.Errorf("unsafe staged bundle")
 	}
 	// Linking publishes without replacing an existing file, even after a crash.
 	if e = r.Link(token+".partial", target); e != nil {

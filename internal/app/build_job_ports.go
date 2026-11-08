@@ -2,9 +2,10 @@ package app
 
 import (
 	"context"
-	"github.com/rbretschneider/ownership_board/internal/domain"
 	"io"
 	"time"
+
+	"github.com/rbretschneider/ownership_board/internal/domain"
 )
 
 type BuildJobRepository interface {

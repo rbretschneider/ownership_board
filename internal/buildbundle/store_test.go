@@ -80,3 +80,22 @@ func TestBundleSizeBoundary(t *testing.T) {
 		t.Fatal("missing 413 classification", e)
 	}
 }
+
+func TestPromoteRejectsSymlink(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "payloads")
+	s, e := New(root)
+	if e != nil {
+		t.Fatal(e)
+	}
+	token := strings.Repeat("c", 64)
+	if e = os.WriteFile(filepath.Join(root, strings.Repeat("d", 64)+".partial"), []byte("abc"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e = os.Symlink(strings.Repeat("d", 64)+".partial", filepath.Join(root, token+".partial")); e != nil {
+		t.Fatal(e)
+	}
+	m := domain.BuildJobSubmission{Repo: "example/tools", SHA: strings.Repeat("a", 40), Preset: "script", Target: domain.BuildJobTarget{OS: "linux"}, BundleBytes: 3, BundleSHA256: fmt.Sprintf("%x", sha256.Sum256([]byte("abc")))}
+	if e = s.Promote(token, m); e == nil {
+		t.Fatal("promoted symlink")
+	}
+}

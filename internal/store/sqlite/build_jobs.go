@@ -4,9 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"time"
+
 	"github.com/rbretschneider/ownership_board/internal/app"
 	"github.com/rbretschneider/ownership_board/internal/domain"
-	"time"
 )
 
 type buildJobRepo struct{ q querier }
