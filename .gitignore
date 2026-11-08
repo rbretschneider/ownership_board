@@ -21,3 +21,8 @@ coverage/
 *.swp
 .DS_Store
 *.tsbuildinfo
+
+# Python runtime
+__pycache__/
+*.py[cod]
+.venv/

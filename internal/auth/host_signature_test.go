@@ -3,6 +3,10 @@ package auth
 import (
 	"crypto/ed25519"
 	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"os"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -46,6 +50,50 @@ func TestHostSignatureTampering(t *testing.T) {
 	}{{"GET", "/path", ts, sig, key.Public().(ed25519.PublicKey)}, {"POST", "/other", ts, sig, key.Public().(ed25519.PublicKey)}, {"POST", "/path", "01000", sig, key.Public().(ed25519.PublicKey)}, {"POST", "/path", ts, sig, otherKey.Public().(ed25519.PublicKey)}, {"POST", "/path", ts, sig + "\n", key.Public().(ed25519.PublicKey)}, {"POST", "/path", ts, "bad", key.Public().(ed25519.PublicKey)}} {
 		if VerifyHostSignature(test.key, test.method, test.path, test.ts, test.sig, []byte(`{}`), time.Unix(1000, 0)) {
 			t.Fatal(test)
+		}
+	}
+}
+
+// These public deterministic credentials are fixtures, never enrollment identities.
+func TestHostSignatureSharedVectors(t *testing.T) {
+	raw, err := os.ReadFile("testdata/host_signature_vectors.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vectors []struct{ Seed, PublicKey, Method, Path, Timestamp, Body, Message, Signature string }
+	// JSON uses snake_case for the public key.
+	var entries []map[string]string
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range entries {
+		vectors = append(vectors, struct{ Seed, PublicKey, Method, Path, Timestamp, Body, Message, Signature string }{v["seed"], v["public_key"], v["method"], v["path"], v["timestamp"], v["body"], v["message"], v["signature"]})
+	}
+	for _, v := range vectors {
+		seed, err := hex.DecodeString(v.Seed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		key := ed25519.NewKeyFromSeed(seed)
+		public, err := base64.StdEncoding.DecodeString(v.PublicKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ts, err := strconv.ParseInt(v.Timestamp, 10, 64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(HostSignatureMessage(v.Method, v.Path, v.Timestamp, []byte(v.Body))) != v.Message {
+			t.Fatal("canonical bytes differ")
+		}
+		if got := base64.StdEncoding.EncodeToString(ed25519.Sign(key, []byte(v.Message))); got != v.Signature {
+			t.Fatal("signature differs")
+		}
+		if !VerifyHostSignature(public, v.Method, v.Path, v.Timestamp, v.Signature, []byte(v.Body), time.Unix(ts, 0)) {
+			t.Fatal("shared signature rejected")
+		}
+		if VerifyHostSignature(public, v.Method, v.Path, v.Timestamp, v.Signature, []byte(v.Body+" "), time.Unix(ts, 0)) {
+			t.Fatal("tampered bytes accepted")
 		}
 	}
 }
