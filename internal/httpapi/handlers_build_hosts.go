@@ -14,31 +14,31 @@ import (
 )
 
 type buildHostDTO struct {
-	Online        bool                   `json:"online"`
-	RunningJobIDs []int64                `json:"running_job_ids"`
-	FreeDiskBytes *int64                 `json:"free_disk_bytes"`
-	ID            int64                  `json:"id"`
-	Name          string                 `json:"name"`
-	OS            domain.BuildHostOS     `json:"os"`
-	Arch          string                 `json:"arch"`
-	Status        domain.BuildHostStatus `json:"status"`
-	Capabilities  []string               `json:"capabilities"`
-	MaxParallel   int                    `json:"max_parallel"`
-	Enabled       bool                   `json:"enabled"`
-	PublicKey     string                 `json:"public_key"`
-	Facts         json.RawMessage        `json:"facts"`
-	AgentVersion  string                 `json:"agent_version"`
-	LastSeenAt    *time.Time             `json:"last_seen_at"`
-	CreatedAt     time.Time              `json:"created_at"`
-	ApprovedAt    *time.Time             `json:"approved_at"`
-	ApprovedBy    *int64                 `json:"approved_by"`
-	RevokedAt     *time.Time             `json:"revoked_at"`
+	Online        bool                    `json:"online"`
+	RunningJobIDs []domain.BuildHostJobID `json:"running_job_ids"`
+	FreeDiskBytes *int64                  `json:"free_disk_bytes"`
+	ID            int64                   `json:"id"`
+	Name          string                  `json:"name"`
+	OS            domain.BuildHostOS      `json:"os"`
+	Arch          string                  `json:"arch"`
+	Status        domain.BuildHostStatus  `json:"status"`
+	Capabilities  []string                `json:"capabilities"`
+	MaxParallel   int                     `json:"max_parallel"`
+	Enabled       bool                    `json:"enabled"`
+	PublicKey     string                  `json:"public_key"`
+	Facts         json.RawMessage         `json:"facts"`
+	AgentVersion  string                  `json:"agent_version"`
+	LastSeenAt    *time.Time              `json:"last_seen_at"`
+	CreatedAt     time.Time               `json:"created_at"`
+	ApprovedAt    *time.Time              `json:"approved_at"`
+	ApprovedBy    *int64                  `json:"approved_by"`
+	RevokedAt     *time.Time              `json:"revoked_at"`
 }
 
 func toBuildHost(h domain.BuildHost) buildHostDTO {
 	jobs := h.RunningJobIDs
 	if jobs == nil {
-		jobs = []int64{}
+		jobs = []domain.BuildHostJobID{}
 	}
 	return buildHostDTO{RunningJobIDs: jobs, FreeDiskBytes: h.FreeDiskBytes, ID: h.ID, Name: h.Name, OS: h.OS, Arch: h.Arch, Status: h.Status, Capabilities: h.Capabilities, MaxParallel: h.MaxParallel, Enabled: h.Enabled, PublicKey: h.PublicKey, Facts: h.Facts, AgentVersion: h.AgentVersion, LastSeenAt: h.LastSeenAt, CreatedAt: h.CreatedAt, ApprovedAt: h.ApprovedAt, ApprovedBy: h.ApprovedBy, RevokedAt: h.RevokedAt}
 }

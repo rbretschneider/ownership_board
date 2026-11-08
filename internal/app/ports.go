@@ -18,6 +18,7 @@ type Store interface {
 // Repos is the set of repositories bound to one unit of work. ("Repository"
 // here is the persistence pattern; code repositories are Repo.)
 type Repos interface {
+	BuildJobs() BuildJobRepository
 	BuildHostEvents() BuildHostEventRepository
 	BuildHosts() BuildHostRepository
 	BuildHostPairingCodes() BuildHostPairingCodeRepository

@@ -57,13 +57,13 @@ func TestBuildHostEnrollmentLifecycle(t *testing.T) {
 	if notify.n != 1 {
 		t.Fatal(notify.n)
 	}
-	if _, e = s.Heartbeat(f.ctx, app.AuthenticatedBuildHost{ID: h.ID}, domain.BuildHostReport{Facts: []byte(machineFacts), RunningJobIDs: []int64{}, FreeDiskBytes: 1}); !errors.Is(e, auth.ErrUnauthorized) {
+	if _, e = s.Heartbeat(f.ctx, app.AuthenticatedBuildHost{ID: h.ID}, domain.BuildHostReport{Facts: []byte(machineFacts), RunningJobIDs: []domain.BuildHostJobID{}, FreeDiskBytes: 1}); !errors.Is(e, auth.ErrUnauthorized) {
 		t.Fatal(e)
 	}
 	if _, e = s.Approve(f.ctx, owner, h.ID, domain.BuildHostEdit{}); e != nil {
 		t.Fatal(e)
 	}
-	report := domain.BuildHostReport{Facts: []byte(machineFacts), RunningJobIDs: []int64{7}, FreeDiskBytes: 42}
+	report := domain.BuildHostReport{Facts: []byte(machineFacts), RunningJobIDs: []domain.BuildHostJobID{"7"}, FreeDiskBytes: 42}
 	h, e = s.Heartbeat(f.ctx, app.AuthenticatedBuildHost{ID: h.ID}, report)
 	if e != nil {
 		t.Fatal(e)
@@ -219,7 +219,7 @@ func TestHeartbeatHistoryAndManagementIsolation(t *testing.T) {
 	if e = authenticate(false, nil); e != nil {
 		t.Fatal(e)
 	}
-	report := domain.BuildHostReport{Facts: []byte(strings.Replace(machineFacts, `"cmake":"3"`, `"cmake":"4","ninja":"1"`, 1)), RunningJobIDs: []int64{4}, FreeDiskBytes: 99}
+	report := domain.BuildHostReport{Facts: []byte(strings.Replace(machineFacts, `"cmake":"3"`, `"cmake":"4","ninja":"1"`, 1)), RunningJobIDs: []domain.BuildHostJobID{"4"}, FreeDiskBytes: 99}
 	if _, e = f.store.SQL().Exec(`CREATE TRIGGER refuse_report BEFORE UPDATE OF facts ON build_hosts BEGIN SELECT RAISE(ABORT,'injected failure'); END`); e != nil {
 		t.Fatal(e)
 	}

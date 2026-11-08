@@ -14,6 +14,7 @@ const (
 	KindNotFound
 	KindConflict
 	KindForbidden
+	KindTooLarge
 )
 
 // Error is a failure the caller caused and can correct.
@@ -54,4 +55,8 @@ func KindOf(err error) ErrorKind {
 		return domainErr.Kind
 	}
 	return 0
+}
+
+func TooLargef(format string, args ...any) error {
+	return &Error{Kind: KindTooLarge, Message: fmt.Sprintf(format, args...)}
 }

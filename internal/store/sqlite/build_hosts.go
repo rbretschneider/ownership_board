@@ -97,7 +97,7 @@ func (r buildHostRepo) Insert(ctx context.Context, h *domain.BuildHost) error {
 	}
 	jobs := h.RunningJobIDs
 	if jobs == nil {
-		jobs = []int64{}
+		jobs = []domain.BuildHostJobID{}
 	}
 	encodedJobs, _ := json.Marshal(jobs)
 	result, err := r.q.ExecContext(ctx, `INSERT INTO build_hosts (name,os,arch,status,capabilities,max_parallel,enabled,public_key,facts,agent_version,last_seen_at,created_at,approved_at,approved_by,revoked_at,running_job_ids,free_disk_bytes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, h.Name, h.OS, h.Arch, h.Status, string(caps), h.MaxParallel, h.Enabled, h.PublicKey, string(h.Facts), h.AgentVersion, formatOptionalTime(h.LastSeenAt), formatTime(h.CreatedAt), formatOptionalTime(h.ApprovedAt), nullableID64(h.ApprovedBy), formatOptionalTime(h.RevokedAt), string(encodedJobs), nullableID64(h.FreeDiskBytes))

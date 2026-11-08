@@ -24,7 +24,7 @@ const (
 
 // BuildHost is a registered build identity. Facts are untrusted self-reported metadata.
 type BuildHost struct {
-	RunningJobIDs []int64
+	RunningJobIDs []BuildHostJobID
 	FreeDiskBytes *int64
 	ID            int64
 	Name          string
@@ -79,7 +79,7 @@ var buildArchPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
 // NewBuildHost creates a validated pending identity with conservative defaults.
 func NewBuildHost(d BuildHostDraft, now time.Time) (BuildHost, error) {
-	h := BuildHost{RunningJobIDs: []int64{}, Name: d.Name, OS: d.OS, Arch: d.Arch, PublicKey: d.PublicKey, Capabilities: slices.Clone(d.Capabilities), MaxParallel: 1, Enabled: true, Status: BuildHostPending, Facts: slices.Clone(d.Facts), AgentVersion: d.AgentVersion, CreatedAt: now.UTC()}
+	h := BuildHost{RunningJobIDs: []BuildHostJobID{}, Name: d.Name, OS: d.OS, Arch: d.Arch, PublicKey: d.PublicKey, Capabilities: slices.Clone(d.Capabilities), MaxParallel: 1, Enabled: true, Status: BuildHostPending, Facts: slices.Clone(d.Facts), AgentVersion: d.AgentVersion, CreatedAt: now.UTC()}
 	if d.MaxParallel != nil {
 		h.MaxParallel = *d.MaxParallel
 	}

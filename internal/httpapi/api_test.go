@@ -16,6 +16,7 @@ import (
 	"github.com/rbretschneider/ownership_board/internal/app"
 	"github.com/rbretschneider/ownership_board/internal/auth"
 	"github.com/rbretschneider/ownership_board/internal/broker"
+	"github.com/rbretschneider/ownership_board/internal/buildbundle"
 	"github.com/rbretschneider/ownership_board/internal/clock"
 	"github.com/rbretschneider/ownership_board/internal/connections"
 	"github.com/rbretschneider/ownership_board/internal/httpapi"
@@ -64,7 +65,12 @@ func newServer(t *testing.T) *apiClient {
 	if err != nil {
 		t.Fatalf("catalog: %v", err)
 	}
+	bundles, err := buildbundle.New(filepath.Join(t.TempDir(), "bundles"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	handler := httpapi.New(httpapi.Deps{
+		BuildJobs:  app.NewBuildJobService(db, clk, bundles, logger),
 		BuildHosts: app.NewBuildHostService(db, clk, logger, nil),
 		Board:      services.Board, Agents: services.Agents, Repos: services.Repos, Auth: authService,
 		OIDC: auth.NewOIDC(auth.OIDCConfig{}, authService), Broker: hub, Health: db, Logger: logger,

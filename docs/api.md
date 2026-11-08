@@ -542,6 +542,93 @@ for unassigned work and unresolved repository references have `health: null`.
 Delivery counters keep their period-based semantics. Statistics are read-only
 and may reflect concurrent updates across reads.
 
+## Verification jobs
+
+Agent tokens can upload a commit with `POST /api/v1/build-jobs` and inspect its
+state with `GET /api/v1/build-jobs/{id}`. Uploads use multipart form data: a
+`metadata` JSON part followed by one `bundle` part. The filename is ignored.
+Metadata contains `ticket_id`, the ticket's assigned `repo` full name, `sha`
+(a full 40- or 64-digit Git object ID), `preset` (`dotnet`, `cmake`, or `script`),
+`target`, `bundle_bytes`, and `bundle_sha256` (lowercase SHA-256 of the upload).
+For example, `target` can be
+`{"os":"linux","required_capabilities":["cmake","ninja"]}`. Targets also accept
+`windows` and `macos`; capability tokens follow the host registry syntax.
+
+The response is a job object: `id`, `ticket_id`, `repo`, `sha`, `preset`, `target`,
+`status`, `host_id`, `attempt`, `created_at`, `started_at`, `finished_at`, `phase`,
+`detail`, `result`, `bundle_bytes`, and `bundle_sha256`. Unset assignments,
+timestamps, and results are null. Creation returns `201`; an identity already
+stored for that ticket returns `200` with its current state. Identity depends
+on repository, commit, preset, and canonical target. Reordered or repeated
+capabilities do not create a different job. A collision with another ticket,
+an active upload, or an incompatible retained payload returns `409`.
+
+First publication of a distinct commit supersedes queued and running work for
+the same ticket and complete target. A retry cannot reset a job or replace its
+bundle. Additional presets for the current commit can run independently;
+additional checks for an older superseded commit stay superseded. Commit order
+is publication order, without fetching Git history.
+
+Approved hosts use the existing Ed25519 signature protocol on these routes.
+Sign the concrete path containing the job hash. Query strings, path aliases,
+and ambiguous headers are rejected.
+
+| Request | Body | Response |
+|---------|------|----------|
+| `POST /api/v1/build-host/claim` | `{}` | `200 {"job": ...}` or `204` when no eligible slot/work exists |
+| `GET /api/v1/build-host/jobs/{id}/bundle` | Empty | Opaque bytes, with Content-Length; requires a current running assignment |
+| `POST /api/v1/build-host/jobs/{id}/progress` | `{"attempt":1,"phase":"build","detail":"compiling"}` | `{stop,status,attempt}` |
+| `POST /api/v1/build-host/jobs/{id}/result` | `{attempt,status,result}` | Final job object |
+
+Claims match host OS and owner-approved capabilities and respect enabled state
+and `max_parallel`. Heartbeat telemetry does not grant capacity or capabilities.
+Use the assignment's attempt on every report. Progress phase/detail allow at
+most 64/4096 UTF-8 bytes. On `stop:true`, stop execution and acknowledge with
+phase `stopped` (or send a terminal report). Stopping assignments continue to
+occupy a slot until acknowledgment or connectivity timeout.
+
+A result has `commands`, an array of `{label,exit_code,log}`, and optional
+`failure_kind`. Each label is 1–200 bytes, each log is at most 16 KiB, and there
+are at most 128 commands. A `passed` report requires at least one command and
+all zero exit codes. A `failed` report requires a nonzero exit code or nonempty
+failure kind (at most 64 bytes). Conflicting repeated terminal reports return
+`409`; identical reports are idempotent. Superseded/cancelled jobs keep their
+terminal status when acknowledging completion.
+
+Only a signed-in administrator can call
+`POST /api/v1/build-jobs/{id}/cancel`, with the normal same-origin requirement.
+Repeated cancellation succeeds; other terminal states return `409`. Agent tokens,
+browser cookies, and host signatures each authorize only their own route class.
+
+Heartbeats accept legacy positive integer job IDs and lowercase 64-digit hash
+strings together, for example `"running_job_ids":[7,"<64-digit hash>"]`.
+Scalar types round-trip unchanged. Decimal strings, fractions, malformed hashes,
+and duplicates are rejected. These values are observations, not assignments.
+
+The heartbeat timeout is three minutes, inclusive. Recovery runs at startup,
+every 30 seconds, and during worker operations. A disconnected or revoked host's
+work is retried up to three execution attempts, then fails with
+`failure_kind:"infrastructure"`. Disabling a host stops new claims while its
+current work can finish. Progress does not replace heartbeats.
+
+Payload storage is under the data directory's `build_jobs/<id>/commit.bundle`.
+Bundles are immutable and limited to 100 MiB each; the aggregate allowance is
+2 GiB, including retained partial and orphan payloads. Reservations prevent
+concurrent uploads from overspending that allowance. Metadata is limited to
+16 KiB and multipart overhead to 64 KiB. Result objects are limited to 256 KiB;
+the signed result envelope permits an additional 4 KiB. Size and capacity
+violations return `413`. Other existing machine routes keep their 96 KiB limit.
+
+Interrupted transfers remain on disk and consume capacity. Uploaders hold a
+process lock for each reservation; startup only abandons reservations whose lock
+is free, preserving transfers through other server instances. Empty `.lock` files
+are persistent coordination metadata and must not be removed while servers run.
+Shared storage must support operating-system advisory locks. Startup validates
+referenced payloads and refuses missing or corrupt files. Nothing prunes failed
+uploads or published bundles; operators manage retention externally. SQLite
+backups alone do not contain bundle payloads. Back up the data volume to preserve
+both. Uploads retain the server's existing read timeout.
+
 ## Repository deployment policy
 
 Repository objects expose `deploy_mode` through existing reads, including

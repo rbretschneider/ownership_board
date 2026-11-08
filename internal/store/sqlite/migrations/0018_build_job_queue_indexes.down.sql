@@ -1,0 +1,2 @@
+DROP INDEX build_jobs_commit_history;
+DROP INDEX build_jobs_active_assignments;

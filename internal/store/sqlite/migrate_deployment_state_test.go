@@ -47,7 +47,7 @@ func TestDeploymentMigrationRoundTrip(t *testing.T) {
 			t.Fatal("history changed")
 		}
 	}
-	if err := m.Up(); err != nil {
+	if err := m.Migrate(16); err != nil {
 		t.Fatal(err)
 	}
 	verify()
