@@ -1,6 +1,7 @@
 package domain_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/rbretschneider/ownership_board/internal/domain"
@@ -76,5 +77,38 @@ func TestRepoRefreshKeepsChosenColor(t *testing.T) {
 	}
 	if repo.Color != "#aabbcc" || !repo.IsArchived {
 		t.Fatalf("color %q archived %v", repo.Color, repo.IsArchived)
+	}
+}
+
+func TestHealthCheckIntervalBounds(t *testing.T) {
+	repo, err := domain.NewManualRepo(domain.ManualRepoDraft{FullName: "acme/api"}, now)
+	if err != nil || repo.HealthCheckEvery != domain.DefaultHealthCheckEvery {
+		t.Fatalf("new repo interval %d, err %v", repo.HealthCheckEvery, err)
+	}
+	if domain.DefaultHealthCheckEvery != 8 {
+		t.Fatalf("new repo interval %d, err %v", repo.HealthCheckEvery, err)
+	}
+	for _, tc := range []struct {
+		value int
+		ok    bool
+	}{{-1, false}, {0, true}, {8, true}, {50, true}, {51, false}, {1 << 40, false}} {
+		r := repo
+		v := tc.value
+		err := r.Restyle(domain.RepoStyle{HealthCheckEvery: &v})
+		if tc.ok && (err != nil || r.HealthCheckEvery != v) {
+			t.Errorf("%d: got %d, err %v", v, r.HealthCheckEvery, err)
+		}
+		if !tc.ok {
+			if domain.KindOf(err) != domain.KindInvalid || !strings.Contains(err.Error(), "between 0 and 50") {
+				t.Errorf("%d: error %v", v, err)
+			}
+			if r.HealthCheckEvery != 8 {
+				t.Errorf("%d: value changed to %d", v, r.HealthCheckEvery)
+			}
+		}
+	}
+	untouched := repo
+	if err := untouched.Restyle(domain.RepoStyle{}); err != nil || untouched.HealthCheckEvery != 8 {
+		t.Errorf("nil changed the interval: %d, %v", untouched.HealthCheckEvery, err)
 	}
 }

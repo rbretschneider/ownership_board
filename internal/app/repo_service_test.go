@@ -88,3 +88,31 @@ func TestRepoSyncLeavesCheckpointsAlone(t *testing.T) {
 		t.Fatalf("sync changed the checkpoints: spec %v design %v", got.RequireSpecApproval, got.RequireDesignApproval)
 	}
 }
+
+func TestOnlyPeopleChangeTheHealthCheckInterval(t *testing.T) {
+	source := &scriptedSource{names: []string{"me/app"}}
+	f := newFixture(t, source)
+	if err := f.repos.Sync(f.ctx); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	repo := f.repoNamed("me/app")
+	if repo.HealthCheckEvery != 8 {
+		t.Fatalf("default interval %d, want 8", repo.HealthCheckEvery)
+	}
+	every := 12
+	if _, err := f.repos.Restyle(f.ctx, agent, repo.ID, domain.RepoStyle{HealthCheckEvery: &every}); domain.KindOf(err) != domain.KindForbidden {
+		t.Fatalf("agent restyle error: %v", err)
+	}
+	if got := f.repoNamed("me/app"); got.HealthCheckEvery != 8 {
+		t.Fatalf("agent changed the interval to %d", got.HealthCheckEvery)
+	}
+	if _, err := f.repos.Restyle(f.ctx, owner, repo.ID, domain.RepoStyle{HealthCheckEvery: &every}); err != nil {
+		t.Fatalf("owner restyle: %v", err)
+	}
+	if err := f.repos.Sync(f.ctx); err != nil {
+		t.Fatalf("second sync: %v", err)
+	}
+	if got := f.repoNamed("me/app"); got.HealthCheckEvery != 12 {
+		t.Fatalf("interval %d after owner change and sync, want 12", got.HealthCheckEvery)
+	}
+}

@@ -46,12 +46,13 @@ func (s *server) restyleRepo(w http.ResponseWriter, r *http.Request, who caller)
 		return err
 	}
 	var body struct {
-		Color           *string `json:"color"`
-		TreatAsPublic   *bool   `json:"treat_as_public"`
-		Description     *string `json:"description"`
-		RequireSpec     *bool   `json:"require_spec_approval"`
-		RequireDesign   *bool   `json:"require_design_approval"`
-		AllowAgentMerge *bool   `json:"allow_agent_merge"`
+		Color            *string `json:"color"`
+		TreatAsPublic    *bool   `json:"treat_as_public"`
+		Description      *string `json:"description"`
+		RequireSpec      *bool   `json:"require_spec_approval"`
+		RequireDesign    *bool   `json:"require_design_approval"`
+		AllowAgentMerge  *bool   `json:"allow_agent_merge"`
+		HealthCheckEvery *int    `json:"health_check_every"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
@@ -59,7 +60,7 @@ func (s *server) restyleRepo(w http.ResponseWriter, r *http.Request, who caller)
 	style := domain.RepoStyle{
 		Color: body.Color, Description: body.Description, TreatAsPublic: body.TreatAsPublic,
 		RequireSpecApproval: body.RequireSpec, RequireDesignApproval: body.RequireDesign,
-		AllowAgentMerge: body.AllowAgentMerge,
+		AllowAgentMerge: body.AllowAgentMerge, HealthCheckEvery: body.HealthCheckEvery,
 	}
 	repo, err := s.deps.Repos.Restyle(r.Context(), who.actor, id, style)
 	if err != nil {

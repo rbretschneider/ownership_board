@@ -48,6 +48,10 @@ type repoDTO struct {
 	RequireDesign   bool              `json:"require_design_approval"`
 	AllowAgentMerge bool              `json:"allow_agent_merge"`
 	Visibility      domain.Visibility `json:"visibility"`
+
+	HealthCheckEvery           int        `json:"health_check_every"`
+	HealthCheckedThroughTicket *int64     `json:"health_checked_through_ticket"`
+	HealthCheckedAt            *time.Time `json:"health_checked_at"`
 }
 
 type ticketSummaryDTO struct {
@@ -164,7 +168,9 @@ func toRepo(repo domain.Repo) repoDTO {
 		IsPrivate: repo.IsPrivate, IsArchived: repo.IsArchived, SyncedAt: repo.SyncedAt, MissingSince: repo.MissingSince,
 		TreatAsPublic: repo.TreatAsPublic, Visibility: repo.Visibility(time.Now()),
 		RequireSpec: repo.RequireSpecApproval, RequireDesign: repo.RequireDesignApproval,
-		AllowAgentMerge: repo.AllowAgentMerge,
+		AllowAgentMerge:  repo.AllowAgentMerge,
+		HealthCheckEvery: repo.HealthCheckEvery, HealthCheckedThroughTicket: repo.HealthCheckedThroughTicket,
+		HealthCheckedAt: repo.HealthCheckedAt,
 	}
 }
 
