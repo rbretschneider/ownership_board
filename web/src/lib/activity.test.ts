@@ -44,3 +44,8 @@ it("keeps deployed work completed even if old worker metadata remains", () => {
  expect(cardActivity({...ticket, lane: "deployed", stage: "deployed"})).toEqual({label: "Deployed", working: false, blocked: false});
  expect(cardTone({...ticket, lane: "deployed", stage: "deployed"})).toBe("");
 });
+
+it("renders leased deployment with the generic activity indicator", () => {
+ expect(cardActivity({...ticket, stage: "deploying", lane: "merged"})).toMatchObject({label: "Deploying", working: true});
+ expect(cardActivity({...ticket, stage: "deploying", lane: "merged", lease: null})).toMatchObject({label: "Queued", working: false});
+});

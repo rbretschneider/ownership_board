@@ -21,6 +21,7 @@ const ICONS: Record<StageId, typeof PenLine> = {
   build: Hammer,
   pr: GitPullRequest,
   done: GitMerge,
+  deploying: CircleDashed,
   deployed: CircleCheck,
 };
 

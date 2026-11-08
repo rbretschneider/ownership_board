@@ -67,6 +67,7 @@ export function flowStage(t: Pick<TicketSummary, "stage" | "work_model">): FlowS
     }
     case "pr":
       return "pr";
+    case "deploying":
     case "deployed":
     case "done":
       return "merged";
