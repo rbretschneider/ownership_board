@@ -90,6 +90,12 @@ func (s *BoardService) Create(ctx context.Context, actor domain.Actor, draft dom
 		if err := repos.Tickets().Insert(ctx, &ticket); err != nil {
 			return err
 		}
+		if ticket.IsAutonomous {
+			decision := domain.DecisionFromAutonomySwitch(ticket.ID, true, actor, ticket.CreatedAt)
+			if err := repos.Decisions().Insert(ctx, &decision); err != nil {
+				return err
+			}
+		}
 		entries := []domain.TimelineEntry{domain.NewEntry(ticket.ID, domain.TimelineCreated, actor, ticket.CreatedAt)}
 		detail, events, err = s.recordCreated(ctx, repos, actor, ticket, entries, dependsOn)
 		return err

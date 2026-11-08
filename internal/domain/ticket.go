@@ -32,9 +32,10 @@ type Ticket struct {
 	DesignRevision         int
 	ApprovedSpecRevision   int
 	ApprovedDesignRevision int
-	// IsAutonomous means the owner agreed the spec in a chat and wants a pull
-	// request with no stops: no checkpoints, and agents decide instead of
-	// asking. Only a delegate agent files one; only a person changes the flag.
+	// IsAutonomous means the owner wants a pull request with no stops: no
+	// checkpoints, and agents decide instead of asking. A delegate agent files
+	// one with a spec agreed in a chat, or a person starts one on autopilot;
+	// only a person changes the flag afterwards.
 	IsAutonomous  bool
 	CreatedBy     string
 	CreatedAt     time.Time
@@ -51,6 +52,11 @@ type TicketDraft struct {
 	Body   string
 	// DependsOn lists tickets in the same repo the new ticket waits for.
 	DependsOn []int64
+	// IsAutonomous starts the ticket on autopilot: refined, designed and built
+	// with no checkpoints or questions, straight to a pull request. Only a
+	// person may set it, and it needs a repo: the owner skips the checkpoints
+	// for that repo.
+	IsAutonomous bool
 }
 
 // AutonomousDraft is a ticket whose spec the owner already agreed in a chat
@@ -89,9 +95,16 @@ func NewTicket(draft TicketDraft, actor Actor, now time.Time) (Ticket, error) {
 	if err != nil {
 		return Ticket{}, err
 	}
+	if draft.IsAutonomous && actor.IsAgent() {
+		return Ticket{}, Forbiddenf("only a person can start a ticket on autopilot; an agent files an autonomous ticket with its agreed spec")
+	}
+	if draft.IsAutonomous && draft.RepoID == 0 {
+		return Ticket{}, Invalidf("choose a repo to start a ticket on autopilot")
+	}
 	return Ticket{
 		RepoID: draft.RepoID, Kind: kind, Title: title, Body: body, Lane: LaneTodo, Stage: StageRefine,
-		CreatedBy: actor.Name, CreatedAt: now, UpdatedAt: now, LaneChangedAt: now,
+		IsAutonomous: draft.IsAutonomous,
+		CreatedBy:    actor.Name, CreatedAt: now, UpdatedAt: now, LaneChangedAt: now,
 	}, nil
 }
 

@@ -30,7 +30,10 @@ export function CreateTicketDialog({ repos, onClose, onCreated, initialKind }: C
   const [repo, setRepo] = useState<RepoFilter>(() => initialRepo(repos));
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [isAutonomous, setAutonomous] = useState(false);
   const [isBusy, setBusy] = useState(false);
+  // Autopilot skips the checkpoints for one repo, so it needs one chosen.
+  const hasRepo = repo.kind === "repo";
   const [error, setError] = useState<string | null>(null);
   const canSubmit = !isBusy && title.trim() !== "";
 
@@ -43,7 +46,9 @@ export function CreateTicketDialog({ repos, onClose, onCreated, initialKind }: C
     setError(null);
     try {
       const repoId = repo.kind === "repo" ? repo.id : null;
-      const ticket = await api.createTicket({ repo_id: repoId, kind, title: title.trim(), body: body.trim() });
+      const ticket = await api.createTicket({
+        repo_id: repoId, kind, title: title.trim(), body: body.trim(), is_autonomous: isAutonomous && hasRepo,
+      });
       preferences.write(STORAGE_KEYS.lastRepo, encodeRepoFilter(repo));
       preferences.write(STORAGE_KEYS.lastKind, kind);
       onCreated(ticket);
@@ -106,6 +111,29 @@ export function CreateTicketDialog({ repos, onClose, onCreated, initialKind }: C
               aria-describedby="create-body-hint"
             />
             <p id="create-body-hint" className="field__hint">Markdown supported. Ctrl/⌘ + Enter to create.</p>
+          </div>
+          <div className="field">
+            <label className="switch" htmlFor="create-autonomous">
+              <input
+                id="create-autonomous"
+                type="checkbox"
+                role="switch"
+                className="switch__input"
+                checked={isAutonomous && hasRepo}
+                disabled={!hasRepo}
+                onChange={(e) => setAutonomous(e.target.checked)}
+                aria-describedby="create-autonomous-hint"
+              />
+              <span className="switch__track" aria-hidden="true" />
+              <span className="switch__label">On autopilot</span>
+            </label>
+            <p id="create-autonomous-hint" className="field__hint">
+              {!hasRepo
+                ? "Choose a repository to start it on autopilot."
+                : isAutonomous
+                  ? "Agents refine, design and build it with no checkpoints or questions, straight to a pull request you review."
+                  : "Off: agents stop at this repo's checkpoints and ask when unsure."}
+            </p>
           </div>
           {error !== null && <p className="form-error" role="alert">Couldn't create it: {error}</p>}
         </div>

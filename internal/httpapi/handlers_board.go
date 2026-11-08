@@ -61,11 +61,13 @@ func (s *server) createTicket(w http.ResponseWriter, r *http.Request, who caller
 		Relation        string `json:"relation"`
 		RelatedTicketID int64  `json:"related_ticket_id"`
 		Spec            string `json:"spec"`
+		// IsAutonomous starts the ticket on autopilot; people only.
+		IsAutonomous bool `json:"is_autonomous"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
 	}
-	draft := domain.TicketDraft{RepoID: valueOrZero(body.RepoID), Kind: body.Kind, Title: body.Title, Body: body.Body, DependsOn: body.DependsOn}
+	draft := domain.TicketDraft{RepoID: valueOrZero(body.RepoID), Kind: body.Kind, Title: body.Title, Body: body.Body, DependsOn: body.DependsOn, IsAutonomous: body.IsAutonomous}
 	if (body.Relation == "") != (body.RelatedTicketID == 0) {
 		return domain.Invalidf("give relation and related_ticket_id together")
 	}
