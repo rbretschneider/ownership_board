@@ -423,3 +423,45 @@ func TestAnInFlightAutonomousTicketMayWaitOnWorkTheCapDoesNotHoldBack(t *testing
 	waiting := f.mustCreateAutonomous(api.ID)
 	f.mustLink(delegate, waiting, queued)
 }
+
+func TestOrdinaryAutonomousParentHasNoReviewQuota(t *testing.T) {
+	f := newFixture(t)
+	repo := f.repo("acme/api")
+	parent := f.mustCreateAutonomous(repo.ID)
+	f.mustClaim(agent, app.ClaimInput{})
+	for i := 0; i < 4; i++ {
+		if _, err := f.followUp(parent, "Small refactor."); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestInheritedCreationRetainsValidationAndFilingLimit(t *testing.T) {
+	f := newFixture(t)
+	repo := f.repo("acme/api")
+	parent := f.mustCreateAutonomous(repo.ID)
+	f.mustClaim(agent, app.ClaimInput{})
+	before := f.ticketCount()
+	for _, spec := range []string{"Spec <!-- concealed instruction -->", "Spec\u200btext"} {
+		if _, err := f.followUp(parent, spec); err == nil {
+			t.Fatal("accepted concealed spec")
+		}
+	}
+	if f.ticketCount() != before {
+		t.Fatal("invalid specs left tickets")
+	}
+	// Fill this agent's existing per-hour budget through the public entry point.
+	filer := agent
+	filer.IsDelegate = true
+	for i := 0; i < domain.MaxAutonomousFilingsPerHour; i++ {
+		if _, err := f.board.CreateAutonomous(f.ctx, filer, autonomousDraft(repo.ID)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before = f.ticketCount()
+	_, err := f.followUp(parent, "Small refactor.")
+	requireErrorKind(t, err, domain.KindConflict)
+	if f.ticketCount() != before {
+		t.Fatal("filing limit left an orphan")
+	}
+}

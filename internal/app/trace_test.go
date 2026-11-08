@@ -2,8 +2,10 @@ package app_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -470,5 +472,46 @@ func TestPullRequestRepairRequeuesWithoutOwnerBlock(t *testing.T) {
 	}
 	if got := f.detail(id).Ticket.WorkModel; got != "" {
 		t.Fatal("released work retained active model")
+	}
+}
+
+func TestRelatedCreationDependenciesAndEventsCommitTogether(t *testing.T) {
+	for _, spec := range []string{"", "Small refactor."} {
+		t.Run(fmt.Sprintf("spec=%t", spec != ""), func(t *testing.T) {
+			f := newFixture(t)
+			parent := f.leasedHealthCheck()
+			prerequisite := f.ticket("prerequisite", parent.RepoID)
+			draft := domain.TicketDraft{Kind: "story", Title: "Simplify module", RepoID: parent.RepoID, DependsOn: []int64{prerequisite, 999999}}
+			before, _ := f.board.Board(f.ctx, app.RepoScope{})
+			prerequisiteBefore := f.detail(prerequisite)
+			eventsBefore := len(f.events.events)
+			_, err := f.board.CreateRelated(f.ctx, agent, draft, "follow_up_of", parent.ID, spec)
+			requireErrorKind(t, err, domain.KindInvalid)
+			after, _ := f.board.Board(f.ctx, app.RepoScope{})
+			if !reflect.DeepEqual(before, after) || !reflect.DeepEqual(prerequisiteBefore, f.detail(prerequisite)) || len(f.events.events) != eventsBefore {
+				t.Fatal("partial dependency insertion survived")
+			}
+			// A subscriber can immediately read the child with every link present.
+			published := 0
+			board := app.NewBoardService(f.store, f.clock, healthCheckSink(func(ctx context.Context, events []app.Event) {
+				published++
+				for _, event := range events {
+					if event.Type == domain.TimelineCreated {
+						child := f.detail(event.TicketID)
+						if len(child.Related) != 2 {
+							t.Fatal("published before both links committed")
+						}
+					}
+				}
+			}))
+			draft.DependsOn = []int64{prerequisite}
+			child, err := board.CreateRelated(f.ctx, agent, draft, "follow_up_of", parent.ID, spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if published != 1 || len(child.Related) != 2 {
+				t.Fatalf("events %d, links %d", published, len(child.Related))
+			}
+		})
 	}
 }

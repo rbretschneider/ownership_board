@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -408,5 +409,203 @@ func TestHealthCheckLargeBacklogIsComplete(t *testing.T) {
 				t.Fatal("incomplete checkpoint")
 			}
 		}
+	}
+}
+
+func (f *fixture) leasedHealthCheck() domain.Ticket {
+	f.t.Helper()
+	repo := f.repo("acme/review")
+	f.healthInterval(repo.ID, 1)
+	f.move(owner, f.ticket("completed work", repo.ID), domain.LaneMerged, nil)
+	check := f.checks(repo.ID)[0]
+	if got := f.mustClaim(agent, app.ClaimInput{}).Ticket.Ticket.ID; got != check.ID {
+		f.t.Fatalf("claimed %d, want %d", got, check.ID)
+	}
+	return f.detail(check.ID).Ticket
+}
+
+func (f *fixture) followUp(parent int64, spec string) (app.TicketDetail, error) {
+	return f.board.CreateRelated(f.ctx, agent, domain.TicketDraft{Kind: "story", Title: "Simplify module"}, "follow_up_of", parent, spec)
+}
+
+func TestHealthCheckFollowUpCapIsAtomic(t *testing.T) {
+	for _, spec := range []string{"Refactor specification.", ""} {
+		t.Run(fmt.Sprintf("spec=%t", spec != ""), func(t *testing.T) {
+			f := newFixture(t)
+			parent := f.leasedHealthCheck()
+			for i := 0; i < 3; i++ {
+				if _, err := f.followUp(parent.ID, spec); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before, err := f.board.Board(f.ctx, app.RepoScope{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			parentBefore := f.detail(parent.ID)
+			eventsBefore := len(f.events.events)
+			_, err = f.followUp(parent.ID, spec)
+			requireErrorKind(t, err, domain.KindInvalid)
+			if !strings.Contains(err.Error(), fmt.Sprintf("health check %d allows at most 3", parent.ID)) {
+				t.Fatal(err)
+			}
+			after, err := f.board.Board(f.ctx, app.RepoScope{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(before, after) || !reflect.DeepEqual(parentBefore, f.detail(parent.ID)) || len(f.events.events) != eventsBefore {
+				t.Fatal("refusal changed board, history or events")
+			}
+		})
+	}
+}
+
+func TestHealthCheckFollowUpPlacement(t *testing.T) {
+	for _, health := range []bool{true, false} {
+		t.Run(fmt.Sprint(health), func(t *testing.T) {
+			f := newFixture(t)
+			var parent domain.Ticket
+			if health {
+				parent = f.leasedHealthCheck()
+			} else {
+				repo := f.repo("acme/api")
+				id := f.mustCreateAutonomous(repo.ID)
+				f.mustClaim(agent, app.ClaimInput{})
+				parent = f.detail(id).Ticket
+			}
+			existing := f.mustCreateAutonomous(parent.RepoID)
+			child, err := f.followUp(parent.ID, "Simplify one subsystem.")
+			if err != nil {
+				t.Fatal(err)
+			}
+			c := child.Ticket
+			if !c.IsAutonomous || c.IsHealthCheck || c.RepoID != parent.RepoID || c.Stage != domain.StageReady || c.SpecRevision != 1 || c.ApprovedSpecRevision != 1 || len(child.Decisions) != 1 || child.Decisions[0].Weight != domain.WeightBinding || len(child.Related) != 1 {
+				t.Fatalf("inheritance: %+v", child)
+			}
+			order := f.laneOrder(domain.LaneTodo)
+			want := existing
+			if health {
+				want = c.ID
+			}
+			if order[0] != want {
+				t.Fatalf("order %v, want %d first", order, want)
+			}
+		})
+	}
+}
+
+func TestHealthCheckFollowUpLinkPolicy(t *testing.T) {
+	f := newFixture(t)
+	parent := f.leasedHealthCheck()
+	// Outgoing links and incoming links of other kinds do not consume slots.
+	extra := f.ticket("other work", parent.RepoID)
+	for _, link := range []struct {
+		from, to int64
+		kind     string
+	}{{parent.ID, extra, "follow_up_of"}, {extra, parent.ID, "relates_to"}} {
+		if _, err := f.board.LinkTickets(f.ctx, agent, link.from, link.kind, link.to); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ids := []int64{}
+	for i := 0; i < 3; i++ {
+		id := f.ticket("human child", parent.RepoID)
+		ids = append(ids, id)
+		if _, err := f.board.LinkTickets(f.ctx, owner, id, "follow_up_of", parent.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.healthInterval(parent.RepoID, 0)
+	f.move(owner, ids[0], domain.LaneMerged, nil)
+	_, err := f.board.LinkTickets(f.ctx, agent, extra, "follow_up_of", parent.ID)
+	requireErrorKind(t, err, domain.KindInvalid)
+	_, err = f.board.LinkTickets(f.ctx, agent, ids[0], "follow_up_of", parent.ID)
+	requireErrorKind(t, err, domain.KindConflict)
+	// A human can exceed the cap; removing two live links frees one slot.
+	if _, err := f.board.LinkTickets(f.ctx, owner, extra, "follow_up_of", parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.board.UnlinkTickets(f.ctx, owner, extra, "follow_up_of", parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.board.Delete(f.ctx, owner, ids[0]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.board.LinkTickets(f.ctx, agent, extra, "follow_up_of", parent.ID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHealthCheckFollowUpConcurrentCap(t *testing.T) {
+	f := newFixture(t)
+	parent := f.leasedHealthCheck()
+	for i := 0; i < 2; i++ {
+		if _, err := f.followUp(parent.ID, "Small refactor."); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := f.ticketCount()
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		go func() { <-start; _, err := f.followUp(parent.ID, "Small refactor."); results <- err }()
+	}
+	close(start)
+	success, refused := 0, 0
+	for i := 0; i < 2; i++ {
+		err := <-results
+		if err == nil {
+			success++
+		} else if domain.KindOf(err) == domain.KindInvalid && strings.Contains(err.Error(), "at most 3") {
+			refused++
+		} else {
+			t.Fatal(err)
+		}
+	}
+	if success != 1 || refused != 1 || f.ticketCount() != before+1 {
+		t.Fatalf("success %d refused %d count %d", success, refused, f.ticketCount())
+	}
+	count := 0
+	for _, related := range f.detail(parent.ID).Related {
+		if related.Relation.Kind == domain.RelationFollowUpOf && related.Relation.ToID == parent.ID {
+			count++
+		}
+	}
+	if count != 3 {
+		t.Fatalf("follow-ups %d", count)
+	}
+}
+
+func TestRelatedCreationRollsBackOnLinkFailure(t *testing.T) {
+	for _, autonomous := range []bool{true, false} {
+		t.Run(fmt.Sprint(autonomous), func(t *testing.T) {
+			f := newFixture(t)
+			parent := f.leasedHealthCheck()
+			if _, err := f.store.SQL().ExecContext(f.ctx, `CREATE TRIGGER fail_relation BEFORE INSERT ON relations WHEN NEW.kind = 'follow_up_of' BEGIN SELECT RAISE(ABORT, 'link failure'); END`); err != nil {
+				t.Fatal(err)
+			}
+			before := f.ticketCount()
+			eventsBefore := len(f.events.events)
+			parentBefore := f.detail(parent.ID)
+			spec := ""
+			if autonomous {
+				spec = "Small refactor."
+			}
+			if _, err := f.followUp(parent.ID, spec); err == nil {
+				t.Fatal("expected link failure")
+			}
+			if f.ticketCount() != before || len(f.events.events) != eventsBefore || !reflect.DeepEqual(parentBefore, f.detail(parent.ID)) {
+				t.Fatal("orphan or events survived failed link")
+			}
+			for _, table := range []string{"decisions", "timeline"} {
+				var count int
+				if err := f.store.SQL().QueryRowContext(f.ctx, "SELECT COUNT(*) FROM "+table+" WHERE ticket_id NOT IN (SELECT id FROM tickets)").Scan(&count); err != nil {
+					t.Fatal(err)
+				}
+				if count != 0 {
+					t.Fatalf("orphan %s rows: %d", table, count)
+				}
+			}
+		})
 	}
 }
