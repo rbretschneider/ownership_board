@@ -100,6 +100,20 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(len(payload['result']['commands']),128)
         self.assertTrue(all(len(c['log'].encode())<=16384 for c in payload['result']['commands']))
 
+    def test_report_budget_includes_server_html_and_separator_escaping(self):
+        for text in ('<', '>', '&', '\u2028', '\u2029'):
+            with self.subTest(text=text):
+                commands=[{'label':str(i),'exit_code':0,'log':text*14000} for i in range(16)]
+                raw=host.completion_bytes(1,commands)
+                result=json.loads(raw)['result']
+                # Go encoding/json escapes HTML and JavaScript line separators.
+                normalized=json.dumps(result,ensure_ascii=False,separators=(',',':'))
+                for char in ('<', '>', '&', '\u2028', '\u2029'):
+                    normalized=normalized.replace(char,'\\u%04x'%ord(char))
+                self.assertLess(len(normalized.encode()),256*1024)
+                self.assertLess(len(raw),256*1024)
+                self.assertEqual(len(result['commands']),16)
+
     def test_preset_arguments_and_phase_order(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)

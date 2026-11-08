@@ -16,7 +16,58 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/rbretschneider/ownership_board/internal/domain"
 )
+
+func TestBuildHostPythonInteropResultBudget(t *testing.T) {
+	python := os.Getenv("BUILD_HOST_PYTHON")
+	if python == "" {
+		t.Skip("set BUILD_HOST_PYTHON to run the native client integration")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	source, err := filepath.Abs("../../agent/build_host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Feed actual Python completion bytes through the server's normalization and
+	// validation, including escaping that expands small UTF-8 logs substantially.
+	program := `import sys
+sys.path.insert(0, sys.argv[1])
+import build_host as host
+for text in ('<', '>', '&', '\u2028', '\u2029', '🌍\\"\x00'):
+    commands = [{'label': str(i) + '<>&\u2028\u2029', 'exit_code': 0, 'log': text * 14000} for i in range(128)]
+    print(host.completion_bytes(1, commands).decode())
+`
+	raw, err := exec.CommandContext(ctx, python, "-c", program, source).Output()
+	if err != nil {
+		t.Fatalf("Python completion generation: %v", err)
+	}
+	lines := bytes.Split(bytes.TrimSpace(raw), []byte{'\n'})
+	if len(lines) != 6 {
+		t.Fatalf("got %d completion cases, want 6", len(lines))
+	}
+	for i, line := range lines {
+		var completion domain.BuildJobCompletion
+		if err := json.Unmarshal(line, &completion); err != nil {
+			t.Fatalf("case %d: decode: %v", i, err)
+		}
+		if err := completion.Validate(); err != nil {
+			t.Fatalf("case %d: server rejected completion: %v", i, err)
+		}
+		if len(completion.Result) >= domain.BuildJobResultLimit {
+			t.Fatalf("case %d: normalized result exceeds budget: %d", i, len(completion.Result))
+		}
+		var result domain.BuildJobResult
+		if err := json.Unmarshal(completion.Result, &result); err != nil {
+			t.Fatal(err)
+		}
+		if completion.Status != "passed" || len(result.Commands) != 128 {
+			t.Fatalf("case %d: lost command outcomes", i)
+		}
+	}
+}
 
 // BUILD_HOST_PYTHON is mandatory in the agent CI job. Other Go jobs stay independent
 // of Python installation. The subprocess sees only its own enrollment identity.

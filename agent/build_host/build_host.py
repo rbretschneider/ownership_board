@@ -849,6 +849,14 @@ def validate_job(job, host_id):
 
 
 def completion_bytes(attempt, commands, failure_kind=''):
+    def encoded(value):
+        # The board normalizes results with Go encoding/json. Match its HTML
+        # and JavaScript separator escaping when budgeting and sending reports.
+        raw = json_bytes(value)
+        for char in ('<', '>', '&', '\u2028', '\u2029'):
+            raw = raw.replace(char.encode(), ('\\u%04x' % ord(char)).encode())
+        return raw
+
     commands = [dict(c, log=c['log'].encode()[:16384].decode('utf-8','ignore')) for c in commands]
     if len(commands) > 128:
         raise ValueError('too many commands for one report')
@@ -858,16 +866,22 @@ def completion_bytes(attempt, commands, failure_kind=''):
     payload = {'attempt':attempt, 'status':'failed' if failure_kind or any(c['exit_code'] != 0 for c in commands) else 'passed', 'result':result}
     if not commands and not failure_kind:
         raise ValueError('no commands executed')
-    raw = json_bytes(payload)
+    size = len(encoded(payload))
+    log_sizes = [len(encoded(c['log'])) for c in commands]
     # Includes JSON escaping and the completion envelope, leaving protocol headroom.
-    while len(raw) >= 250*1024:
-        command = max(commands, key=lambda c:len(json_bytes(c['log'])))
+    # Only log strings change, so their encoded size deltas avoid repeatedly
+    # serializing every command in a large report during truncation.
+    while size >= 250*1024:
+        index = max(range(len(commands)), key=log_sizes.__getitem__)
+        command = commands[index]
         data = command['log'].encode()
         if len(data) < 256:
             raise ValueError('result metadata too large')
         command['log'] = data[:len(data)//4].decode('utf-8','ignore') + '\n[report truncated]\n' + data[-len(data)//4:].decode('utf-8','ignore')
-        raw = json_bytes(payload)
-    return raw
+        new_size = len(encoded(command['log']))
+        size += new_size-log_sizes[index]
+        log_sizes[index] = new_size
+    return encoded(payload)
 
 
 def cpu_budget():
@@ -1298,7 +1312,9 @@ class AgentLoop:
         if reply is not None:
             try:
                 self.start(reply['job'])
-            except (KeyError,ValueError):
+            except (KeyError,ValueError,OSError):
+                # A claim whose journal cannot be saved is also untracked work.
+                # Withhold health so the board can expire that assignment.
                 self.quiet_until = self.clock()+185
                 self.cancel_all()
                 raise

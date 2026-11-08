@@ -155,6 +155,30 @@ class SchedulerTests(unittest.TestCase):
                 with self.assertRaises(OSError): loop.upload(assignment)
             self.assertFalse(any(p.endswith('/result') for _,p,_ in board.calls))
 
+    def test_claim_journal_failure_withholds_health_until_assignment_expires(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            loop,board,clock=self.setup_loop(tmp)
+            job={'id':'a'*64,'attempt':1,'host_id':7,'sha':'b'*40,
+                 'bundle_sha256':'c'*64,'bundle_bytes':1,'preset':'script',
+                 'target':{'os':host.OS,'required_capabilities':[]}}
+            board.claims.append(job)
+            with patch.object(host,'atomic_private',side_effect=OSError('disk full')), \
+                 patch.object(host.JobRunner,'execute') as execute:
+                loop.tick()
+                self.assertFalse(loop.active)
+                self.assertFalse(list(loop.journals.glob('*.json')))
+                execute.assert_not_called()
+                count=len(board.calls)
+                for at in (2,60,120,184):
+                    clock.now=at
+                    loop.tick()
+                    self.assertEqual(len(board.calls),count)
+                self.assertGreaterEqual(loop.quiet_until,185)
+            clock.now=186
+            loop.tick()
+            self.assertGreater(len(board.calls),count)
+            self.assertEqual(sum(p.endswith('/heartbeat') for _,p,_ in board.calls),2)
+
     def test_health_reports_build_volume_while_cache_reserve_pauses_claims(self):
         from collections import namedtuple
         Usage=namedtuple('Usage','free')
