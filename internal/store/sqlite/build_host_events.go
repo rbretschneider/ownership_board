@@ -17,7 +17,13 @@ func (r buildHostEventRepo) Append(ctx context.Context, e *domain.BuildHostEvent
 	return err
 }
 func (r buildHostEventRepo) ForHost(ctx context.Context, id, after int64, limit int) ([]domain.BuildHostEvent, error) {
-	rows, err := r.q.QueryContext(ctx, `SELECT id,host_id,event_type,data,created_at FROM build_host_events WHERE host_id=? AND id>? ORDER BY id LIMIT ?`, id, after, limit)
+	return r.events(ctx, `SELECT id,host_id,event_type,data,created_at FROM build_host_events WHERE host_id=? AND id>? ORDER BY id LIMIT ?`, id, after, limit)
+}
+func (r buildHostEventRepo) RecentForHost(ctx context.Context, id int64, limit int) ([]domain.BuildHostEvent, error) {
+	return r.events(ctx, `SELECT id,host_id,event_type,data,created_at FROM build_host_events WHERE host_id=? ORDER BY id DESC LIMIT ?`, id, limit)
+}
+func (r buildHostEventRepo) events(ctx context.Context, query string, args ...any) ([]domain.BuildHostEvent, error) {
+	rows, err := r.q.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

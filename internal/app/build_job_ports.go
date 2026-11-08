@@ -9,6 +9,8 @@ import (
 )
 
 type BuildJobRepository interface {
+	RunnerAssignments(context.Context) ([]RunnerAssignment, error)
+	QueuedCountsByOS(context.Context) (map[domain.BuildHostOS]int, error)
 	Get(context.Context, string) (domain.BuildJob, error)
 	ActiveAssignments(context.Context) ([]domain.BuildJob, error)
 	AssignmentCount(context.Context, int64) (int, error)

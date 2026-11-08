@@ -1,5 +1,6 @@
 import type { HttpClient } from "./httpClient";
 import type {
+  BuildHost, BuildHostEdit, BuildHostEvent, BuildHostPairingCode, RegisteredRunnersSnapshot,
   AccountUsage,
   Answer,
   ApproveInput,
@@ -44,6 +45,13 @@ export type RepoFilter = { kind: "all" } | { kind: "none" } | { kind: "repo"; id
 
 /** Typed access to every endpoint the web UI uses. */
 export interface BoardApi {
+ buildHosts(): Promise<BuildHost[]>;
+ issueBuildHostCode(): Promise<BuildHostPairingCode>;
+ approveBuildHost(id:number,input:Pick<BuildHostEdit,"capabilities"|"max_parallel">):Promise<BuildHost>;
+ editBuildHost(id:number,input:BuildHostEdit):Promise<BuildHost>;
+ revokeBuildHost(id:number):Promise<BuildHost>;
+ buildHostEvents(id:number):Promise<BuildHostEvent[]>;
+ registeredRunners():Promise<RegisteredRunnersSnapshot>;
   accountUsage(): Promise<AccountUsage>;
   /** The Windows build host's live slots and queue. */
   runners(): Promise<RunnersSnapshot>;
@@ -100,6 +108,13 @@ export interface BoardApi {
 export function createBoardApi(http: HttpClient): BoardApi {
   const t = (id: number): string => `/tickets/${id}`;
   return {
+    buildHosts: () => http.request("GET","/build-hosts"),
+    issueBuildHostCode: () => http.request("POST","/build-hosts/pairing-codes",{}),
+    approveBuildHost: (id,input) => http.request("POST",`/build-hosts/${id}/approve`,input),
+    editBuildHost: (id,input) => http.request("PATCH",`/build-hosts/${id}`,input),
+    revokeBuildHost: (id) => http.request("POST",`/build-hosts/${id}/revoke`,{}),
+    buildHostEvents: (id) => http.request("GET",`/build-hosts/${id}/events?latest=true&limit=20`),
+    registeredRunners: () => http.request("GET","/build-hosts/runners"),
     accountUsage: () => http.request("GET", "/account-usage"),
     runners: () => http.request("GET", "/runners"),
     prs: () => http.request("GET", "/prs"),
