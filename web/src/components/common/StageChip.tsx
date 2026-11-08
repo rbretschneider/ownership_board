@@ -1,5 +1,6 @@
 import {
   CircleDashed,
+  CircleCheck,
   ClipboardCheck,
   DraftingCompass,
   FileCheck,
@@ -8,7 +9,7 @@ import {
   Hammer,
   PenLine,
 } from "lucide-react";
-import type { Stage, StageId } from "../../api/types";
+import type { Repo, Stage, StageId } from "../../api/types";
 import { stageLabel } from "../../lib/stages";
 
 const ICONS: Record<StageId, typeof PenLine> = {
@@ -20,15 +21,16 @@ const ICONS: Record<StageId, typeof PenLine> = {
   build: Hammer,
   pr: GitPullRequest,
   done: GitMerge,
+  deployed: CircleCheck,
 };
 
 /** A ticket's stage as icon plus text. */
-export function StageChip({ stage, stages }: { stage: StageId; stages: Stage[] }) {
+export function StageChip({ stage, stages, repo }: { stage: StageId; stages: Stage[]; repo?: Repo }) {
   const Icon = ICONS[stage] ?? CircleDashed;
   return (
     <span className="stage-chip">
       <Icon size={13} aria-hidden="true" />
-      {stageLabel(stages, stage)}
+      {stageLabel(stages, stage, repo)}
     </span>
   );
 }

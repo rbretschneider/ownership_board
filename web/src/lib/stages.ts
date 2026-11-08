@@ -1,5 +1,5 @@
 import { ApiError } from "../api/ApiError";
-import type { Checkpoint, LaneId, Stage, StageId, TicketDetail, TicketSummary } from "../api/types";
+import type { Checkpoint, Repo, LaneId, Stage, StageId, TicketDetail, TicketSummary } from "../api/types";
 
 /** One entry of a column's stage summary. */
 export interface StageCount {
@@ -24,8 +24,15 @@ export function stageSummary(counts: StageCount[]): string {
   return counts.map((c) => `${c.label} ${c.count}`).join(" · ");
 }
 
-/** The stage's display name, falling back to its id for a stage the UI does not know. */
-export function stageLabel(stages: Stage[], id: StageId): string {
+/** Whether work has reached merge-level completion. */
+export function isCompletedStage(stage: StageId): boolean {
+  return stage === "done" || stage === "deployed";
+}
+
+/** The current stage label, using repository policy for deployment waits. */
+export function stageLabel(stages: Stage[], id: StageId, repo?: Repo): string {
+  if (id === "done" && repo?.deploy_mode === "agent") return "Awaiting deploy";
+  if (id === "deployed") return "Deployed";
   return stages.find((s) => s.id === id)?.label ?? id;
 }
 

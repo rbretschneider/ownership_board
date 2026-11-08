@@ -36,6 +36,7 @@ const STAGE_NAMES: Record<StageId, string> = {
   build: "Build",
   pr: "Review (PR)",
   done: "Merged",
+  deployed: "Deployed",
 };
 
 /** The stage's short workflow name. */

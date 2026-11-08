@@ -76,3 +76,9 @@ describe("windowsStatus", () => {
     });
   });
 });
+
+it("keeps every delivery step completed after deployment", () => {
+ expect(currentStepIndex({stage: "deployed"})).toBe(4);
+ expect(progressSteps({stage: "deployed"})).toEqual(progressSteps({stage: "done"}));
+ expect(progressSteps({stage: "deployed"}).every(s => s.state === "done")).toBe(true);
+});

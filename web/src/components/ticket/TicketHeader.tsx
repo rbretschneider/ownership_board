@@ -80,7 +80,7 @@ export function TicketHeader({ ticket, lanes, stages, repos, run }: TicketHeader
             </select>
             <span className="lane-move__stage">
               <span className="visually-hidden">Stage: </span>
-              <StageChip stage={ticket.stage} stages={stages} />
+              <StageChip stage={ticket.stage} stages={stages} repo={repos.find(r => r.id === ticket.repo_id)} />
             </span>
           </div>
         </div>
