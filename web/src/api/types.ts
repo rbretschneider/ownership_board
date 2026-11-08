@@ -90,6 +90,12 @@ export interface Repo {
   require_design_approval: boolean;
   /** The owner lets agents merge this repo's green, review-clean PRs themselves. */
   allow_agent_merge: boolean;
+  /** Merges between architecture health checks; 0 turns the check off. */
+  health_check_every: number;
+  /** The last merged ticket a health check covered; null before the first check. */
+  health_checked_through_ticket: number | null;
+  /** When that check ran; null before the first check. */
+  health_checked_at: string | null;
 }
 
 /** Whether board content may appear in a repo's commits and PRs. */
@@ -111,6 +117,7 @@ export type RepoEdit = Partial<{
   require_spec_approval: boolean;
   require_design_approval: boolean;
   allow_agent_merge: boolean;
+  health_check_every: number;
 }>;
 
 /** A provider the board can connect to for repo sync. */
