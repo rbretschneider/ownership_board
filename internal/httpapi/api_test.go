@@ -34,6 +34,7 @@ type apiClient struct {
 	token  string
 	origin string
 	worker string
+	store  *sqlite.DB
 }
 
 func newServer(t *testing.T) *apiClient {
@@ -64,7 +65,8 @@ func newServer(t *testing.T) *apiClient {
 		t.Fatalf("catalog: %v", err)
 	}
 	handler := httpapi.New(httpapi.Deps{
-		Board: services.Board, Agents: services.Agents, Repos: services.Repos, Auth: authService,
+		BuildHosts: app.NewBuildHostService(db, clk, logger),
+		Board:      services.Board, Agents: services.Agents, Repos: services.Repos, Auth: authService,
 		OIDC: auth.NewOIDC(auth.OIDCConfig{}, authService), Broker: hub, Health: db, Logger: logger,
 		MCP:         mcp.NewServer("test", logger, mcp.BoardTools(services)...),
 		Connections: connections.NewService(catalog, services.Repos, notify.Noop{}, connections.Policy{}),
@@ -72,7 +74,7 @@ func newServer(t *testing.T) *apiClient {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	jar, _ := cookiejar.New(nil)
-	return &apiClient{t: t, base: server.URL, http: &http.Client{Jar: jar}, origin: server.URL}
+	return &apiClient{store: db, t: t, base: server.URL, http: &http.Client{Jar: jar}, origin: server.URL}
 }
 
 func (c *apiClient) asAgent(token string) *apiClient {

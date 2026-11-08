@@ -108,6 +108,9 @@ func (rt *router) identify(r *http.Request) (caller, error) {
 var workerIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,48}$`)
 
 func (rt *router) authorize(r *http.Request, who caller, level access) error {
+	if err := authorizeAccess(who, level); err != nil {
+		return err
+	}
 	if who.isBearer && isUnsafe(r.Method) {
 		if err := rt.writes.allow(who.actor.ID); err != nil {
 			return err
@@ -116,6 +119,10 @@ func (rt *router) authorize(r *http.Request, who caller, level access) error {
 	if !who.isBearer && isUnsafe(r.Method) && !rt.isSameOrigin(r) {
 		return domain.Forbiddenf("cross-origin request refused")
 	}
+	return nil
+}
+
+func authorizeAccess(who caller, level access) error {
 	switch level {
 	case accessPublic:
 		return nil
