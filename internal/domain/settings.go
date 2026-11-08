@@ -39,7 +39,17 @@ type BoardSettings struct {
 	// or build at once. While that many are, agents claim no further
 	// autonomous ticket from Ready; other work still flows.
 	AutonomousInFlightCap int
+	// LegacyWindowsRunnerEnabled and LegacyWindowsParallelBuilds are the
+	// Windows settings stored before build hosts existed. They apply only
+	// while no Windows build host is approved, so a board whose Windows
+	// verification predates build hosts (or cannot pair one, for example
+	// over plain HTTP) keeps verifying instead of silently stopping.
+	LegacyWindowsRunnerEnabled  bool
+	LegacyWindowsParallelBuilds int
 }
+
+// MaxLegacyWindowsParallelBuilds bounds a stored pre-build-host value.
+const MaxLegacyWindowsParallelBuilds = 6
 
 // SettingsEdit lists the settings to change; nil leaves a setting as it is.
 type SettingsEdit struct {

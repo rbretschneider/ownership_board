@@ -134,22 +134,58 @@ func TestWindowsSettingsWithoutHosts(t *testing.T) {
 	}
 }
 
-func TestWindowsHistoricalSettingsAreNotAuthoritative(t *testing.T) {
-	f := settingsFixture(t)
-	for key, value := range map[string]string{"windows_runner_enabled": "true", "windows_parallel_builds": "6"} {
+func seedLegacyWindows(t *testing.T, f *fixture, enabled, parallel string) {
+	t.Helper()
+	for key, value := range map[string]string{"windows_runner_enabled": enabled, "windows_parallel_builds": parallel} {
 		if _, err := f.store.SQL().Exec(`INSERT INTO board_settings(key,value,updated_by,updated_at) VALUES(?,?,'Owner','2026-01-01T00:00:00.000Z')`, key, value); err != nil {
 			t.Fatal(err)
 		}
 	}
+}
+
+func TestWindowsLegacySettingsApplyUntilAHostIsApproved(t *testing.T) {
+	f := settingsFixture(t)
+	seedLegacyWindows(t, f, "true", "2")
 	workers := 4
 	got, err := f.board.UpdateSettings(f.ctx, owner, domain.SettingsEdit{CodexWorkers: &workers})
-	if err != nil || got.WindowsRunnerEnabled || got.WindowsParallelBuilds != 0 || got.WindowsParallelBuildLimit != 0 {
+	if err != nil || !got.WindowsRunnerEnabled || got.WindowsParallelBuilds != 2 || got.WindowsParallelBuildLimit != 0 {
 		t.Fatal(got, err)
 	}
-	for key, want := range map[string]string{"windows_runner_enabled": "true", "windows_parallel_builds": "6"} {
+	if got, err := f.board.Settings(f.ctx); err != nil || !got.WindowsRunnerEnabled || got.WindowsParallelBuilds != 2 {
+		t.Fatal(got, err)
+	}
+	for key, want := range map[string]string{"windows_runner_enabled": "true", "windows_parallel_builds": "2"} {
 		var value string
 		if err := f.store.SQL().QueryRow(`SELECT value FROM board_settings WHERE key=?`, key).Scan(&value); err != nil || value != want {
 			t.Fatal(key, value, err)
 		}
+	}
+	// Once a Windows host is approved, hosts are authoritative and the legacy values no longer count.
+	settingsHost(t, f, "windows", domain.BuildHostApproved, false, 3)
+	if got, err := f.board.Settings(f.ctx); err != nil || got.WindowsRunnerEnabled || got.WindowsParallelBuilds != 0 || got.WindowsParallelBuildLimit != 8 {
+		t.Fatal(got, err)
+	}
+}
+
+func TestWindowsLegacySettingsCanOnlyBeTurnedOff(t *testing.T) {
+	f := settingsFixture(t)
+	seedLegacyWindows(t, f, "true", "1")
+	if _, err := f.board.UpdateSettings(f.ctx, owner, domain.SettingsEdit{WindowsRunnerEnabled: boolPointer(true)}); err == nil {
+		t.Fatal("enabling without an approved host must stay refused")
+	}
+	got, err := f.board.UpdateSettings(f.ctx, owner, domain.SettingsEdit{WindowsRunnerEnabled: boolPointer(false)})
+	if err != nil || got.WindowsRunnerEnabled || got.WindowsParallelBuilds != 0 {
+		t.Fatal(got, err)
+	}
+	if got, err := f.board.Settings(f.ctx); err != nil || got.WindowsRunnerEnabled {
+		t.Fatal(got, err)
+	}
+}
+
+func TestWindowsLegacySettingsIgnoreInvalidValues(t *testing.T) {
+	f := settingsFixture(t)
+	seedLegacyWindows(t, f, "true", "99")
+	if got, err := f.board.Settings(f.ctx); err != nil || got.WindowsRunnerEnabled || got.WindowsParallelBuilds != 0 {
+		t.Fatal(got, err)
 	}
 }
