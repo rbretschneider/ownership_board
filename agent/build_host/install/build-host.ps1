@@ -79,7 +79,8 @@ $wrapperExists = Test-Path -LiteralPath $wrapper
 if (!$wrapperExists) { [IO.File]::WriteAllBytes($wrapper,[byte[]]@()) }
 Protect-UserPath $wrapper $false $wrapperExists
 [IO.File]::WriteAllText($wrapper,$line,(New-Object Text.UTF8Encoding($true)))
-$action = New-ScheduledTaskAction -Execute (Join-Path $PSHOME 'powershell.exe') -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $wrapper + '"') -WorkingDirectory $application
+$taskShell = (Get-Command powershell.exe -ErrorAction Stop).Source
+$action = New-ScheduledTaskAction -Execute $taskShell -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $wrapper + '"') -WorkingDirectory $application
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $identity.Name
 $taskPrincipal = New-ScheduledTaskPrincipal -UserId $identity.Name -LogonType Interactive -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries

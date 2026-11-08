@@ -35,7 +35,7 @@ class InstallerTests(unittest.TestCase):
             root=Path(tmp)
             bindir=root/'tools';bindir.mkdir()
             home=root/'home space &';home.mkdir()
-            data=root/"data ' % $ & ü";data.mkdir()
+            data=root/"data ' % $ & ü \\";data.mkdir()
             calls=root/'calls.jsonl'
             shim=bindir/'python3'
             shim.write_text('#!'+sys.executable+'\n'+'''import json,os,pathlib,subprocess,sys
@@ -73,11 +73,18 @@ os.execv(os.environ['FIXTURE_REAL_PYTHON'],[os.environ['FIXTURE_REAL_PYTHON'],*a
                 self.assertIn('%%',unit)
                 self.assertIn('$$',unit)
                 self.assertIn('run',unit)
+                self.assertIn('Environment="PATH=',unit)
                 self.assertNotIn('public-fixture',unit)
+                if shutil.which('systemd-analyze'):
+                    runtime=root/'runtime';runtime.mkdir(mode=0o700)
+                    verifyenv=dict(env,XDG_RUNTIME_DIR=str(runtime))
+                    result=subprocess.run(['systemd-analyze','--user','verify',str(home/'.config/systemd/user/ownership-build-host.service')],env=verifyenv,capture_output=True,text=True)
+                    self.assertEqual(result.returncode,0,result.stdout+result.stderr)
             else:
                 import plistlib
                 plist=plistlib.loads((home/'Library/LaunchAgents/org.ownership.build-host.plist').read_bytes())
                 self.assertEqual(plist['ProgramArguments'][-1],str(app/'config.json'))
+                self.assertEqual(plist['EnvironmentVariables']['PATH'],env['PATH'])
                 self.assertNotIn('public-fixture',json.dumps(plist))
 
     @unittest.skipUnless(os.name=='nt','PowerShell parser and isolated task fixture')
@@ -145,6 +152,8 @@ if (!$?) { throw 'second installation failed' }
             self.assertEqual(len(pairs),2)
             self.assertEqual(pairs[0][pairs[0].index('--code')+1],'public-fixture ;$&')
             saved=json.loads(task.read_text(encoding='utf-8-sig'))
+            self.assertTrue(Path(saved['Action']['Execute']).is_file())
+            self.assertEqual(Path(saved['Action']['Execute']).name.lower(),'powershell.exe')
             self.assertEqual(saved['Principal']['RunLevel'],'Limited')
             self.assertEqual(saved['Principal']['LogonType'],'Interactive')
             self.assertEqual(saved['Settings']['MultipleInstances'],'IgnoreNew')

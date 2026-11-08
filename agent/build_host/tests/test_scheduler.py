@@ -144,3 +144,26 @@ class SchedulerTests(unittest.TestCase):
             def request(self,*args): return {'attempt':1}
         with self.assertRaises(ValueError): host.poll_assignment(Broken(),assignment)
         self.assertTrue(assignment.cancel.is_set())
+
+    def test_upload_requires_durable_completion_before_network(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            loop,board,clock=self.setup_loop(tmp)
+            assignment=host.Assignment({'id':'a'*64,'attempt':1},loop.journals/'completion.json')
+            assignment.payload=host.completion_bytes(1,[],'infrastructure')
+            loop.persist(assignment)
+            with patch.object(host,'atomic_private',side_effect=OSError('disk full')):
+                with self.assertRaises(OSError): loop.upload(assignment)
+            self.assertFalse(any(p.endswith('/result') for _,p,_ in board.calls))
+
+    def test_health_reports_build_volume_while_cache_reserve_pauses_claims(self):
+        from collections import namedtuple
+        Usage=namedtuple('Usage','free')
+        with tempfile.TemporaryDirectory() as tmp:
+            loop,board,clock=self.setup_loop(tmp)
+            loop.config['reserve_gib']=50
+            def usage(path):
+                return Usage((100 if str(path)==loop.config['build_root'] else 10)*host.GIB)
+            with patch.object(host.shutil,'disk_usage',side_effect=usage): loop.tick()
+            reports=[body for _,p,body in board.calls if p.endswith('/heartbeat')]
+            self.assertEqual(reports[0]['free_disk_bytes'],100*host.GIB)
+            self.assertFalse(any(p.endswith('/claim') for _,p,_ in board.calls))

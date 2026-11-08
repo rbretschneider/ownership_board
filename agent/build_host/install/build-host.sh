@@ -86,18 +86,23 @@ args=[str(root/'venv/bin/python'),str(root/'build_host.py'),'run','--config',str
 if sys.platform=='darwin':
     path=pathlib.Path.home()/'Library/LaunchAgents/org.ownership.build-host.plist'
     path.parent.mkdir(parents=True,exist_ok=True)
-    value={'Label':'org.ownership.build-host','ProgramArguments':args,'RunAtLoad':True,'KeepAlive':True,'ProcessType':'Background','StandardOutPath':str(root/'logs/service.log'),'StandardErrorPath':str(root/'logs/service-error.log')}
+    value={'Label':'org.ownership.build-host','ProgramArguments':args,'RunAtLoad':True,'KeepAlive':True,'ProcessType':'Background','EnvironmentVariables':{'PATH':os.environ.get('PATH','/usr/bin:/bin')},'StandardOutPath':str(root/'logs/service.log'),'StandardErrorPath':str(root/'logs/service-error.log')}
     if path.is_symlink(): raise SystemExit('Service file cannot be a symlink.')
     path.write_bytes(plistlib.dumps(value))
 else:
     path=pathlib.Path(os.environ.get('XDG_CONFIG_HOME',str(pathlib.Path.home()/'.config')))/'systemd/user/ownership-build-host.service'
     path.parent.mkdir(parents=True,exist_ok=True)
-    def quote(value):
-        return '"'+value.replace('\\','\\\\').replace('"','\\"').replace('%','%%').replace('$','$$')+'"'
-    command=' '.join(quote(a) for a in args)
-    log=str(root/'logs/service.log').replace('%','%%')
+    def quote(value,expand_dollar=True):
+        value=value.replace('\\','\\\\').replace('"','\\"').replace('%','%%')
+        if expand_dollar: value=value.replace('$','$$')
+        return '"'+value+'"'
+    # systemd forbids dollar signs in the executable token itself. env receives
+    # the absolute interpreter as an ordinary, correctly escaped argument.
+    command='/usr/bin/env -- '+' '.join(quote(a) for a in args)
+    log=str(root/'logs/service.log').replace('\\','\\\\').replace('%','%%')
+    environment='Environment='+quote('PATH='+os.environ.get('PATH','/usr/bin:/bin'),expand_dollar=False)
     if path.is_symlink(): raise SystemExit('Service file cannot be a symlink.')
-    path.write_text('[Unit]\nDescription=Ownership build worker\nAfter=network-online.target\n\n[Service]\nType=simple\nExecStart='+command+'\nRestart=on-failure\nRestartSec=10\nKillMode=control-group\nTimeoutStopSec=10\nNice=10\nUMask=0077\nStandardOutput=append:'+log+'\nStandardError=append:'+log+'\n\n[Install]\nWantedBy=default.target\n')
+    path.write_text('[Unit]\nDescription=Ownership build worker\nAfter=network-online.target\n\n[Service]\nType=simple\nExecStart='+command+'\n'+environment+'\nRestart=on-failure\nRestartSec=10\nKillMode=control-group\nTimeoutStopSec=10\nNice=10\nUMask=0077\nStandardOutput=append:'+log+'\nStandardError=append:'+log+'\n\n[Install]\nWantedBy=default.target\n')
 path.chmod(0o600)
 PY
 if [ "$system" = Linux ]; then

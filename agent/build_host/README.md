@@ -33,7 +33,8 @@ rejected and certificate verification stays enabled.
 The shell installer accepts `--build-root`, `--cache-root`, `--reserve-gib`,
 `--max-jobs` and `--max-parallel`; PowerShell accepts the corresponding
 `-BuildRoot`, `-CacheRoot`, `-ReserveGiB`, `-MaxJobs` and `-MaxParallel` parameters.
-Settings are persisted for the service. `max-jobs` limits each build tool;
+Settings are persisted for the service. Linux and macOS service registration
+preserves the installer's tool search path. `max-jobs` limits each build tool;
 `max-parallel` limits concurrent assignments, further restricted by approved
 host capacity and the CPU budget. The defaults are one thread and one job.
 Linux uses at most three CPU slots; Windows uses at most two. Smaller inherited
@@ -74,7 +75,8 @@ files themselves while no affected build is active.
 
 Service output is under the application's `logs` directory. Each unique job
 folder retains its bundle, detached checkout, numbered command logs and any
-agent error diagnostic. Command logs retain at most 8 MiB each and note
+agent error diagnostic. Common .NET, ccache and sccache caches use the configured cache root.
+Command logs retain at most 8 MiB each and note
 truncation; uploaded logs retain bounded head/tail excerpts. Result journals
 under `assignments` preserve completion bytes across retries. Restarted workers
 report interrupted known assignments rather than rerunning a partial checkout.

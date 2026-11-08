@@ -79,7 +79,7 @@ class ProcessTreeTests(unittest.TestCase):
 
     def test_large_output_is_drained_and_bounded(self):
         with host.ProcessTree(threading.Event()) as tree:
-            code, log = tree.run([sys.executable,'-c','import sys; sys.stdout.write("🌍\\\\\\\""*300000)'], Path.cwd(), dict(os.environ))
+            code, log = tree.run([sys.executable,'-c','import sys; sys.stdout.buffer.write(("🌍\\\\\\\""*300000).encode("utf-8"))'], Path.cwd(), dict(os.environ))
         self.assertEqual(code, 0)
         self.assertLessEqual(len(log.encode()), 16384)
         self.assertIn('truncated', log)

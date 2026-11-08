@@ -397,11 +397,16 @@ def default_roots():
     for mount, usage in volumes():
         if os.access(mount, os.W_OK | os.X_OK):
             choices.append((usage.total, mount))
-    if not choices:
-        raise OSError('no writable local volume; specify --build-root and --cache-root')
-    base = max(choices, key=lambda entry: entry[0])[1] / ('.ownership-build-host-' + (windows_sid().replace('-', '_') if os.name == 'nt' else str(os.geteuid())))
-    private_dir(base)
-    return base / 'builds', base / 'cache'
+    suffix = '.ownership-build-host-' + (windows_sid().replace('-', '_') if os.name == 'nt' else str(os.geteuid()))
+    for _,mount in sorted(choices,key=lambda entry:entry[0],reverse=True):
+        base = mount/suffix
+        try:
+            # access() alone cannot establish Windows ACL writability.
+            private_dir(base)
+        except OSError:
+            continue
+        return base/'builds',base/'cache'
+    raise OSError('no writable local volume; specify --build-root and --cache-root')
 
 
 def interactive_session():
@@ -969,7 +974,8 @@ class JobRunner:
         # Git preparation is entirely local and must not inherit external configuration.
         self.env = {k:v for k,v in self.env.items() if not k.startswith('GIT_')}
         self.env.update(GIT_CONFIG_GLOBAL=os.devnull,GIT_CONFIG_SYSTEM=os.devnull,GIT_CONFIG_NOSYSTEM='1',GIT_TERMINAL_PROMPT='0',GIT_NO_REPLACE_OBJECTS='1',GIT_LFS_SKIP_SMUDGE='1',DOTNET_CLI_UI_LANGUAGE='en-US',VSLANG='1033',DOTNET_CLI_TELEMETRY_OPTOUT='1')
-        self.env['NUGET_PACKAGES'] = str(Path(config['cache_root'])/'nuget')
+        for name,directory in {'NUGET_PACKAGES':'nuget','NUGET_HTTP_CACHE_PATH':'nuget-http','DOTNET_CLI_HOME':'dotnet','CCACHE_DIR':'ccache','SCCACHE_DIR':'sccache'}.items():
+            self.env[name] = str(Path(config['cache_root'])/directory)
         self.commands = []
         self.folder = None
         self.checkout = None
@@ -1184,6 +1190,8 @@ class AgentLoop:
             return
         if not assignment.payload:
             raise RuntimeError('missing persisted completion')
+        # A full disk must not turn an upload into an unrecoverable one-shot report.
+        self.persist(assignment)
         try:
             self.client.request('POST',API+'/jobs/'+assignment.job['id']+'/result',assignment.payload)
         except BoardError as exc:
@@ -1228,6 +1236,8 @@ class AgentLoop:
             finally:
                 try:
                     self.persist(assignment)
+                except OSError:
+                    pass  # The controller must persist successfully before upload.
                 finally:
                     assignment.done.set()
         assignment.thread = threading.Thread(target=work,name='build-'+job['id'][:12])
@@ -1244,7 +1254,7 @@ class AgentLoop:
                 raise BoardError(401)
             self.status = status
             try:
-                free = free_bytes(self.config)
+                free = shutil.disk_usage(self.config['build_root']).free
             except OSError:
                 free = 0
             self.client.request('POST',API+'/heartbeat',{'facts':self.facts.collect(),'running_job_ids':sorted(self.active),'free_disk_bytes':free})

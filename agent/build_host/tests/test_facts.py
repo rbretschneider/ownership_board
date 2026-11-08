@@ -44,3 +44,19 @@ class FactsTests(unittest.TestCase):
                 build,cache=host.default_roots()
             self.assertTrue(build.is_relative_to(second))
             self.assertEqual(build.parent,cache.parent)
+
+    def test_unwritable_largest_volume_falls_back_to_usable_home(self):
+        from collections import namedtuple
+        from unittest.mock import patch
+        Usage=namedtuple('Usage','total free')
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            small,large=root/'small',root/'large'
+            small.mkdir();large.mkdir()
+            create=host.private_dir
+            def probe_root(path):
+                if path.is_relative_to(large): raise PermissionError('fixture denies this volume')
+                return create(path)
+            with patch.object(host,'volumes',return_value=[(small,Usage(100,80)),(large,Usage(200,150))]),patch.object(host,'private_dir',side_effect=probe_root):
+                build,cache=host.default_roots()
+            self.assertTrue(build.is_relative_to(small))

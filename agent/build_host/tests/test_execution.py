@@ -152,3 +152,11 @@ class ExecutionTests(unittest.TestCase):
             runner.assignment.tree=Tree()
             runner.command('é'*300,['fixture'])
             self.assertLessEqual(len(runner.commands[0]['label'].encode()),200)
+
+    def test_common_tool_caches_stay_under_configured_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            raw,job=make_bundle(root)
+            runner=self.runner(root,raw,job)
+            for name in ('NUGET_PACKAGES','NUGET_HTTP_CACHE_PATH','DOTNET_CLI_HOME','CCACHE_DIR','SCCACHE_DIR'):
+                self.assertTrue(Path(runner.env[name]).is_relative_to(root/'cache'),name)
