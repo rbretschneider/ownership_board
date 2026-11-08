@@ -34,8 +34,21 @@ type Repo struct {
 	// green and no review asks for changes. Off by default; only a person
 	// can turn it on, per repo.
 	AllowAgentMerge bool
-	CreatedAt       time.Time
+	// HealthCheckEvery is how many merges pass between architecture health
+	// checks; 0 turns the check off.
+	HealthCheckEvery int
+	// HealthCheckedThroughTicket and HealthCheckedAt record where the last
+	// health check ended. Both are empty until the first check.
+	HealthCheckedThroughTicket *int64
+	HealthCheckedAt            *time.Time
+	CreatedAt                  time.Time
 }
+
+// Architecture health check interval limits.
+const (
+	DefaultHealthCheckEvery = 8
+	MaxHealthCheckEvery     = 50
+)
 
 // Visibility is how agents must treat a repo's contents and history.
 type Visibility string
@@ -89,6 +102,8 @@ type RepoStyle struct {
 	RequireDesignApproval *bool
 	// AllowAgentMerge changes the agent-merge grant.
 	AllowAgentMerge *bool
+	// HealthCheckEvery changes the architecture check interval (0 = off).
+	HealthCheckEvery *int
 }
 
 // Repo field limits.
@@ -118,7 +133,7 @@ func NewManualRepo(draft ManualRepoDraft, now time.Time) (Repo, error) {
 
 // NewSyncedRepo validates a provider listing as a new repo.
 func NewSyncedRepo(listing RepoListing, now time.Time) (Repo, error) {
-	repo := Repo{Provider: listing.Provider, CreatedAt: now, RequireSpecApproval: true}
+	repo := Repo{Provider: listing.Provider, CreatedAt: now, RequireSpecApproval: true, HealthCheckEvery: DefaultHealthCheckEvery}
 	if err := repo.Refresh(listing, now); err != nil {
 		return Repo{}, err
 	}
@@ -181,6 +196,12 @@ func (r *Repo) Restyle(style RepoStyle) error {
 		}
 		r.Description = description
 	}
+	if style.HealthCheckEvery != nil {
+		if *style.HealthCheckEvery < 0 || *style.HealthCheckEvery > MaxHealthCheckEvery {
+			return Invalidf("health_check_every must be between 0 and %d (0 turns the check off)", MaxHealthCheckEvery)
+		}
+		r.HealthCheckEvery = *style.HealthCheckEvery
+	}
 	if style.TreatAsPublic != nil {
 		r.TreatAsPublic = *style.TreatAsPublic
 	}
@@ -199,6 +220,11 @@ func (r *Repo) Restyle(style RepoStyle) error {
 // ChangesGates reports whether style changes a checkpoint setting.
 func (style RepoStyle) ChangesGates() bool {
 	return style.RequireSpecApproval != nil || style.RequireDesignApproval != nil || style.AllowAgentMerge != nil
+}
+
+// ChangesHealthCheck reports whether style changes the health check interval.
+func (style RepoStyle) ChangesHealthCheck() bool {
+	return style.HealthCheckEvery != nil
 }
 
 func parseRepoName(raw string) (string, error) {

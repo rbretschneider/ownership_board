@@ -115,6 +115,10 @@ type RepoRepository interface {
 	// Update writes everything but the checkpoint settings.
 	Update(ctx context.Context, repo domain.Repo) error
 	SetGates(ctx context.Context, repo domain.Repo) error
+	// SetHealthCheck writes the health check interval.
+	SetHealthCheck(ctx context.Context, repo domain.Repo) error
+	// RecordHealthCheck stores the last merged ticket a health check covered.
+	RecordHealthCheck(ctx context.Context, repoID, throughTicket int64, at time.Time) error
 }
 
 // SourceStatusRepository persists the outcome of the last sync per provider.

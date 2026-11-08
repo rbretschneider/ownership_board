@@ -405,3 +405,32 @@ func TestLinkTicketsToolAddsADependencyShownFromBothEnds(t *testing.T) {
 		t.Fatalf("the ticket list does not show what #2 waits on:\n%s", got)
 	}
 }
+
+func TestHealthCheckIntervalOverTheAPI(t *testing.T) {
+	browser, token := signedIn(t)
+	repo := browser.expect(http.StatusCreated, "POST", "/api/v1/repos", `{"full_name":"acme/api"}`)
+	path := "/api/v1/repos/" + jsonNumber(repo["id"])
+	if repo["health_check_every"] != float64(8) || repo["health_checked_through_ticket"] != nil || repo["health_checked_at"] != nil {
+		t.Fatalf("fresh repo: %v", repo)
+	}
+	agent := browser.asAgent(token)
+	agent.expect(http.StatusForbidden, "PATCH", path, `{"health_check_every":3}`)
+	if status, _ := agent.do("GET", "/api/v1/repos", ""); status != http.StatusOK {
+		t.Fatalf("agent could not list repos: %d", status)
+	}
+	if edited := browser.expect(http.StatusOK, "PATCH", path, `{"health_check_every":0}`); edited["health_check_every"] != float64(0) {
+		t.Fatalf("person could not turn the check off: %v", edited)
+	}
+	for _, body := range []string{`{"health_check_every":51}`, `{"health_check_every":-1}`} {
+		reply := browser.expect(http.StatusBadRequest, "PATCH", path, body)
+		if !strings.Contains(reply["error"].(map[string]any)["message"].(string), "between 0 and 50") {
+			t.Fatalf("%s: %v", body, reply)
+		}
+	}
+	browser.expect(http.StatusBadRequest, "PATCH", path, `{"health_check_every":1.5}`)
+	browser.expect(http.StatusBadRequest, "PATCH", path, `{"health_checked_through_ticket":9}`)
+	got := browser.expect(http.StatusOK, "PATCH", path, `{}`)
+	if got["health_check_every"] != float64(0) || got["health_checked_through_ticket"] != nil {
+		t.Fatalf("repo after refused edits: %v", got)
+	}
+}

@@ -80,11 +80,23 @@ func (s *RepoService) Restyle(ctx context.Context, actor domain.Actor, id int64,
 		if err := repo.Restyle(style); err != nil {
 			return err
 		}
-		if err := repos.CodeRepos().Update(ctx, repo); err != nil || !style.ChangesGates() {
+		if err := repos.CodeRepos().Update(ctx, repo); err != nil {
 			return err
 		}
-		return repos.CodeRepos().SetGates(ctx, repo)
+		if style.ChangesGates() {
+			if err := repos.CodeRepos().SetGates(ctx, repo); err != nil {
+				return err
+			}
+		}
+		if style.ChangesHealthCheck() {
+			return repos.CodeRepos().SetHealthCheck(ctx, repo)
+		}
+		return nil
 	})
+	if err == nil && style.ChangesHealthCheck() {
+		s.logger.Info("repo health check interval changed", "repo", repo.FullName, "by", actor.Name,
+			"health_check_every", repo.HealthCheckEvery)
+	}
 	if err == nil && style.ChangesGates() {
 		s.logger.Info("repo checkpoints changed", "repo", repo.FullName, "by", actor.Name,
 			"require_spec_approval", repo.RequireSpecApproval, "require_design_approval", repo.RequireDesignApproval,
