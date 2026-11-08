@@ -16,6 +16,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd ./cmd
 COPY internal ./internal
+COPY agent/build_host ./agent/build_host
 COPY --from=web /web/dist ./internal/webui/dist
 ARG VERSION=dev
 # Static and stripped: no CGO (the SQLite driver is pure Go), reproducible paths.
