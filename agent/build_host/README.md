@@ -80,8 +80,12 @@ Command logs retain at most 8 MiB each and note
 truncation; uploaded logs retain bounded head/tail excerpts. Result journals
 under `assignments` preserve completion bytes across retries. Restarted workers
 report interrupted known assignments rather than rerunning a partial checkout.
-A lost claim response triggers a quiet recovery interval so unknown assignments
-can expire. Extended connectivity loss terminates local work before reassignment.
+A claim is marked in private `claim.json` state before its request is sent. A
+lost response or interrupted claim triggers a 185-second quiet recovery interval
+so unknown assignments can expire. Restarting with an unresolved marker waits
+a fresh full interval before any health, claim or journal-recovery requests;
+repeated restarts extend that pause. Do not remove the marker to skip recovery.
+Extended connectivity loss terminates local work before reassignment.
 
 Verification modes:
 

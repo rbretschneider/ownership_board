@@ -1175,6 +1175,18 @@ class AgentLoop:
         self.next_health = 0
         self.next_claim = 0
         self.quiet_until = 0
+        self.claim_marker = state.root/'claim.json'
+        self.claim_pending = False
+        if self.claim_marker.exists() or self.claim_marker.is_symlink():
+            check_private(self.claim_marker)
+            marker = json.loads(self.claim_marker.read_bytes())
+            if not isinstance(marker,dict) or type(marker.get('pending')) is not bool:
+                raise ValueError('invalid claim recovery marker; preserve it for operator recovery')
+            self.claim_pending = marker['pending']
+            if self.claim_pending:
+                # A fresh full interval also covers reboot/clock changes and repeated
+                # restarts, without trusting a persisted wall-clock deadline.
+                self.quiet_until = self.clock()+185
         self.failure_since = None
         self.last_health = self.clock()
         self.connected = False
@@ -1190,6 +1202,17 @@ class AgentLoop:
 
     def persist(self,assignment,settled=False):
         atomic_private(assignment.journal,json_bytes({'job':assignment.job,'completion':base64.b64encode(assignment.payload).decode() if assignment.payload else '', 'settled':settled}))
+
+    def mark_claim(self,pending):
+        atomic_private(self.claim_marker,json_bytes({'pending':pending}))
+        self.claim_pending = pending
+
+    def release_claim_barrier(self):
+        if self.clock() < self.quiet_until:
+            return False
+        if self.claim_pending:
+            self.mark_claim(False)
+        return True
 
     def cancel_all(self,reason='infrastructure'):
         for assignment in list(self.active.values()):
@@ -1215,6 +1238,8 @@ class AgentLoop:
         self.persist(assignment,settled=True)
 
     def recover(self):
+        if not self.release_claim_barrier():
+            return False
         for path in sorted(self.journals.glob('*.json')):
             check_private(path)
             value = json.loads(path.read_bytes())
@@ -1235,6 +1260,7 @@ class AgentLoop:
                 assignment.payload = completion_bytes(assignment.job['attempt'],[],'infrastructure')
                 self.persist(assignment)
             self.upload(assignment)
+        return True
 
     def start(self,job):
         validate_job(job,self.config['host_id'])
@@ -1259,7 +1285,7 @@ class AgentLoop:
         assignment.thread.start()
 
     def _tick(self,now):
-        if now < self.quiet_until:
+        if not self.release_claim_barrier():
             return
         if now >= self.next_health or not self.connected:
             # Status applies owner changes; disabled hosts continue health/current work.
@@ -1299,25 +1325,35 @@ class AgentLoop:
         except OSError:
             return
         self.next_claim = now+5
+        # Persist before sending: termination anywhere in the request/response
+        # window must not allow a restarted worker to extend unknown ownership.
+        self.mark_claim(True)
+        self.quiet_until = self.clock()+185
         try:
             reply = self.client.request('POST',API+'/claim',{})
         except (OSError,ValueError,BoardError) as exc:
             if isinstance(exc,BoardError) and 400 <= exc.status < 500 and exc.status != 408:
+                self.mark_claim(False)
+                self.quiet_until = 0
                 raise
             # Unknown claim ownership must age out before any health can extend it.
             self.quiet_until = self.clock()+185
             self.connected = False
             self.cancel_all()
             raise
-        if reply is not None:
-            try:
+        try:
+            if reply is not None:
                 self.start(reply['job'])
-            except (KeyError,ValueError,OSError):
-                # A claim whose journal cannot be saved is also untracked work.
-                # Withhold health so the board can expire that assignment.
-                self.quiet_until = self.clock()+185
-                self.cancel_all()
-                raise
+            # Assignment persistence in start precedes clearing the marker.
+            # Idle responses are definitive too; neither needs a restart pause.
+            self.mark_claim(False)
+            self.quiet_until = 0
+        except (KeyError,ValueError,OSError):
+            # A claim whose journal cannot be saved is also untracked work.
+            # Withhold health so the board can expire that assignment.
+            self.quiet_until = self.clock()+185
+            self.cancel_all()
+            raise
 
     def enforce_lease_safety(self,now):
         if now-self.last_health >= 120 or self.failure_since is not None and now-self.failure_since >= 120:
@@ -1347,7 +1383,8 @@ class AgentLoop:
         # Previous native containment closes on owner death. Give guardians their
         # bounded cleanup interval before reporting interrupted assignments.
         time.sleep(2)
-        self.recover()
+        while not self.shutdown.is_set() and not self.recover():
+            self.shutdown.wait(2)
         watchdog_stop = threading.Event()
         def watch():
             while not watchdog_stop.wait(.2):

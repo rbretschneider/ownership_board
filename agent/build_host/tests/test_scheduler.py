@@ -105,6 +105,119 @@ class SchedulerTests(unittest.TestCase):
             self.assertEqual(completions,[raw])
             self.assertTrue(json.loads(assignment.journal.read_bytes())['settled'])
 
+    def test_lost_claim_response_withholds_all_control_traffic_after_restart(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            loop,board,clock=self.setup_loop(tmp)
+            marker=loop.state.root/'claim.json'
+            original=board.request
+            def lost(method,path,body=None):
+                if path.endswith('/claim'):
+                    self.assertTrue(json.loads(marker.read_bytes())['pending'])
+                    raise OSError('response lost')
+                return original(method,path,body)
+            board.request=lost
+            loop.tick()
+            self.assertTrue(marker.exists())
+            # Known journals must also wait: progress/completion can touch health.
+            assignment=host.Assignment({'id':'d'*64,'attempt':1},loop.journals/'saved.json')
+            assignment.payload=host.completion_bytes(1,[],'infrastructure')
+            loop.persist(assignment)
+            restarted,board,clock=self.setup_loop(tmp)
+            for at in (0,2,60,120,184):
+                clock.now=at
+                restarted.recover()
+                restarted.tick()
+                self.assertEqual(board.calls,[])
+            # Another restart cannot bypass the barrier; clocks may reset at boot.
+            restarted,board,clock=self.setup_loop(tmp)
+            restarted.tick()
+            self.assertEqual(board.calls,[])
+            clock.now=185
+            restarted.recover()
+            restarted.tick()
+            self.assertTrue(any(p.endswith('/result') for _,p,_ in board.calls))
+            self.assertTrue(any(p.endswith('/heartbeat') for _,p,_ in board.calls))
+            self.assertFalse(json.loads(marker.read_bytes())['pending'])
+            restarted,board,clock=self.setup_loop(tmp)
+            restarted.tick()
+            self.assertTrue(any(p.endswith('/heartbeat') for _,p,_ in board.calls))
+
+    def test_interruption_during_claim_preserves_restart_barrier(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            loop,board,clock=self.setup_loop(tmp)
+            original=board.request
+            def interrupted(method,path,body=None):
+                if path.endswith('/claim'): raise KeyboardInterrupt()
+                return original(method,path,body)
+            board.request=interrupted
+            with self.assertRaises(KeyboardInterrupt): loop.tick()
+            restarted,board,clock=self.setup_loop(tmp)
+            restarted.tick()
+            self.assertEqual(board.calls,[])
+
+    def test_claim_marker_write_failure_prevents_claim_request(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            loop,board,clock=self.setup_loop(tmp)
+            with patch.object(host,'atomic_private',side_effect=OSError('disk full')):
+                loop.tick()
+            self.assertFalse(any(p.endswith('/claim') for _,p,_ in board.calls))
+
+    def test_definitive_claim_rejection_does_not_delay_restart(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            loop,board,clock=self.setup_loop(tmp)
+            original=board.request
+            def rejected(method,path,body=None):
+                if path.endswith('/claim'): raise host.BoardError(429)
+                return original(method,path,body)
+            board.request=rejected
+            loop.tick()
+            restarted,board,clock=self.setup_loop(tmp)
+            restarted.tick()
+            self.assertTrue(any(p.endswith('/heartbeat') for _,p,_ in board.calls))
+
+    def test_failed_marker_settlement_preserves_barrier_after_restart(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            loop,board,clock=self.setup_loop(tmp)
+            write=host.atomic_private
+            def fail_settlement(path,raw):
+                if path == loop.state.root/'claim.json' and not json.loads(raw)['pending']:
+                    raise OSError('disk full')
+                return write(path,raw)
+            with patch.object(host,'atomic_private',side_effect=fail_settlement):
+                loop.tick()
+                self.assertTrue(any(p.endswith('/claim') for _,p,_ in board.calls))
+            restarted,board,clock=self.setup_loop(tmp)
+            restarted.tick()
+            self.assertEqual(board.calls,[])
+
+    def test_successful_claim_is_journaled_before_marker_settlement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            loop,board,clock=self.setup_loop(tmp)
+            job={'id':'a'*64,'attempt':1,'host_id':7,'sha':'b'*40,
+                 'bundle_sha256':'c'*64,'bundle_bytes':1,'preset':'script',
+                 'target':{'os':host.OS,'required_capabilities':[]}}
+            board.claims.append(job)
+            write=host.atomic_private
+            def observe_settlement(path,raw):
+                if path == loop.state.root/'claim.json' and not json.loads(raw)['pending']:
+                    journals=[json.loads(p.read_bytes()) for p in loop.journals.glob('*.json')]
+                    self.assertTrue(any(j['job'] == job for j in journals))
+                return write(path,raw)
+            with patch.object(host,'atomic_private',side_effect=observe_settlement), \
+                 patch.object(host.JobRunner,'execute',return_value=host.completion_bytes(1,[],'infrastructure')):
+                loop.tick()
+                loop.active[job['id']].thread.join(5)
+            self.assertFalse(json.loads((loop.state.root/'claim.json').read_bytes())['pending'])
+
+    def test_malformed_claim_marker_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            loop,board,clock=self.setup_loop(tmp)
+            marker=loop.state.root/'claim.json'
+            for value in ({}, {'pending':'false'}, [], None):
+                host.atomic_private(marker,host.json_bytes(value))
+                with self.subTest(value=value),self.assertRaises(ValueError):
+                    self.setup_loop(tmp)
+
     def test_resource_limits_honor_smaller_environment(self):
         config={'max_jobs':3}
         with patch.object(host,'cpu_budget',return_value=3):
@@ -162,7 +275,11 @@ class SchedulerTests(unittest.TestCase):
                  'bundle_sha256':'c'*64,'bundle_bytes':1,'preset':'script',
                  'target':{'os':host.OS,'required_capabilities':[]}}
             board.claims.append(job)
-            with patch.object(host,'atomic_private',side_effect=OSError('disk full')), \
+            write=host.atomic_private
+            def fail_assignment(path,raw):
+                if path.parent == loop.journals: raise OSError('disk full')
+                return write(path,raw)
+            with patch.object(host,'atomic_private',side_effect=fail_assignment), \
                  patch.object(host.JobRunner,'execute') as execute:
                 loop.tick()
                 self.assertFalse(loop.active)
@@ -174,6 +291,9 @@ class SchedulerTests(unittest.TestCase):
                     loop.tick()
                     self.assertEqual(len(board.calls),count)
                 self.assertGreaterEqual(loop.quiet_until,185)
+            restarted,restarted_board,_=self.setup_loop(tmp)
+            restarted.tick()
+            self.assertEqual(restarted_board.calls,[])
             clock.now=186
             loop.tick()
             self.assertGreater(len(board.calls),count)
