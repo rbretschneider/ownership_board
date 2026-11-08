@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -388,6 +389,10 @@ func TestBuildJobsOldCommitNewPresetCannotSupersedeNewer(t *testing.T) {
 	m.SHA = old.SHA
 	m.Preset = "script"
 	late := submitJob(t, f, s, m)
+	stored, err := s.Get(f.ctx, late.ID)
+	if err != nil || stored.FinishedAt == nil || late.FinishedAt == nil || !stored.FinishedAt.Equal(*late.FinishedAt) {
+		t.Fatalf("terminal submission did not round trip: submitted=%+v stored=%+v error=%v", late, stored, err)
+	}
 	current, e := s.Get(f.ctx, newer.ID)
 	if e != nil || current.Status != "queued" || late.Status != "superseded" {
 		t.Fatal(current, late, e)
@@ -697,5 +702,96 @@ func TestBuildJobsSupersessionAndResultRace(t *testing.T) {
 		if got.Status != "passed" && got.Status != "superseded" || got.AssignmentReleasedAt == nil {
 			t.Fatal(got)
 		}
+	}
+}
+
+func TestBuildJobsRecoveryPreservesLiveReservation(t *testing.T) {
+	f, _, m, _ := jobFixture(t)
+	root := filepath.Join(t.TempDir(), "bundles")
+	bs, err := buildbundle.New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := app.NewBuildJobService(f.store, f.clock, bs, slog.Default())
+	s.StorageLimit = 3
+	reader := &gatedJobReader{start: make(chan struct{}), release: make(chan struct{}), data: bytes.NewReader([]byte("abc"))}
+	done := make(chan error, 1)
+	go func() { _, _, err := s.Submit(f.ctx, m, reader, nil); done <- err }()
+	<-reader.start
+	var path string
+	if err := f.store.SQL().QueryRow(`SELECT file FROM pragma_database_list WHERE name='main'`).Scan(&path); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sqlite.Open(f.ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	bs2, err := buildbundle.New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := app.NewBuildJobService(db, f.clock, bs2, slog.Default())
+	second.StorageLimit = 3
+	recoveryErr := second.RecoverStorage(f.ctx)
+	_, _, sameErr := second.Submit(f.ctx, m, bytes.NewBufferString("abc"), nil)
+	other := m
+	other.SHA = fmt.Sprintf("%040x", 2)
+	_, _, quotaErr := second.Submit(f.ctx, other, bytes.NewBufferString("abc"), nil)
+	close(reader.release)
+	firstErr := <-done
+	if recoveryErr != nil || firstErr != nil || domain.KindOf(sameErr) != domain.KindConflict || domain.KindOf(quotaErr) != domain.KindTooLarge {
+		t.Fatal(recoveryErr, firstErr, sameErr, quotaErr)
+	}
+}
+
+func TestBuildJobsQueueOperationsExcludeHistoricalLogs(t *testing.T) {
+	f, s, m, h := jobFixture(t)
+	j := submitJob(t, f, s, m)
+	command := `{"label":"build","exit_code":0,"log":"` + strings.Repeat("x", 16*1024) + `"}`
+	result := `{"commands":[` + strings.TrimSuffix(strings.Repeat(command+",", 8), ",") + `]}`
+	if err := (&domain.BuildJobCompletion{Attempt: 1, Status: "passed", Result: []byte(result)}).Validate(); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := f.store.SQL().BeginTx(f.ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	for i := 0; i < 300; i++ {
+		_, err := tx.Exec(`INSERT INTO build_jobs(id,ticket_id,repo,sha,preset,target,target_os,status,attempt,created_at,finished_at,result,bundle_bytes,bundle_sha256) SELECT ?,ticket_id,repo,?,preset,target,target_os,'passed',attempt,created_at,created_at,?,bundle_bytes,bundle_sha256 FROM build_jobs WHERE id=?`, fmt.Sprintf("%064x", i+1), fmt.Sprintf("%040x", i+10), result, j.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	for _, operation := range []struct {
+		name string
+		run  func() error
+	}{
+		{"recovery", func() error { return s.RequeueOffline(f.ctx) }},
+		{"claim", func() error { _, err := s.Claim(f.ctx, app.AuthenticatedBuildHost{ID: h.ID}); return err }},
+		{"submission", func() error {
+			m.SHA = fmt.Sprintf("%040x", 999)
+			_, _, err := s.Submit(f.ctx, m, bytes.NewBufferString("abc"), nil)
+			return err
+		}},
+	} {
+		t.Run(operation.name, func(t *testing.T) {
+			runtime.GC()
+			var before, after runtime.MemStats
+			runtime.ReadMemStats(&before)
+			if err := operation.run(); err != nil {
+				t.Fatal(err)
+			}
+			runtime.ReadMemStats(&after)
+			allocated := after.TotalAlloc - before.TotalAlloc
+			t.Logf("allocated %d bytes with 300 completed jobs", allocated)
+			if allocated > 8*1024*1024 {
+				t.Fatalf("queue operation allocated %d bytes for completed history", allocated)
+			}
+		})
 	}
 }

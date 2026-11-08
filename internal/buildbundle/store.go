@@ -70,6 +70,10 @@ func (s *Store) PayloadSizes() (map[string]int64, error) {
 		base := filepath.Base(p)
 		isBundle := base == "commit.bundle" && domain.ValidBuildJobID(filepath.Dir(p))
 		isPartial := filepath.Dir(p) == "." && len(base) == 72 && base[64:] == ".partial" && domain.ValidBuildJobID(base[:64])
+		isLock := filepath.Dir(p) == "." && len(base) == 69 && base[64:] == ".lock" && domain.ValidBuildJobID(base[:64])
+		if isLock && info.Size() == 0 {
+			return nil
+		}
 		if !isBundle && !isPartial {
 			return fmt.Errorf("unexpected bundle file")
 		}
@@ -208,4 +212,35 @@ func (s *Store) Verify(id string, size int64, digest string) error {
 		return fmt.Errorf("bundle integrity check failed")
 	}
 	return nil
+}
+
+// TryLockUpload coordinates upload ownership across store instances and processes.
+// Lock files are persistent, empty metadata; unlinking them would break fencing.
+func (s *Store) TryLockUpload(token string) (io.Closer, error) {
+	if !domain.ValidBuildJobID(token) {
+		return nil, domain.Invalidf("invalid upload token")
+	}
+	r, err := s.root()
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	name := token + ".lock"
+	if info, err := r.Lstat(name); err == nil {
+		if !info.Mode().IsRegular() || info.Size() != 0 {
+			return nil, fmt.Errorf("unsafe upload lock")
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	f, err := r.OpenFile(name, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return nil, err
+	}
+	held, err := tryLockFile(f)
+	if err != nil || !held {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
 }

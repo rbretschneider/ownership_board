@@ -615,7 +615,11 @@ concurrent uploads from overspending that allowance. Metadata is limited to
 the signed result envelope permits an additional 4 KiB. Size and capacity
 violations return `413`. Other existing machine routes keep their 96 KiB limit.
 
-Interrupted transfers remain on disk and consume capacity. Startup validates
+Interrupted transfers remain on disk and consume capacity. Uploaders hold a
+process lock for each reservation; startup only abandons reservations whose lock
+is free, preserving transfers through other server instances. Empty `.lock` files
+are persistent coordination metadata and must not be removed while servers run.
+Shared storage must support operating-system advisory locks. Startup validates
 referenced payloads and refuses missing or corrupt files. Nothing prunes failed
 uploads or published bundles; operators manage retention externally. SQLite
 backups alone do not contain bundle payloads. Back up the data volume to preserve

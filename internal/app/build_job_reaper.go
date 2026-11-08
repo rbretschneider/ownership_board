@@ -8,25 +8,22 @@ import (
 )
 
 func (s *BuildJobService) recover(ctx context.Context, r Repos, now time.Time) error {
-	jobs, e := r.BuildJobs().List(ctx)
-	if e != nil {
-		return e
-	}
-	hosts, e := r.BuildHosts().List(ctx)
+	jobs, e := r.BuildJobs().ActiveAssignments(ctx)
 	if e != nil {
 		return e
 	}
 	byID := map[int64]domain.BuildHost{}
-	for _, h := range hosts {
-		byID[h.ID] = h
-	}
 	for _, j := range jobs {
 		if j.HostID == nil || j.AssignmentReleasedAt != nil || j.StartedAt == nil {
 			continue
 		}
 		h, ok := byID[*j.HostID]
 		if !ok {
-			return domain.NotFoundf("assigned host missing")
+			h, e = r.BuildHosts().Get(ctx, *j.HostID)
+			if e != nil {
+				return e
+			}
+			byID[h.ID] = h
 		}
 		seen := j.StartedAt
 		if h.LastSeenAt != nil {

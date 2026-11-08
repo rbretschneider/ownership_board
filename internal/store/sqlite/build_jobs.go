@@ -52,8 +52,8 @@ func scanJob(row interface{ Scan(...any) error }) (domain.BuildJob, error) {
 func (r buildJobRepo) Get(ctx context.Context, id string) (domain.BuildJob, error) {
 	return scanJob(r.q.QueryRowContext(ctx, `SELECT `+jobColumns+` FROM build_jobs WHERE id=?`, id))
 }
-func (r buildJobRepo) List(ctx context.Context) ([]domain.BuildJob, error) {
-	rows, e := r.q.QueryContext(ctx, `SELECT `+jobColumns+` FROM build_jobs ORDER BY rowid`)
+func (r buildJobRepo) ActiveAssignments(ctx context.Context) ([]domain.BuildJob, error) {
+	rows, e := r.q.QueryContext(ctx, `SELECT `+jobColumns+` FROM build_jobs WHERE host_id IS NOT NULL AND assignment_released_at IS NULL`)
 	if e != nil {
 		return nil, e
 	}
@@ -69,7 +69,7 @@ func (r buildJobRepo) List(ctx context.Context) ([]domain.BuildJob, error) {
 	return out, rows.Err()
 }
 func (r buildJobRepo) Insert(ctx context.Context, j domain.BuildJob) error {
-	_, e := r.q.ExecContext(ctx, `INSERT INTO build_jobs(id,ticket_id,repo,sha,preset,target,target_os,status,attempt,created_at,bundle_bytes,bundle_sha256) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, j.ID, j.TicketID, j.Repo, j.SHA, j.Preset, j.Target.Canonical(), j.Target.OS, j.Status, j.Attempt, formatTime(j.CreatedAt), j.BundleBytes, j.BundleSHA256)
+	_, e := r.q.ExecContext(ctx, `INSERT INTO build_jobs(id,ticket_id,repo,sha,preset,target,target_os,status,attempt,created_at,finished_at,bundle_bytes,bundle_sha256) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, j.ID, j.TicketID, j.Repo, j.SHA, j.Preset, j.Target.Canonical(), j.Target.OS, j.Status, j.Attempt, formatTime(j.CreatedAt), formatOptionalTime(j.FinishedAt), j.BundleBytes, j.BundleSHA256)
 	return conflictOr(e, "build job already exists")
 }
 func jobArgs(j domain.BuildJob) []any {
@@ -128,4 +128,56 @@ func (r buildJobRepo) Reserve(ctx context.Context, u app.BuildJobUpload) error {
 func (r buildJobRepo) FinishUpload(ctx context.Context, token string) error {
 	_, e := r.q.ExecContext(ctx, `UPDATE build_job_uploads SET state='abandoned' WHERE token=?`, token)
 	return e
+}
+
+func (r buildJobRepo) AssignmentCount(ctx context.Context, hostID int64) (int, error) {
+	var n int
+	err := r.q.QueryRowContext(ctx, `SELECT count(*) FROM build_jobs WHERE host_id=? AND assignment_released_at IS NULL`, hostID).Scan(&n)
+	return n, err
+}
+func (r buildJobRepo) Candidate(ctx context.Context, h domain.BuildHost) (*domain.BuildJob, error) {
+	caps, err := json.Marshal(h.Capabilities)
+	if err != nil {
+		return nil, err
+	}
+	j, err := scanJob(r.q.QueryRowContext(ctx, `SELECT `+jobColumns+` FROM build_jobs WHERE status='queued' AND target_os=? AND NOT EXISTS (
+ SELECT 1 FROM json_each(build_jobs.target,'$.required_capabilities') required
+ WHERE NOT EXISTS (SELECT 1 FROM json_each(?) allowed WHERE allowed.value=required.value)
+ ) ORDER BY created_at,id LIMIT 1`, h.OS, string(caps)))
+	if domain.KindOf(err) == domain.KindNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &j, nil
+}
+
+// CommitState returns publication order without loading retained job bodies.
+func (r buildJobRepo) CommitState(ctx context.Context, ticketID int64, target domain.BuildJobTarget, sha string) (known bool, latest string, err error) {
+	err = r.q.QueryRowContext(ctx, `SELECT
+ EXISTS(SELECT 1 FROM build_jobs WHERE ticket_id=? AND target=? AND sha=?),
+ COALESCE((SELECT sha FROM build_jobs WHERE ticket_id=? AND target=? GROUP BY sha ORDER BY min(rowid) DESC LIMIT 1),'')`,
+		ticketID, target.Canonical(), sha, ticketID, target.Canonical()).Scan(&known, &latest)
+	return
+}
+func (r buildJobRepo) Supersede(ctx context.Context, ticketID int64, target domain.BuildJobTarget, sha string, now time.Time) error {
+	_, err := r.q.ExecContext(ctx, `UPDATE build_jobs SET status='superseded',finished_at=? WHERE ticket_id=? AND target_os=? AND target=? AND sha<>? AND status IN ('queued','running')`, formatTime(now), ticketID, target.OS, target.Canonical(), sha)
+	return err
+}
+func (r buildJobRepo) Bundles(ctx context.Context) ([]app.BuildJobBundle, error) {
+	rows, err := r.q.QueryContext(ctx, `SELECT id,bundle_bytes,bundle_sha256 FROM build_jobs`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []app.BuildJobBundle
+	for rows.Next() {
+		var b app.BuildJobBundle
+		if err := rows.Scan(&b.ID, &b.Bytes, &b.SHA256); err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
 }

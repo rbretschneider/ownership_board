@@ -70,6 +70,12 @@ func (s *BuildJobService) Submit(ctx context.Context, m domain.BuildJobSubmissio
 		return j, false, e
 	}
 	token := hex.EncodeToString(tokenBytes)
+	var uploadLock io.Closer
+	defer func() {
+		if uploadLock != nil {
+			uploadLock.Close()
+		}
+	}()
 	duplicate, orphan := false, false
 	e := s.store.Write(ctx, func(r Repos) error {
 		if e := validateJobRepo(ctx, r, m); e != nil {
@@ -115,6 +121,13 @@ func (s *BuildJobService) Submit(ctx context.Context, m domain.BuildJobSubmissio
 		if total > s.StorageLimit || needed > s.StorageLimit-total {
 			return domain.TooLargef("bundle storage exceeds 2 GiB capacity")
 		}
+		uploadLock, e = s.bundles.TryLockUpload(token)
+		if e != nil {
+			return e
+		}
+		if uploadLock == nil {
+			return domain.Conflictf("upload_in_progress")
+		}
 		return r.BuildJobs().Reserve(ctx, BuildJobUpload{Token: token, JobID: m.ID(), Metadata: m, CreatedAt: s.now()})
 	})
 	if e != nil || duplicate {
@@ -157,38 +170,26 @@ func (s *BuildJobService) Submit(ctx context.Context, m domain.BuildJobSubmissio
 		if e = s.bundles.Promote(token, m); e != nil {
 			return e
 		}
-		jobs, e := r.BuildJobs().List(ctx)
+		known, latestSHA, e := r.BuildJobs().CommitState(ctx, m.TicketID, m.Target, m.SHA)
 		if e != nil {
 			return e
 		}
-		seen := map[string]bool{}
-		latestSHA := ""
-		for _, old := range jobs {
-			if old.TicketID == m.TicketID && old.Target.Canonical() == m.Target.Canonical() && !seen[old.SHA] {
-				seen[old.SHA] = true
-				latestSHA = old.SHA
-			}
-		}
+
 		now := s.now()
 		j = domain.BuildJob{ID: m.ID(), TicketID: m.TicketID, Repo: m.Repo, SHA: m.SHA, Preset: m.Preset, Target: m.Target, Status: "queued", Attempt: 1, CreatedAt: now, BundleBytes: m.BundleBytes, BundleSHA256: m.BundleSHA256}
-		if seen[m.SHA] && latestSHA != m.SHA {
+		if known && latestSHA != m.SHA {
 			j.Status = "superseded"
 			j.FinishedAt = &now
 		}
 		if e = r.BuildJobs().Insert(ctx, j); e != nil {
 			return e
 		}
-		if !seen[m.SHA] {
-			for _, old := range jobs {
-				if old.TicketID == j.TicketID && old.Target.Canonical() == j.Target.Canonical() && old.SHA != j.SHA && (old.Status == "queued" || old.Status == "running") {
-					old.Status = "superseded"
-					old.FinishedAt = &now
-					if e = r.BuildJobs().Save(ctx, old); e != nil {
-						return e
-					}
-				}
+		if !known {
+			if e = r.BuildJobs().Supersede(ctx, j.TicketID, j.Target, j.SHA, now); e != nil {
+				return e
 			}
 		}
+
 		return r.BuildJobs().FinishUpload(ctx, token)
 	})
 	if e != nil {
@@ -231,32 +232,26 @@ func (s *BuildJobService) Claim(ctx context.Context, who AuthenticatedBuildHost)
 		if !h.Enabled {
 			return nil
 		}
-		jobs, e := r.BuildJobs().List(ctx)
+		active, e := r.BuildJobs().AssignmentCount(ctx, h.ID)
 		if e != nil {
 			return e
-		}
-		active := 0
-		for _, j := range jobs {
-			if j.HostID != nil && *j.HostID == h.ID && j.AssignmentReleasedAt == nil {
-				active++
-			}
 		}
 		if active >= h.MaxParallel {
 			return nil
 		}
-		for _, j := range jobs {
-			if j.Status == "queued" && j.Target.Matches(h) {
-				j.Status = "running"
-				j.HostID = &h.ID
-				j.StartedAt = &now
-				j.Phase = "claimed"
-				if e = r.BuildJobs().Assign(ctx, j); e != nil {
-					return e
-				}
-				out = &j
-				break
-			}
+		j, e := r.BuildJobs().Candidate(ctx, h)
+		if e != nil || j == nil {
+			return e
 		}
+		j.Status = "running"
+		j.HostID = &h.ID
+		j.StartedAt = &now
+		j.Phase = "claimed"
+		if e = r.BuildJobs().Assign(ctx, *j); e != nil {
+			return e
+		}
+		out = j
+
 		return nil
 	})
 	return out, e
@@ -425,8 +420,8 @@ func (s *BuildJobService) Cancel(ctx context.Context, isOwner bool, id string) (
 	return j, e
 }
 
-// RecoverStorage must finish before accepting HTTP requests. Interrupted uploads
-// are retained; referenced payload corruption prevents startup.
+// RecoverStorage retains interrupted uploads and preserves reservations owned by
+// live uploaders. Referenced payload corruption prevents startup.
 func (s *BuildJobService) RecoverStorage(ctx context.Context) error {
 	return s.store.Write(ctx, func(r Repos) error {
 		if _, e := s.bundles.PayloadSizes(); e != nil {
@@ -437,16 +432,28 @@ func (s *BuildJobService) RecoverStorage(ctx context.Context) error {
 			return e
 		}
 		for _, u := range uploads {
-			if e = r.BuildJobs().FinishUpload(ctx, u.Token); e != nil {
-				return e
+			lock, err := s.bundles.TryLockUpload(u.Token)
+			if err != nil {
+				return err
+			}
+			if lock == nil {
+				continue
+			}
+			err = r.BuildJobs().FinishUpload(ctx, u.Token)
+			closeErr := lock.Close()
+			if err != nil {
+				return err
+			}
+			if closeErr != nil {
+				return closeErr
 			}
 		}
-		jobs, e := r.BuildJobs().List(ctx)
+		jobs, e := r.BuildJobs().Bundles(ctx)
 		if e != nil {
 			return e
 		}
 		for _, j := range jobs {
-			if e = s.bundles.Verify(j.ID, j.BundleBytes, j.BundleSHA256); e != nil {
+			if e = s.bundles.Verify(j.ID, j.Bytes, j.SHA256); e != nil {
 				return fmt.Errorf("stored bundle %s: %w", j.ID, e)
 			}
 		}
