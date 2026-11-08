@@ -139,7 +139,7 @@ func TestBuildHostHistoryHTTP(t *testing.T) {
 	browser, token := signedIn(t)
 	id := jsonNumber(float64(seedBuildHost(t, browser)))
 	path := "/api/v1/build-hosts/" + id + "/events"
-	for _, query := range []string{"?after_id=-1", "?limit=0", "?limit=201", "?limit=abc", "?limit=1&limit=2", "?extra=1"} {
+	for _, query := range []string{"?after_id=-1", "?after_id=%zz", "?limit=0", "?limit=201", "?limit=abc", "?limit=1&limit=2", "?extra=1"} {
 		browser.expect(400, "GET", path+query, "")
 	}
 	browser.asAgent("").expect(401, "GET", path, "")

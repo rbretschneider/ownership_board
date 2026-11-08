@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -224,7 +225,10 @@ func (s *server) buildHostEvents(w http.ResponseWriter, r *http.Request, who cal
 	if e != nil {
 		return e
 	}
-	q := r.URL.Query()
+	q, e := url.ParseQuery(r.URL.RawQuery)
+	if e != nil {
+		return domain.Invalidf("invalid pagination")
+	}
 	after := int64(0)
 	limit := 100
 	for key, vals := range q {
