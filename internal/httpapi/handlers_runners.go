@@ -2,6 +2,8 @@ package httpapi
 
 import (
 	"encoding/json"
+	"github.com/rbretschneider/ownership_board/internal/app"
+	"github.com/rbretschneider/ownership_board/internal/domain"
 	"io"
 	"math"
 	"net/http"
@@ -39,11 +41,19 @@ type runnerQueued struct {
 	DeferredUntil *time.Time `json:"deferred_until"`
 }
 
+type registryRunnerHost struct {
+	runnersSnapshot
+	ID     int64              `json:"id"`
+	OS     domain.BuildHostOS `json:"os"`
+	Online bool               `json:"online"`
+}
+
 type runnersSnapshot struct {
-	ObservedAt     *time.Time `json:"observed_at"`
-	Host           string     `json:"host"`
-	Enabled        bool       `json:"enabled"`
-	ParallelBuilds int        `json:"parallel_builds"`
+	Hosts          []registryRunnerHost `json:"hosts,omitempty"`
+	ObservedAt     *time.Time           `json:"observed_at"`
+	Host           string               `json:"host"`
+	Enabled        bool                 `json:"enabled"`
+	ParallelBuilds int                  `json:"parallel_builds"`
 	// Blocked says why slots are not taking board work; empty when they are.
 	Blocked      string         `json:"blocked"`
 	BlockedSince *time.Time     `json:"blocked_since"`
@@ -97,10 +107,49 @@ var (
 	runnerBlocks        = map[string]bool{"github-actions": true, "disabled": true, "low-disk": true, "no-settings": true, "drained": true}
 )
 
-// Only reads a small sanitized cache written by the build queue.
-func (s *server) windowsRunners(w http.ResponseWriter, _ *http.Request, _ caller) error {
-	writeJSON(w, http.StatusOK, readRunnersSnapshot(s.deps.RunnersFile))
+// Prefer approved registry identities; preserve the file snapshot during migration.
+func (s *server) windowsRunners(w http.ResponseWriter, r *http.Request, who caller) error {
+	snapshot, err := s.deps.BuildHosts.CompatibilityRunners(r.Context(), who.actor)
+	if err != nil {
+		return err
+	}
+	if len(snapshot.Hosts) == 0 {
+		writeJSON(w, http.StatusOK, readRunnersSnapshot(s.deps.RunnersFile))
+		return nil
+	}
+	hosts := make([]registryRunnerHost, 0, len(snapshot.Hosts))
+	selected := 0
+	windowsSelected := false
+	for i, row := range snapshot.Hosts {
+		hosts = append(hosts, toCompatibilityRunner(row, snapshot.ObservedAt))
+		if row.Host.OS == "windows" && !windowsSelected {
+			selected = i
+			windowsSelected = true
+		}
+	}
+	out := hosts[selected].runnersSnapshot
+	out.Hosts = hosts
+	writeJSON(w, http.StatusOK, out)
 	return nil
+}
+
+func toCompatibilityRunner(row app.BuildHostRunner, now time.Time) registryRunnerHost {
+	h := row.Host
+	snapshot := runnersSnapshot{ObservedAt: h.LastSeenAt, Host: h.Name, Enabled: h.Enabled, ParallelBuilds: h.MaxParallel, Slots: []runnerSlot{}, Queue: []runnerQueued{}}
+	if !h.Enabled {
+		snapshot.Blocked = "disabled"
+	}
+	for i, a := range row.Jobs {
+		phase := a.Phase
+		if !runnerPhases[phase] {
+			phase = "verifying"
+		}
+		snapshot.Slots = append(snapshot.Slots, runnerSlot{Slot: i + 1, TicketID: positiveID(&a.TicketID), Repo: a.Repo, SHA: a.SHA[:min(len(a.SHA), 12)], Preset: a.Preset, Phase: phase, Detail: cleanDetail(a.Detail), Since: a.StartedAt, UpdatedAt: h.LastSeenAt, Orphan: a.Status == "cancelled" || a.Status == "superseded"})
+	}
+	for i, j := range row.Queue {
+		snapshot.Queue = append(snapshot.Queue, runnerQueued{Position: i + 1, TicketID: positiveID(&j.TicketID), Repo: j.Repo, SHA: j.SHA[:min(len(j.SHA), 12)], Preset: j.Preset, QueuedAt: &j.CreatedAt})
+	}
+	return registryRunnerHost{runnersSnapshot: snapshot, ID: h.ID, OS: h.OS, Online: h.Online(now)}
 }
 
 func readRunnersSnapshot(path string) runnersSnapshot {

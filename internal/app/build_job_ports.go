@@ -9,6 +9,7 @@ import (
 )
 
 type BuildJobRepository interface {
+	QueuedForHost(context.Context, domain.BuildHost, int) ([]domain.BuildJob, error)
 	RunnerAssignments(context.Context) ([]RunnerAssignment, error)
 	QueuedCountsByOS(context.Context) (map[domain.BuildHostOS]int, error)
 	Get(context.Context, string) (domain.BuildJob, error)

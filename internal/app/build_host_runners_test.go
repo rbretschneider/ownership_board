@@ -103,3 +103,43 @@ func TestRecentBuildHostEvents(t *testing.T) {
 	_, e = s.RecentEvents(f.ctx, owner, 999, 20)
 	requireErrorKind(t, e, domain.KindNotFound)
 }
+
+func TestCompatibilityRunnersQueuesAndHeartbeat(t *testing.T) {
+	f, _, _, h := jobFixture(t)
+	// Queue entries are eligible work, and can match more than one host.
+	for i := 0; i < 47; i++ {
+		os, caps, status := "linux", `["cmake"]`, "queued"
+		if i == 0 {
+			os = "windows"
+		}
+		if i == 1 {
+			caps = `["gl"]`
+		}
+		if i == 2 {
+			status = "passed"
+		}
+		_, err := f.store.SQL().Exec(`INSERT INTO build_jobs(id,ticket_id,repo,sha,preset,target,target_os,status,attempt,created_at,bundle_bytes,bundle_sha256) VALUES(?,1,'example/tools',?,'cmake',?,?,?,1,'2026-01-01T00:00:00.000Z',3,?)`, fmt.Sprintf("%064x", i), fmt.Sprintf("%064x", i), fmt.Sprintf(`{"os":%q,"required_capabilities":%s}`, os, caps), os, status, fmt.Sprintf("%064x", 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	s := app.NewBuildHostService(f.store, f.clock, nil, nil)
+	snapshot, err := s.CompatibilityRunners(f.ctx, owner)
+	if err != nil || len(snapshot.Hosts) != 1 || len(snapshot.Hosts[0].Queue) != 40 {
+		t.Fatal(snapshot, err)
+	}
+	row := snapshot.Hosts[0]
+	if row.Host.LastSeenAt != nil || row.Queue[0].ID != fmt.Sprintf("%064x", 3) || row.Queue[39].ID != fmt.Sprintf("%064x", 42) {
+		t.Fatal(row)
+	}
+	if _, err := f.store.SQL().Exec(`UPDATE build_hosts SET enabled=0,last_seen_at='2026-01-01T00:00:00.000Z' WHERE id=?`, h.ID); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = s.CompatibilityRunners(f.ctx, owner)
+	if err != nil || snapshot.Hosts[0].Host.Enabled || snapshot.Hosts[0].Host.LastSeenAt == nil || len(snapshot.Hosts[0].Queue) != 40 {
+		t.Fatal(snapshot, err)
+	}
+	if _, err = s.CompatibilityRunners(f.ctx, agent); domain.KindOf(err) != domain.KindForbidden {
+		t.Fatal(err)
+	}
+}

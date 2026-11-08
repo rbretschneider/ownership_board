@@ -135,22 +135,44 @@ func (r buildJobRepo) AssignmentCount(ctx context.Context, hostID int64) (int, e
 	err := r.q.QueryRowContext(ctx, `SELECT count(*) FROM build_jobs WHERE host_id=? AND assignment_released_at IS NULL`, hostID).Scan(&n)
 	return n, err
 }
-func (r buildJobRepo) Candidate(ctx context.Context, h domain.BuildHost) (*domain.BuildJob, error) {
+
+const eligibleQueue = ` FROM build_jobs WHERE status='queued' AND target_os=? AND NOT EXISTS (
+ SELECT 1 FROM json_each(build_jobs.target,'$.required_capabilities') required
+ WHERE NOT EXISTS (SELECT 1 FROM json_each(?) allowed WHERE allowed.value=required.value)
+ ) ORDER BY created_at,id LIMIT ?`
+
+func (r buildJobRepo) QueuedForHost(ctx context.Context, h domain.BuildHost, limit int) ([]domain.BuildJob, error) {
+	if limit < 1 || limit > 40 {
+		return nil, domain.Invalidf("queue limit must be between 1 and 40")
+	}
 	caps, err := json.Marshal(h.Capabilities)
 	if err != nil {
 		return nil, err
 	}
-	j, err := scanJob(r.q.QueryRowContext(ctx, `SELECT `+jobColumns+` FROM build_jobs WHERE status='queued' AND target_os=? AND NOT EXISTS (
- SELECT 1 FROM json_each(build_jobs.target,'$.required_capabilities') required
- WHERE NOT EXISTS (SELECT 1 FROM json_each(?) allowed WHERE allowed.value=required.value)
- ) ORDER BY created_at,id LIMIT 1`, h.OS, string(caps)))
-	if domain.KindOf(err) == domain.KindNotFound {
-		return nil, nil
-	}
+	rows, err := r.q.QueryContext(ctx, `SELECT `+jobColumns+eligibleQueue, h.OS, string(caps), limit)
 	if err != nil {
 		return nil, err
 	}
-	return &j, nil
+	defer rows.Close()
+	out := []domain.BuildJob{}
+	for rows.Next() {
+		j, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, j)
+	}
+	return out, rows.Err()
+}
+func (r buildJobRepo) Candidate(ctx context.Context, h domain.BuildHost) (*domain.BuildJob, error) {
+	jobs, err := r.QueuedForHost(ctx, h, 1)
+	if err != nil {
+		return nil, err
+	}
+	if len(jobs) == 0 {
+		return nil, nil
+	}
+	return &jobs[0], nil
 }
 
 // CommitState returns publication order without loading retained job bodies.
