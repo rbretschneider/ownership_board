@@ -21,3 +21,5 @@ func (r repos) BuildHosts() app.BuildHostRepository { return buildHostRepo{q: r.
 func (r repos) BuildHostPairingCodes() app.BuildHostPairingCodeRepository {
 	return buildHostPairingCodeRepo{q: r.q}
 }
+
+func (r repos) BuildHostEvents() app.BuildHostEventRepository { return buildHostEventRepo{q: r.q} }

@@ -70,7 +70,7 @@ func build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*applic
 		UsageFile:    filepath.Join(cfg.DataDir, "account_usage.json"),
 		RunnersFile:  filepath.Join(cfg.DataDir, "windows_runners.json"),
 		PRStatusFile: filepath.Join(cfg.DataDir, "pr_status.json"),
-		BuildHosts:   app.NewBuildHostService(db, systemClock, logger),
+		BuildHosts:   app.NewBuildHostService(db, systemClock, logger, boardNotifier(cfg)),
 		Board:        services.Board, Agents: services.Agents, Repos: services.Repos,
 		Connections: connections.NewService(catalog, services.Repos, boardNotifier(cfg), connectionPolicy(cfg)),
 		Auth:        authService, OIDC: auth.NewOIDC(oidcConfig(cfg), authService),

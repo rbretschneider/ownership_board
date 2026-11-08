@@ -1,19 +1,24 @@
 package httpapi
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"strings"
 
+	"github.com/rbretschneider/ownership_board/internal/app"
 	"github.com/rbretschneider/ownership_board/internal/auth"
 	"github.com/rbretschneider/ownership_board/internal/domain"
 )
 
 // caller is who made a request: a person, an agent, or nobody.
 type caller struct {
+	host  app.AuthenticatedBuildHost
 	actor domain.Actor
 	// user is set for a person.
 	user auth.User
@@ -44,6 +49,7 @@ type router struct {
 	origin  string
 	logger  *slog.Logger
 	network network
+	hosts   *app.BuildHostService
 	writes  *writeLimiter
 }
 
@@ -174,4 +180,55 @@ func bearerToken(r *http.Request) (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(token), true
+}
+
+// machine routes use only explicit machine credentials and carry no cookie authority.
+func (rt *router) machinePublic(pattern string, fn handlerFunc) {
+	rt.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		if e := fn(w, r, caller{}); e != nil {
+			writeError(w, r, rt.logger, e)
+		}
+	})
+}
+func (rt *router) signedHost(pattern string, allowPending bool, fn handlerFunc) {
+	rt.machinePublic(pattern, func(w http.ResponseWriter, r *http.Request, _ caller) error {
+		method, path, _ := strings.Cut(pattern, " ")
+		if r.Method != method || r.URL.Path != path || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.RawPath != "" || r.URL.EscapedPath() != r.URL.Path {
+			return auth.ErrUnauthorized
+		}
+		values := []string{}
+		for _, k := range []string{"X-Build-Host", "X-Timestamp", "X-Signature"} {
+			v := r.Header.Values(k)
+			if len(v) != 1 || len(v[0]) == 0 || len(v[0]) > 128 {
+				return auth.ErrUnauthorized
+			}
+			values = append(values, v[0])
+		}
+		id, ok := auth.CanonicalHostInteger(values[0])
+		if !ok {
+			return auth.ErrUnauthorized
+		}
+		body, e := io.ReadAll(http.MaxBytesReader(w, r.Body, 96*1024))
+		if e != nil {
+			return domain.Invalidf("request body exceeds the size limit")
+		}
+		who, e := rt.hosts.AuthenticateHost(r.Context(), id, r.Method, r.URL.Path, values[1], values[2], body, allowPending)
+		if e != nil {
+			return e
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		return fn(w, r, caller{host: who})
+	})
+}
+
+// Reject signed-path aliases before ServeMux can redirect and normalize them.
+func rejectHostPathRedirects(next http.Handler, logger *slog.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		clean := path.Clean(r.URL.Path)
+		if (clean == "/api/v1/build-host/status" || clean == "/api/v1/build-host/heartbeat") && clean != r.URL.Path {
+			writeError(w, r, logger, auth.ErrUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

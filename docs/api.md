@@ -382,10 +382,123 @@ readback; persistence retains a SHA-256 digest and a 15-minute expiry.
 Issuance and actual host-management changes produce structured audit logs
 without codes, digests, keys, or self-reported facts.
 
-There is currently no host enrollment or code-redemption endpoint. Enrollment
-must eventually consume an unused, unexpired code and insert its pending host
-atomically. Host execution, heartbeats, and scheduling are separate features;
-`enabled` alone does not establish approval or eligibility for execution.
+Host responses additionally include `running_job_ids` (an array),
+`free_disk_bytes` (null until reported), and `online`. Connectivity is computed:
+an approved identity with a heartbeat less than 180 seconds old is online,
+including when disabled. Other identities and hosts never seen are offline.
+
+### Machine enrollment and reports
+
+Machine endpoints use a separate authentication path. Cookies and bearer tokens
+have no authority here, and these endpoints do not require browser Origin.
+Use a trusted transport: signatures do not encrypt enrollment codes or reports.
+
+| Method | Path | Authentication | Result |
+|--------|------|----------------|--------|
+| POST | `/api/v1/build-host/pair` | Pairing code in body | `201 {id, status: "pending"}` |
+| GET | `/api/v1/build-host/status` | Signature, pending or approved | `{id, status, enabled, capabilities, max_parallel, waiting_for_approval}` |
+| POST | `/api/v1/build-host/heartbeat` | Signature, approved | `{id, last_seen_at}` |
+
+Enrollment requires `{code, public_key, name, facts}`. The key is a canonical,
+padded standard-base64 Ed25519 public key (32 decoded bytes). Names use the
+registry's 200-character limit. A successful enrollment consumes the code and
+creates its identity in one transaction. Unknown, expired, used, and incorrectly
+formatted codes all return the same `401`. Duplicate public keys return `409`
+and leave the code available. Validation errors return `400` without consuming
+it. All lifecycle states reserve their public key permanently.
+
+Each client IP may make five enrollment attempts per minute, including failed
+attempts and successful enrollments. Excess attempts return `429` with
+`Retry-After`. Forwarded addresses follow the server's trusted-hop configuration.
+The limiter retains at most 4,096 active addresses and refuses new addresses
+while full. This limit applies independently of sign-in and agent write limits.
+
+A status request has no body. Pending identities receive
+`waiting_for_approval: true`. Polling does not update connectivity. Approval is
+read from storage on each request; revocation invalidates machine credentials.
+
+A heartbeat requires `{facts, running_job_ids, free_disk_bytes}`. Job IDs must be
+distinct positive int64 values, up to 128 entries; `[]` reports idle. Free disk
+is a nonnegative int64, measured on the host's chosen build volume. It is stored
+separately from the disk snapshot in facts. Reports replace telemetry and update
+the OS, architecture, and agent-version projections, with a server UTC timestamp
+at millisecond precision. They preserve owner settings, including capabilities.
+Disabled approved hosts can still report health. Job IDs are observations and
+do not authorize operations on those jobs.
+
+### Request signatures
+
+Send exactly one of each header:
+
+- `X-Build-Host`: positive decimal host ID, without signs or leading zeroes.
+- `X-Timestamp`: positive Unix seconds, in the same decimal encoding.
+- `X-Signature`: canonical padded standard base64 of the 64-byte signature.
+
+Sign these bytes with the enrolled private Ed25519 key, without a final newline:
+
+```text
+METHOD + "\n" + PATH + "\n" + TIMESTAMP + "\n" + lowercase_hex(SHA256(BODY))
+```
+
+Use the actual uppercase method and the literal endpoint path. Query strings,
+escaped path variants, and HEAD status requests are refused. BODY is the exact
+request body, including whitespace; an empty status body uses SHA-256 of zero
+bytes. The timestamp may differ from server Unix seconds by at most 300 seconds,
+in either direction. Missing or ambiguous headers, bad signatures, unknown hosts,
+and disallowed lifecycle states return the same `401`. Storage failures return
+`500`. Existing human and agent APIs do not accept machine signatures.
+
+There is no nonce or replay cache. An identical signed request can be accepted
+again while its timestamp remains fresh. Synchronize the host clock.
+
+### Machine facts
+
+New enrollments and heartbeats require every field below. Historical partial
+facts remain readable. Facts must occupy at most 65,536 UTF-8 bytes before
+compaction; the full machine body is limited to 96 KiB. JSON must contain one
+object, with exact field names, no duplicate keys (at any depth), no nulls, no
+unknown fixed-schema fields, and no trailing values. Integers must fit int64;
+metadata strings cannot contain control characters. Violations return `400`.
+
+| Fields | Type and limits |
+|--------|-----------------|
+| `os` | `windows`, `linux`, or `macos` |
+| `arch` | Lowercase token matching `^[a-z0-9][a-z0-9_-]{0,63}$` |
+| `os_version`, `cpu_model` | Strings, at most 256 and 512 characters respectively; may be empty |
+| `hostname`, `agent_version` | Nonempty strings, at most 255 and 64 characters |
+| `lan_ip` | IP literal without a zone, or empty when unavailable; never resolved or trusted |
+| `cores`, `threads` | Positive integers; threads must be at least cores |
+| `ram_bytes` | Nonnegative integer |
+| `disks` | Up to 128 `{mount, total, free, is_build_volume}` objects; unique nonempty mount up to 1,024 characters; nonnegative byte counts with free <= total; boolean build-volume flag |
+| `gpus` | Up to 32 `{name, driver, opengl_version}` objects; nonempty name; strings at most 256 characters; driver/version may be empty |
+| `toolchains` | Up to 64 tool-name/version entries; names match `^[a-z][a-z0-9_-]{0,31}$`; versions are nonempty strings up to 256 characters |
+| `interactive_session`, `build_user_is_admin` | Booleans |
+
+Disk and GPU arrays and the toolchain object may be empty. At enrollment,
+nonempty versions for `msvc`, `dotnet`, `cmake`, `ninja`, `gcc`, `clang`, `qt`,
+`xcode`, `python`, and `docker` suggest the matching capabilities. `gl` is
+suggested only with an interactive session and a GPU reporting desktop OpenGL
+3.3 or newer. Versions start with numeric major.minor and may have whitespace
+and vendor text afterward; OpenGL ES does not qualify. Suggestions are sorted
+and unique. Other tools and administrator privileges suggest nothing. The owner
+confirms or edits capabilities at approval; heartbeats never replace them.
+
+### Report history
+
+`GET /api/v1/build-hosts/{id}/events?after_id=0&limit=100` requires human
+authentication. `after_id` must be nonnegative; `limit` is 1–200, default 100.
+The response is an array ordered by ascending event ID, empty when no history
+exists; a missing host returns `404`. Each entry contains `id`, `host_id`,
+`event_type`, `data`, and `created_at`. A `toolchains_changed` event's data holds
+`before` and `after` version maps. JSON key order does not count as a change;
+missing toolchains in old facts count as an empty map. Reports and history
+commit together. History retention is not automatic.
+
+Each completed enrollment invokes the configured notifier once with fixed text
+requesting approval. Failed or repeated enrollment requests do not notify.
+Delivery failure is logged without machine metadata and does not undo enrollment.
+This is best-effort delivery, with no durable retry or crash-proof exactly-once
+guarantee.
 
 ## Delivery statistics (human only)
 

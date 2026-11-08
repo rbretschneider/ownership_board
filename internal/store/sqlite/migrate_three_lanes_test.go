@@ -66,7 +66,7 @@ func TestThreeLanesMigrationRoundTrip(t *testing.T) {
 			t.Fatal("migration changed other ticket fields")
 		}
 	}
-	if err := migrator.Up(); err != nil {
+	if err := migrator.Migrate(14); err != nil {
 		t.Fatal(err)
 	}
 	check("in_progress")
@@ -74,11 +74,11 @@ func TestThreeLanesMigrationRoundTrip(t *testing.T) {
 	if err := db.QueryRow(`SELECT count(*) FROM tickets WHERE lane='review'`).Scan(&retired); err != nil || retired != 0 {
 		t.Fatalf("retired lanes: %d %v", retired, err)
 	}
-	if err := migrator.Steps(-1); err != nil {
+	if err := migrator.Migrate(13); err != nil {
 		t.Fatal(err)
 	}
 	check("review")
-	if err := migrator.Up(); err != nil {
+	if err := migrator.Migrate(14); err != nil {
 		t.Fatal(err)
 	}
 	check("in_progress")

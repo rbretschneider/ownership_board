@@ -14,16 +14,17 @@ import (
 )
 
 type BuildHostService struct {
-	store  Store
-	clock  Clock
-	logger *slog.Logger
+	store    Store
+	clock    Clock
+	logger   *slog.Logger
+	notifier Notifier
 }
 
-func NewBuildHostService(store Store, clock Clock, logger *slog.Logger) *BuildHostService {
+func NewBuildHostService(store Store, clock Clock, logger *slog.Logger, notifier Notifier) *BuildHostService {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &BuildHostService{store: store, clock: clock, logger: logger}
+	return &BuildHostService{store: store, clock: clock, logger: logger, notifier: notifier}
 }
 
 // PairingCodeIssue holds plaintext only until the API response is written.
