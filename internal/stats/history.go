@@ -46,10 +46,10 @@ func histories(tickets []domain.Ticket, timeline []domain.TimelineEntry) []histo
 	return out
 }
 
-// MergedAt is when the ticket last reached done.
+// MergedAt is when the ticket last moved from active work to a completed stage.
 func (h history) MergedAt() (time.Time, bool) {
 	for i := len(h.Changes) - 1; i >= 0; i-- {
-		if h.Changes[i].To == domain.StageDone {
+		if !h.Changes[i].From.IsCompleted() && h.Changes[i].To.IsCompleted() {
 			return h.Changes[i].At, true
 		}
 	}

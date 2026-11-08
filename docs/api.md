@@ -135,7 +135,7 @@ while it would leave a dependency across repos. Relations
 | POST | `/api/v1/agent/tickets/{id}/heartbeat` | `{lease_minutes?}` | `TicketDetail` |
 | POST | `/api/v1/agent/tickets/{id}/release` | | `TicketDetail` |
 | GET  | `/api/v1/agent/tickets/{id}/brief` | | the brief, as `text/markdown` |
-| POST | `/api/v1/agent/tickets/{id}/pr-state` | `{state: "merged"\|"closed"\|"open", note?}` | `TicketDetail`. Needs no lease. |
+| POST | `/api/v1/agent/tickets/{id}/pr-state` | `{state: "merged"\|"closed"\|"open"\|"repair", note?}` | `TicketDetail`. Needs no lease. |
 | POST | `/mcp` | JSON-RPC | MCP streamable HTTP (tools listed in [agents.md](agents.md)) |
 
 `wait_seconds` (0 to 600) long-polls: the request stays open until a card
@@ -146,7 +146,7 @@ without a repo.
 
 A claim takes tickets in this order: stage `build`, `design`, `refine`, then
 `ready`. It never returns a ticket with open questions, a blocked ticket, or
-a ticket in `spec_review`, `design_review`, `pr` or `done`, and never a
+a ticket in `spec_review`, `design_review`, `pr`, `done` or `deployed`, and never a
 ticket whose `waiting_on` is not empty. While as many autonomous tickets as
 `autonomous_in_flight_cap` allows are in `design` or `build`, it takes no
 autonomous ticket from `ready` (other tickets still come through). Claiming
@@ -155,13 +155,15 @@ from `ready` moves the ticket to `design`.
 Filing an autonomous ticket answers `409` once the same token has filed 50 in
 the last hour.
 
-When `pr-state` `merged` (or a person's move) brings a ticket to `done`, every
-ticket that waited only on it gets a `dependencies_met` timeline entry by the
-same actor and is claimable from the next claim on.
+When a PR report or a person's move takes active work into `done` or
+`deployed`, every ticket that waited only on it gets a `dependencies_met`
+timeline entry by the same actor and is claimable from the next claim on.
 
 `pr-state` acts only on a ticket in stage `pr` that has a `pr_url`, otherwise
-`409`. `merged` moves it to `merged` / `done`. `closed` moves it to
-`in_progress` / `build` and blocks it with the reason "The pull request was
+`409`. `merged` moves it to `deployed` / `deployed` when its repository
+uses `deploy_mode: "off"` (the default) or it has no repository. With
+`deploy_mode: "agent"`, it moves to `merged` / `done` awaiting deployment.
+`closed` moves it to `in_progress` / `build` and blocks it with the reason "The pull request was
 closed without merging", so a person decides what happens next. `open`
 changes nothing. People get `403`: they move tickets by dragging. `repair` returns a PR-stage
 ticket to `in_progress` / `build` without a block and requires evidence.
@@ -169,12 +171,13 @@ ticket to `in_progress` / `build` without a block and requires evidence.
 ## Types
 
 ```ts
-type LaneId = "todo" | "in_progress" | "merged";
+type LaneId = "todo" | "in_progress" | "merged" | "deployed";
 type StageId =
   | "refine" | "spec_review" | "ready"      // todo
   | "design" | "design_review" | "build"    // in_progress
   | "pr"                                     // in_progress
-  | "done";                                  // merged
+  | "done"                                   // merged
+  | "deployed";                              // deployed
 type Owner = "agent" | "human" | "nobody";
 type Kind = "story" | "bug";
 
@@ -190,6 +193,7 @@ type Board = { lanes: Lane[]; stages: Stage[]; repos: Repo[]; tickets: TicketSum
 type Provider = "github" | "bitbucket" | "forgejo" | "manual";
 type Repo = {
   id: number; provider: Provider;
+  deploy_mode: "off" | "agent"; // human-controlled, default off
   full_name: string;       // "acme/api"
   name: string;            // "api"
   url: string; description: string; color: string; default_branch: string;
@@ -216,7 +220,7 @@ type TicketSummary = {
   spec_revision: number; design_revision: number;
   pr_url: string; branch: string;
   open_questions: number;
-  waiting_on: number[];      // depends_on targets not merged yet; [] when none
+  waiting_on: number[];      // depends_on targets outside done and deployed; [] when none
   lease: Lease | null;
   created_at: string; updated_at: string; lane_changed_at: string;
   attempts: StageAttempts;
@@ -299,7 +303,7 @@ type TimelineType =
 // questions/answers: data {round, count};
 // claimed: data {action}; edited: data {fields: string[]};
 // dependencies_met: data {ticket_id, merged_by_kind}, by the actor that
-// merged ticket_id, the last ticket this one depended on
+// completed ticket_id, the last ticket this one depended on
 
 type Token = {
   id: number; name: string; prefix: string;
@@ -624,3 +628,30 @@ referenced payloads and refuses missing or corrupt files. Nothing prunes failed
 uploads or published bundles; operators manage retention externally. SQLite
 backups alone do not contain bundle payloads. Back up the data volume to preserve
 both. Uploads retain the server's existing read timeout.
+
+## Repository deployment policy
+
+Repository objects expose `deploy_mode` through existing reads, including
+board and work responses and MCP `list_repos`. To change it, a person sends
+`PATCH /api/v1/repos/{id}` with `{"deploy_mode":"off"}` or
+`{"deploy_mode":"agent"}` using the same authentication and Origin checks as
+other repository settings. Agent tokens receive `403` before any fields are
+changed, including mixed-field requests. Unknown values, an empty string, or
+non-string values receive `400` and leave the repository unchanged. Omitting
+the field or supplying `null` leaves its value alone. Repository creation
+uses `off`; provider synchronization preserves the owner's policy.
+
+The policy affects future merged-PR reports only. A human cross-lane move to
+Deployed sets stage `deployed` and records `Marked deployed by <name>` in the
+stage entry, alongside its actor fields. Moving to Merged selects `done`,
+even on an `off` repository. Reordering within a lane keeps the stage and
+adds no deployment entry. Deployed is not claimable or an agent work stage.
+The stage catalog's `done` label remains Merged; clients derive Awaiting deploy
+when the associated repository's mode is `agent`.
+
+Dependencies are satisfied by either `done` or `deployed`. Completion metrics
+retain their existing `merged` field names and count either terminal state.
+A move between those states does not reset lead/cycle time or throughput
+windows and does not repeat dependency release or health-check scheduling.
+The schema upgrade converts existing Merged/Done tickets to Deployed without
+rewriting history; downgrade collapses deployment state back to Merged/Done.

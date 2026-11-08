@@ -17,10 +17,10 @@ func TestThreeLaneCatalog(t *testing.T) {
 			t.Errorf("description: %s", lane.Description)
 		}
 	}
-	if !reflect.DeepEqual(ids, []domain.Lane{domain.LaneTodo, domain.LaneInProgress, domain.LaneMerged}) {
+	if !reflect.DeepEqual(ids, []domain.Lane{domain.LaneTodo, domain.LaneInProgress, domain.LaneMerged, domain.Lane("deployed")}) {
 		t.Fatalf("lanes: %v", ids)
 	}
-	if !reflect.DeepEqual(labels, []string{"Todo", "In progress", "Merged"}) {
+	if !reflect.DeepEqual(labels, []string{"Todo", "In progress", "Merged", "Deployed"}) {
 		t.Fatalf("labels: %v", labels)
 	}
 	if _, err := domain.ParseLane("review"); err == nil {

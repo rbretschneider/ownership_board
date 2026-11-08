@@ -231,7 +231,7 @@ func instructionsFor(input BriefInput) string {
 func (r *briefRenderer) facts(input BriefInput) {
 	ticket := input.Detail.Ticket
 	visibility := visibilityOf(input.Repo, input.Now)
-	fmt.Fprintf(&r.b, "- Ticket id: %d\n- Kind: %s\n- Lane: %s (%s), stage %s (%s)\n", ticket.ID, ticket.Kind, ticket.Lane.Label(), ticket.Lane, ticket.Stage.Label(), ticket.Stage)
+	fmt.Fprintf(&r.b, "- Ticket id: %d\n- Kind: %s\n- Lane: %s (%s), stage %s (%s)\n", ticket.ID, ticket.Kind, ticket.Lane.Label(), ticket.Lane, ticket.Stage.LabelForRepo(input.Repo), ticket.Stage)
 	r.revisionFacts(ticket)
 	r.dependencyFacts(input.Detail.Related)
 	r.repoFact(input.Repo, visibility)
@@ -269,6 +269,8 @@ func (r *briefRenderer) dependencyFacts(related []RelatedTicket) {
 		state := "waiting"
 		if item.Other.Lane == domain.LaneMerged {
 			state = "merged"
+		} else if item.Other.Lane == domain.LaneDeployed {
+			state = "deployed"
 		}
 		dependsOn = append(dependsOn, fmt.Sprintf("#%d (%s)", item.Other.ID, state))
 	}

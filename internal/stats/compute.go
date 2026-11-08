@@ -94,7 +94,7 @@ func (c *RepoCounts) add(h history, w Window) {
 	if opened, isOpened := h.ReviewOpenedAt(); isOpened && w.Contains(opened) {
 		c.PRsOpened++
 	}
-	if h.Ticket.Stage != domain.StageDone {
+	if !h.Ticket.Stage.IsCompleted() {
 		c.Open++
 	}
 }

@@ -13,21 +13,34 @@ import (
 
 func TestBuildJobsMigrationPreservesHosts(t *testing.T) {
 	db, m := migratorAt(t, filepath.Join(t.TempDir(), "upgrade.db"))
-	if e := m.Migrate(15); e != nil {
+	if e := m.Migrate(16); e != nil {
 		t.Fatal(e)
 	}
 	if _, e := db.Exec(`INSERT INTO build_hosts(name,os,arch,public_key,created_at,running_job_ids,free_disk_bytes) VALUES('Builder','linux','amd64','key','2026-01-01T00:00:00.000Z','[1,42]',100)`); e != nil {
 		t.Fatal(e)
 	}
+	if _, e := db.Exec(`INSERT INTO repos(provider,full_name,created_at,deploy_mode) VALUES('manual','acme/api','2026-01-01T00:00:00.000Z','agent')`); e != nil {
+		t.Fatal(e)
+	}
 	before := dumpTable(t, db, "build_hosts")
-	if e := m.Migrate(16); e != nil {
+	reposBefore := dumpTable(t, db, "repos")
+	if e := m.Migrate(18); e != nil {
 		t.Fatal(e)
 	}
 	if !reflect.DeepEqual(before, dumpTable(t, db, "build_hosts")) {
 		t.Fatal("upgrade changed hosts")
 	}
-	if e := m.Migrate(15); e != nil {
+	for _, name := range []string{"build_jobs", "build_job_uploads", "build_jobs_active_assignments", "build_jobs_commit_history"} {
+		var count int
+		if e := db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE name=?`, name).Scan(&count); e != nil || count != 1 {
+			t.Fatalf("missing queue schema %s: count=%d, err=%v", name, count, e)
+		}
+	}
+	if e := m.Migrate(16); e != nil {
 		t.Fatal(e)
+	}
+	if !reflect.DeepEqual(reposBefore, dumpTable(t, db, "repos")) {
+		t.Fatal("queue round trip changed repository deployment settings")
 	}
 	if !reflect.DeepEqual(before, dumpTable(t, db, "build_hosts")) {
 		t.Fatal("downgrade changed hosts")

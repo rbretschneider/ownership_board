@@ -14,6 +14,7 @@ const (
 	StageBuild        Stage = "build"
 	StagePR           Stage = "pr"
 	StageDone         Stage = "done"
+	StageDeployed     Stage = "deployed"
 )
 
 // StageInfo describes a stage for display and for agents.
@@ -34,6 +35,7 @@ var stageCatalog = []StageInfo{
 	{StageBuild, LaneInProgress, "Making it happen", false},
 	{StagePR, LaneInProgress, "PR open", true},
 	{StageDone, LaneMerged, "Merged", false},
+	{StageDeployed, LaneDeployed, "Deployed", false},
 }
 
 // Stages returns every stage in workflow order.
@@ -94,4 +96,15 @@ func stageInfo(s Stage) (StageInfo, bool) {
 		}
 	}
 	return StageInfo{}, false
+}
+
+// IsCompleted reports merge-level completion, including work awaiting deployment.
+func (s Stage) IsCompleted() bool { return s == StageDone || s == StageDeployed }
+
+// LabelForRepo describes a stage in the repository's release process.
+func (s Stage) LabelForRepo(repo *Repo) string {
+	if s == StageDone && repo != nil && repo.DeployMode == DeployModeAgent {
+		return "Awaiting deploy"
+	}
+	return s.Label()
 }

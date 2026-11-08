@@ -10,7 +10,7 @@ import (
 type TicketSummary struct {
 	Ticket        domain.Ticket
 	OpenQuestions int
-	// WaitingOn lists the tickets this one depends on that are not merged
+	// WaitingOn lists the tickets this one depends on that are not completed
 	// yet; agents cannot claim it while any are.
 	WaitingOn []int64
 	// Attempts counts passes through build, test, review and PR, derived

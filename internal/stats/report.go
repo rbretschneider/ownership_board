@@ -22,9 +22,9 @@ type Report struct {
 // Segment holds the metrics for one group of tickets. Counts named "in the
 // window" use the report's window; WIP, Blocked and NeedsOwner are as of now.
 type Segment struct {
-	// MergedRecent counts tickets that reached done in the last 24 hours.
+	// MergedRecent counts tickets that reached Done or Deployed in the last 24 hours.
 	MergedRecent int `json:"merged_24h"`
-	// Merged counts tickets that reached done in the window.
+	// Merged counts tickets that reached Done or Deployed in the window.
 	Merged int `json:"merged"`
 	// PRsOpened counts tickets that first reached review in the window.
 	PRsOpened int `json:"prs_opened"`

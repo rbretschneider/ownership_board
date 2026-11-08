@@ -34,6 +34,8 @@ type Repo struct {
 	// green and no review asks for changes. Off by default; only a person
 	// can turn it on, per repo.
 	AllowAgentMerge bool
+	// DeployMode is a person-controlled policy preserved across provider refreshes.
+	DeployMode DeployMode
 	// Merge sequences order ordinary completions independently of ticket IDs.
 	MergeSequence                     int64
 	HealthCheckedThroughMergeSequence int64
@@ -96,6 +98,7 @@ type ManualRepoDraft struct {
 
 // RepoStyle is what a person may change on any repo, synced or not.
 type RepoStyle struct {
+	DeployMode    *DeployMode
 	Color         *string
 	Description   *string
 	TreatAsPublic *bool
@@ -135,7 +138,7 @@ func NewManualRepo(draft ManualRepoDraft, now time.Time) (Repo, error) {
 
 // NewSyncedRepo validates a provider listing as a new repo.
 func NewSyncedRepo(listing RepoListing, now time.Time) (Repo, error) {
-	repo := Repo{Provider: listing.Provider, CreatedAt: now, RequireSpecApproval: true, HealthCheckEvery: DefaultHealthCheckEvery}
+	repo := Repo{DeployMode: DeployModeOff, Provider: listing.Provider, CreatedAt: now, RequireSpecApproval: true, HealthCheckEvery: DefaultHealthCheckEvery}
 	if err := repo.Refresh(listing, now); err != nil {
 		return Repo{}, err
 	}
@@ -184,6 +187,14 @@ func (r Repo) IsMissing() bool {
 
 // Restyle applies a person's display changes.
 func (r *Repo) Restyle(style RepoStyle) error {
+	if style.DeployMode != nil {
+		mode, err := ParseDeployMode(string(*style.DeployMode))
+		if err != nil {
+			return err
+		}
+		r.DeployMode = mode
+	}
+
 	if style.Color != nil {
 		color, err := parseColor(*style.Color)
 		if err != nil {
@@ -219,9 +230,9 @@ func (r *Repo) Restyle(style RepoStyle) error {
 	return nil
 }
 
-// ChangesGates reports whether style changes a checkpoint setting.
+// ChangesGates reports whether style changes a checkpoint or deployment setting.
 func (style RepoStyle) ChangesGates() bool {
-	return style.RequireSpecApproval != nil || style.RequireDesignApproval != nil || style.AllowAgentMerge != nil
+	return style.DeployMode != nil || style.RequireSpecApproval != nil || style.RequireDesignApproval != nil || style.AllowAgentMerge != nil
 }
 
 // ChangesHealthCheck reports whether style changes the health check interval.
@@ -257,4 +268,22 @@ func parseColor(raw string) (string, error) {
 		return "", Invalidf("color must look like #7c8cff")
 	}
 	return strings.ToLower(color), nil
+}
+
+// DeployMode controls whether merged work waits for deployment.
+type DeployMode string
+
+const (
+	DeployModeOff   DeployMode = "off"
+	DeployModeAgent DeployMode = "agent"
+)
+
+// ParseDeployMode validates the supported repository deployment policies.
+func ParseDeployMode(raw string) (DeployMode, error) {
+	switch DeployMode(raw) {
+	case DeployModeOff, DeployModeAgent:
+		return DeployMode(raw), nil
+	default:
+		return "", Invalidf("deploy_mode must be off or agent")
+	}
 }

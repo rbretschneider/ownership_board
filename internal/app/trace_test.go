@@ -398,7 +398,7 @@ func (f *fixture) inReview(title string) int64 {
 	return id
 }
 
-func TestMergedPullRequestMovesReviewToMerged(t *testing.T) {
+func TestMergedPullRequestCompletesDefaultRepository(t *testing.T) {
 	f := newFixture(t)
 	id := f.inReview("ship it")
 	if _, err := f.board.ReportPullRequest(f.ctx, agent, id, app.PullRequestOpen, ""); err != nil {
@@ -408,7 +408,7 @@ func TestMergedPullRequestMovesReviewToMerged(t *testing.T) {
 	if _, err := f.board.ReportPullRequest(f.ctx, agent, id, app.PullRequestMerged, "merged as abc1234"); err != nil {
 		t.Fatalf("merged: %v", err)
 	}
-	f.requireLane(id, domain.LaneMerged)
+	f.requireLane(id, domain.LaneDeployed)
 }
 
 func TestClosedPullRequestSendsTicketBack(t *testing.T) {

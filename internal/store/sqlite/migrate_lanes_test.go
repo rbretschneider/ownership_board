@@ -56,7 +56,7 @@ func TestLanesMigrationMapsEveryOldLane(t *testing.T) {
 	insertOldTicket(t, db, "in_progress", 1, "spec")
 	insertOldTicket(t, db, "review", 1, "spec")
 	insertOldTicket(t, db, "done", 1, "spec")
-	if err := migrator.Up(); err != nil {
+	if err := migrator.Migrate(14); err != nil {
 		t.Fatalf("migrate up: %v", err)
 	}
 	want := map[string][2]string{
@@ -100,7 +100,7 @@ func TestLanesMigrationRefusesUnknownLanes(t *testing.T) {
 		t.Fatalf("migrate to 4: %v", err)
 	}
 	insertOldTicket(t, db, "backlog", 1, "")
-	if err := migrator.Up(); err == nil {
+	if err := migrator.Migrate(14); err == nil {
 		t.Fatal("the migration accepted a lane it does not know")
 	}
 	var lane string

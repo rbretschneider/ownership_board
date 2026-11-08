@@ -111,7 +111,7 @@ func (t listRepos) Call(ctx context.Context, _ domain.Actor, raw json.RawMessage
 		if repo.IsArchived {
 			archived = " [archived]"
 		}
-		fmt.Fprintf(&b, "- repo_id %d: %s (%s)%s %s\n", repo.ID, repo.FullName, repo.Provider, archived, repo.Description)
+		fmt.Fprintf(&b, "- repo_id %d: %s (%s)%s deploy_mode=%s %s\n", repo.ID, repo.FullName, repo.Provider, archived, repo.DeployMode, repo.Description)
 	}
 	return b.String(), nil
 }
@@ -458,7 +458,7 @@ func (t createAutonomousTicket) Call(ctx context.Context, actor domain.Actor, ra
 func dependsOnProp() map[string]any {
 	return map[string]any{
 		"type": "array", "items": map[string]any{"type": "integer"}, "maxItems": domain.MaxDependencies,
-		"description": "Ids of tickets in the same repo that must be merged before agents can claim the new one. " +
+		"description": "Ids of tickets in the same repo that must reach done or deployed before agents can claim the new one. " +
 			"An unknown id, or one in another repo, refuses the whole call and nothing is filed.",
 	}
 }

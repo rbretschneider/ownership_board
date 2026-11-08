@@ -157,7 +157,7 @@ func DependencyStall(edges map[int64][]int64, tickets map[int64]Ticket, from, to
 }
 
 // lowestReachable walks next from start, start included, through tickets
-// that are not merged, and returns the lowest id that matches.
+// that are not completed, and returns the lowest id that matches.
 func lowestReachable(next map[int64][]int64, tickets map[int64]Ticket, start int64, matches func(Ticket) bool) (int64, bool) {
 	var lowest int64
 	isFound := false
@@ -167,7 +167,7 @@ func lowestReachable(next map[int64][]int64, tickets map[int64]Ticket, start int
 		current := queue[0]
 		queue = queue[1:]
 		ticket, isKnown := tickets[current]
-		if !isKnown || ticket.Stage == StageDone {
+		if !isKnown || ticket.Stage.IsCompleted() {
 			continue
 		}
 		if matches(ticket) && (!isFound || current < lowest) {

@@ -41,8 +41,8 @@ func TestEveryStageBelongsToALane(t *testing.T) {
 	for _, lane := range domain.Lanes() {
 		lanes[lane.ID] = true
 	}
-	if len(lanes) != 3 {
-		t.Fatalf("got %d lanes, want 3", len(lanes))
+	if len(lanes) != 4 {
+		t.Fatalf("got %d lanes, want 4", len(lanes))
 	}
 	for _, stage := range domain.Stages() {
 		if !lanes[stage.Lane] {

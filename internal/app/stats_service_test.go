@@ -38,7 +38,7 @@ func TestStatsHealthCountsLatestDirectOpenFollowUpsWithoutMutation(t *testing.T)
 	}
 	done := f.ticket("closed", repo.ID)
 	link(done, domain.RelationFollowUpOf, latest.ID)
-	f.move(owner, done, domain.LaneMerged, nil)
+	f.move(owner, done, domain.LaneDeployed, nil)
 	link(f.ticket("old follow up", repo.ID), domain.RelationFollowUpOf, old.ID)
 	link(f.ticket("other kind", repo.ID), domain.RelationRelatesTo, latest.ID)
 	link(latest.ID, domain.RelationFollowUpOf, f.ticket("reverse", repo.ID))

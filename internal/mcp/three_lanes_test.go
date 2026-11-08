@@ -12,7 +12,7 @@ func TestLaneSchemasAndInstructions(t *testing.T) {
 		want []string
 	}{
 		{moveTicket{}, []string{"in_progress"}},
-		{listTickets{}, []string{"todo", "in_progress", "merged"}},
+		{listTickets{}, []string{"todo", "in_progress", "merged", "deployed"}},
 	} {
 		def := tc.tool.Definition()
 		got := def.InputSchema["properties"].(map[string]any)["lane"].(map[string]any)["enum"]
@@ -20,7 +20,7 @@ func TestLaneSchemasAndInstructions(t *testing.T) {
 			t.Errorf("%s lanes: %v", def.Name, got)
 		}
 	}
-	if !strings.Contains(serverInstructions, "todo -> in_progress (design, build, PR open) -> merged") || strings.Contains(serverInstructions, "-> review") {
+	if !strings.Contains(serverInstructions, "todo -> in_progress (design, build, PR open) -> merged -> deployed") || strings.Contains(serverInstructions, "-> review") {
 		t.Fatal(serverInstructions)
 	}
 }

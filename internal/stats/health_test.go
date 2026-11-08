@@ -23,7 +23,7 @@ func TestHealthProgressUsesEligibleTickets(t *testing.T) {
 			b.input.Repos = []domain.Repo{{ID: 1, FullName: "acme/app", HealthCheckEvery: tc.every, HealthCheckedThroughMergeSequence: tc.checkpoint, MergeSequence: 99, HealthCheckedAt: &now, HealthCheckedThroughTicket: ptr(int64(2))}, {ID: 2, FullName: "acme/idle", HealthCheckEvery: 8}}
 			b.input.Tickets = []domain.Ticket{
 				{ID: 1, RepoID: 1, Stage: domain.StageDone, HealthCheckMergeSequence: 2},
-				{ID: 2, RepoID: 1, Stage: domain.StageDone, HealthCheckMergeSequence: 5},
+				{ID: 2, RepoID: 1, Stage: domain.StageDeployed, HealthCheckMergeSequence: 5},
 				{ID: 3, RepoID: 1, Stage: domain.StageDone, HealthCheckMergeSequence: 9},
 				{ID: 4, RepoID: 1, Stage: domain.StageReady, HealthCheckMergeSequence: 10},
 				{ID: 5, RepoID: 1, Stage: domain.StageDone, CreatedAt: now.Add(time.Hour)},
