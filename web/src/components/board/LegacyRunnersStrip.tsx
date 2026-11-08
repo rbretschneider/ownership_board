@@ -36,6 +36,7 @@ function SlotChip({ slot, now }: { slot: RunnerSlot; now: number }) {
  */
 export function LegacyRunnersStrip() {
   const { snapshot, now } = useRunners();
+  if (snapshot.hosts !== undefined) return null;
   const state = hostState(snapshot, now);
   if (state === "unknown") return null;
   const slots = Math.max(snapshot.parallel_builds, ...snapshot.slots.map((s) => s.slot), 0);

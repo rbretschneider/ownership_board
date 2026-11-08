@@ -45,7 +45,7 @@ export function BuildHostsSection() {
   const rows = (values: BuildHost[]) =>
     values.map((h) => <BuildHostRow key={h.id} host={h} onMutate={mutate} onRevoke={() => setRevoke(h)} />);
   return (
-    <section className="settings-section build-hosts" aria-label="Build hosts">
+    <section id="build-hosts" tabIndex={-1} className="settings-section build-hosts" aria-label="Build hosts">
       <h2 className="settings-section__title">Build hosts</h2>
       <button
         type="button"

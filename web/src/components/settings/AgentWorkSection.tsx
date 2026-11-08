@@ -1,13 +1,20 @@
-import {useEffect, useId, useRef, useState} from "react";
+import {useCallback, useEffect, useId, useRef, useState} from "react";
 import {Minus, Plus} from "lucide-react";
 import {useApi} from "../../api/ApiContext";
 import type {BoardSettings} from "../../api/types";
 import {ErrorState} from "../common/ErrorState";
+import {useVisiblePolling} from "../../hooks/useVisiblePolling";
+import {LoadingState} from "../common/LoadingState";
 import {useToast} from "../toast/ToastContext";
 
 type AccountField = "codex_workers" | "claude_workers" | "codex_weekly_limit" | "claude_weekly_limit";
 export function AgentWorkSection() {
  const api=useApi(), toast=useToast(), id=useId();
+ const loadHosts=useCallback(()=>api.registeredRunners(),[api]);
+ const hosts=useVisiblePolling(loadHosts);
+ const online=hosts.value?.hosts.filter(h=>h.online)??[];
+ const capacity=online.reduce((sum,h)=>sum+(h.enabled?h.max_parallel:0),0);
+ const stale=hosts.value!==null&&(hosts.error!==null||hosts.now-hosts.receivedAt>15000);
  const [settings,setSettings]=useState<BoardSettings|null>(null);
  const [error,setError]=useState<string|null>(null);
  const [busy,setBusy]=useState(false);
@@ -15,7 +22,7 @@ export function AgentWorkSection() {
  const desired=useRef<Partial<BoardSettings>>({});
  const latest=useRef<BoardSettings|null>(null);
  const saving=useRef(false);
- const normalize=(s:BoardSettings):BoardSettings=>({...s,windows_parallel_builds:s.windows_parallel_builds??3,windows_parallel_build_limit:s.windows_parallel_build_limit??6,claude_workers:s.claude_workers??0,claude_worker_limit:s.claude_worker_limit??6,codex_weekly_limit:s.codex_weekly_limit??100,claude_weekly_limit:s.claude_weekly_limit??100});
+ const normalize=(s:BoardSettings):BoardSettings=>({...s,claude_workers:s.claude_workers??0,claude_worker_limit:s.claude_worker_limit??6,codex_weekly_limit:s.codex_weekly_limit??100,claude_weekly_limit:s.claude_weekly_limit??100});
  useEffect(()=>{let active=true; void api.settings().then(s=>{if(active){confirmed.current=normalize(s);latest.current=confirmed.current;setSettings(confirmed.current);}},e=>{if(active)setError(String(e));});return()=>{active=false;};},[api]);
  const change=async (patch:Partial<BoardSettings>)=>{
   if(!confirmed.current)return;
@@ -50,19 +57,14 @@ export function AgentWorkSection() {
  };
  return <section className="settings-section" aria-labelledby={`${id}-title`}>
   <h2 id={`${id}-title`} className="settings-section__title">Agent work</h2>
+  <div className="field">
+   <a href="#/settings?section=build-hosts">Build hosts</a>
+   {hosts.value===null&&!hosts.error&&<LoadingState label="Loading build hosts"/>}
+   {hosts.error&&<ErrorState message={hosts.error} onRetry={hosts.refresh}/>}
+   {hosts.value&&<p className="muted small" role="status">{hosts.value.hosts.length===0?"No approved build hosts":`${online.length} ${online.length===1?"host":"hosts"} online · ${capacity} ${capacity===1?"build":"builds"} at once`}{stale?" · Status reading is stale":""}</p>}
+  </div>
   {error&&<ErrorState message={error} onRetry={()=>window.location.reload()}/>}
   {settings&&<div className="field">
-   <label className="switch"><input type="checkbox" role="switch" className="switch__input" checked={settings.windows_runner_enabled} disabled={busy} onChange={e=>void change({windows_runner_enabled:e.target.checked})}/><span className="switch__track" aria-hidden="true"/><span className="switch__label">Enable Windows runner</span></label>
-   <p className="muted small">Allow Windows checks for every repository. Turning this off stops Windows builds and holds queued work. Builds run hidden at low priority. The shared CPU throttle is removed; use this switch to reclaim resources.</p>
-   <div className="account-work">
-    <div><label className="field__label" htmlFor={`${id}-windows-builds`}>Parallel Windows builds</label>
-     <div className="worker-stepper">
-      <button type="button" className="button button--secondary" aria-label="Fewer Windows builds" disabled={settings.windows_parallel_builds===1} onClick={()=>void change({windows_parallel_builds:Math.max(1,(latest.current?.windows_parallel_builds??settings.windows_parallel_builds)-1)})}><Minus size={18}/></button>
-      <input id={`${id}-windows-builds`} className="input" type="number" min={1} max={settings.windows_parallel_build_limit} step={1} value={settings.windows_parallel_builds} onChange={e=>{const n=Number(e.target.value);if(e.target.value!==""&&Number.isInteger(n))void change({windows_parallel_builds:Math.max(1,Math.min(settings.windows_parallel_build_limit,n))});}}/>
-      <button type="button" className="button button--secondary" aria-label="More Windows builds" disabled={settings.windows_parallel_builds>=settings.windows_parallel_build_limit} onClick={()=>void change({windows_parallel_builds:Math.min(settings.windows_parallel_build_limit,(latest.current?.windows_parallel_builds??settings.windows_parallel_builds)+1)})}><Plus size={18}/></button>
-     </div>
-    </div><p className="muted small">Up to {settings.windows_parallel_builds} builds at once. Lowering the count lets active builds finish. Desktop tests run one at a time to avoid focus conflicts.</p>
-   </div>
    {(["codex","claude"] as const).map(provider=>{
     const label=provider==="codex"?"Codex":"Claude";
     const field=`${provider}_workers` as const, cap=`${provider}_weekly_limit` as const;

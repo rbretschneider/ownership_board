@@ -26,6 +26,14 @@ export function SettingsPage({ route, status, onSignedOut, onChanged }: Settings
   const isJustLinked = route.params.get("linked") === "1";
   const hasReportedLink = useRef(false);
 
+  const section = route.params.get("section");
+  useEffect(() => {
+    if (section !== "build-hosts") return;
+    const target = document.getElementById("build-hosts");
+    target?.scrollIntoView({block: "start"});
+    target?.focus({preventScroll: true});
+  }, [section]);
+
   // The OIDC link flow lands on #/settings?linked=1: confirm once, then tidy the URL.
   useEffect(() => {
     if (isJustLinked && !hasReportedLink.current) {

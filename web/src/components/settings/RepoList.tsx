@@ -4,6 +4,7 @@ import { PROVIDER_LABELS, repoColor } from "../../lib/repos";
 import { ProviderGlyph } from "../repos/ProviderGlyph";
 import { RepoColorPicker } from "./RepoColorPicker";
 import { RepoGateToggles } from "./RepoGateToggles";
+import { RepoBuildTargetsField } from "./RepoBuildTargetsField";
 import { RepoHealthCheckField } from "./RepoHealthCheckField";
 import { RepoVisibilityToggle } from "./RepoVisibilityToggle";
 
@@ -52,6 +53,7 @@ export function RepoList({ repos, onUpdated }: { repos: Repo[]; onUpdated: (repo
               <RepoVisibilityToggle repo={repo} onUpdated={onUpdated} />
               <RepoGateToggles repo={repo} onUpdated={onUpdated} />
               <RepoHealthCheckField repo={repo} onUpdated={onUpdated} />
+              <RepoBuildTargetsField repo={repo} onUpdated={onUpdated} />
             </div>
             {editingId === repo.id && (
               <RepoColorPicker
