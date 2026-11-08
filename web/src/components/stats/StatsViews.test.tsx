@@ -48,7 +48,9 @@ it("offers a way to the stats page when the summary cannot load", async () => {
 });
 
 it("compares autonomous tickets with the owner's for the period in the route", async () => {
-  const stats = vi.fn().mockResolvedValue(statsReport(report.autonomous, report.owner, 90));
+  const response = statsReport(report.autonomous, report.owner, 90);
+  response.repos = [{ repo_id: 1, name: "acme/app", autonomous: { merged: 0, prs_opened: 0, open: 0 }, owner: { merged: 0, prs_opened: 0, open: 0 }, health: { every: 0, merges_since_check: 2, next_in: null, last_check_ticket: 42, last_checked_at: null, open_follow_ups: 1 } }];
+  const stats = vi.fn().mockResolvedValue(response);
   const host = await render(stats, <StatsPage route={parseHash("#/stats?days=90")} />);
 
   expect(stats).toHaveBeenCalledWith(90);
@@ -57,6 +59,9 @@ it("compares autonomous tickets with the owner's for the period in the route", a
   expect([...(merged?.querySelectorAll("td") ?? [])].map((td) => td.textContent)).toEqual(["5", "4"]);
   expect(host.textContent).toContain("gpt-5");
   expect(host.textContent).toContain("Not recorded yet");
+  expect([...host.querySelectorAll("h2")].some(h => h.textContent === "Architecture health")).toBe(true);
+  expect(host.querySelector('a[href="#/t/42"]')?.textContent).toBe("#42");
+  expect(host.textContent).toContain("off");
   expect(host.querySelector<HTMLInputElement>('input[value="90"]')?.checked).toBe(true);
 });
 
