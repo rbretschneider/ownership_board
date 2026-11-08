@@ -52,6 +52,9 @@ func TestRunnersRegistryCompatibility(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if _, err := c.store.SQL().Exec(`INSERT INTO build_jobs(id,ticket_id,repo,sha,preset,target,target_os,status,attempt,created_at,bundle_bytes,bundle_sha256) VALUES(?,1,'example/tools',?,'script','{"os":"windows","required_capabilities":[]}','windows','queued',1,'2025-12-31T00:00:00.000Z',3,?)`, fmt.Sprintf("%064x", 10), strings.Repeat("c", 40), strings.Repeat("b", 64)); err != nil {
+		t.Fatal(err)
+	}
 	got = c.expect(200, "GET", "/api/v1/runners", "")
 	if got["host"] != "Windows builder" || got["blocked"] != "disabled" || got["enabled"] != false || got["parallel_builds"] != float64(3) {
 		t.Fatal(got)
@@ -69,6 +72,14 @@ func TestRunnersRegistryCompatibility(t *testing.T) {
 		if v["slot"] != float64(i+1) || v["sha"] != "aaaaaaaaaaaa" || v["phase"] != "verifying" || v["detail"] != "" || v["updated_at"] != "2026-01-01T00:01:00Z" || v["since"] != "2026-01-01T00:00:01Z" || v["orphan"] != (i == 1 || i == 2) {
 			t.Fatal(v)
 		}
+	}
+	queue := got["queue"].([]any)
+	if len(queue) != 1 {
+		t.Fatal(queue)
+	}
+	queued := queue[0].(map[string]any)
+	if queued["position"] != float64(1) || queued["ticket_id"] != float64(1) || queued["repo"] != "example/tools" || queued["sha"] != "cccccccccccc" || queued["preset"] != "script" || queued["queued_at"] != "2025-12-31T00:00:00Z" || queued["deferred_until"] != nil {
+		t.Fatal(queued)
 	}
 	raw, _ := json.Marshal(got)
 	for _, secret := range []string{"public_key", "facts", "secret-fact", "secret-result", "bundle", "private"} {

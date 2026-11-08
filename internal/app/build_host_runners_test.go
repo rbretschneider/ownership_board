@@ -123,13 +123,16 @@ func TestCompatibilityRunnersQueuesAndHeartbeat(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if _, err := f.store.SQL().Exec(`UPDATE build_jobs SET created_at='2025-12-31T00:00:00.000Z' WHERE id=?`, fmt.Sprintf("%064x", 46)); err != nil {
+		t.Fatal(err)
+	}
 	s := app.NewBuildHostService(f.store, f.clock, nil, nil)
 	snapshot, err := s.CompatibilityRunners(f.ctx, owner)
 	if err != nil || len(snapshot.Hosts) != 1 || len(snapshot.Hosts[0].Queue) != 40 {
 		t.Fatal(snapshot, err)
 	}
 	row := snapshot.Hosts[0]
-	if row.Host.LastSeenAt != nil || row.Queue[0].ID != fmt.Sprintf("%064x", 3) || row.Queue[39].ID != fmt.Sprintf("%064x", 42) {
+	if row.Host.LastSeenAt != nil || row.Queue[0].ID != fmt.Sprintf("%064x", 46) || row.Queue[39].ID != fmt.Sprintf("%064x", 41) {
 		t.Fatal(row)
 	}
 	if _, err := f.store.SQL().Exec(`UPDATE build_hosts SET enabled=0,last_seen_at='2026-01-01T00:00:00.000Z' WHERE id=?`, h.ID); err != nil {
@@ -137,6 +140,15 @@ func TestCompatibilityRunnersQueuesAndHeartbeat(t *testing.T) {
 	}
 	snapshot, err = s.CompatibilityRunners(f.ctx, owner)
 	if err != nil || snapshot.Hosts[0].Host.Enabled || snapshot.Hosts[0].Host.LastSeenAt == nil || len(snapshot.Hosts[0].Queue) != 40 {
+		t.Fatal(snapshot, err)
+	}
+	second := settingsHost(t, f, "linux", domain.BuildHostApproved, true, 1)
+	caps := []string{"cmake"}
+	if _, err := s.Update(f.ctx, owner, second.ID, domain.BuildHostEdit{Capabilities: &caps}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = s.CompatibilityRunners(f.ctx, owner)
+	if err != nil || len(snapshot.Hosts) != 2 || len(snapshot.Hosts[1].Queue) != 40 || snapshot.Hosts[0].Queue[0].ID != snapshot.Hosts[1].Queue[0].ID {
 		t.Fatal(snapshot, err)
 	}
 	if _, err = s.CompatibilityRunners(f.ctx, agent); domain.KindOf(err) != domain.KindForbidden {
