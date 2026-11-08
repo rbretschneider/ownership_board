@@ -90,3 +90,8 @@ func isAutonomousFiled(event Event) bool {
 func isStageEntry(stage domain.Stage) func(Event) bool {
 	return func(event Event) bool { return event.Type == domain.TimelineStage && event.Stage == stage }
 }
+
+// BuildHostPendingNotification contains no machine-supplied metadata.
+func BuildHostPendingNotification() Notification {
+	return Notification{Title: "Build host approval requested", Message: "A new build host is waiting for approval.", Priority: PriorityDefault}
+}

@@ -24,22 +24,24 @@ const (
 
 // BuildHost is a registered build identity. Facts are untrusted self-reported metadata.
 type BuildHost struct {
-	ID           int64
-	Name         string
-	OS           BuildHostOS
-	Arch         string
-	Status       BuildHostStatus
-	Capabilities []string
-	MaxParallel  int
-	Enabled      bool
-	PublicKey    string
-	Facts        json.RawMessage
-	AgentVersion string
-	LastSeenAt   *time.Time
-	CreatedAt    time.Time
-	ApprovedAt   *time.Time
-	ApprovedBy   *int64
-	RevokedAt    *time.Time
+	RunningJobIDs []int64
+	FreeDiskBytes *int64
+	ID            int64
+	Name          string
+	OS            BuildHostOS
+	Arch          string
+	Status        BuildHostStatus
+	Capabilities  []string
+	MaxParallel   int
+	Enabled       bool
+	PublicKey     string
+	Facts         json.RawMessage
+	AgentVersion  string
+	LastSeenAt    *time.Time
+	CreatedAt     time.Time
+	ApprovedAt    *time.Time
+	ApprovedBy    *int64
+	RevokedAt     *time.Time
 }
 
 // BuildHostDraft supplies enrollment metadata for a new pending identity.
@@ -77,7 +79,7 @@ var buildArchPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
 // NewBuildHost creates a validated pending identity with conservative defaults.
 func NewBuildHost(d BuildHostDraft, now time.Time) (BuildHost, error) {
-	h := BuildHost{Name: d.Name, OS: d.OS, Arch: d.Arch, PublicKey: d.PublicKey, Capabilities: slices.Clone(d.Capabilities), MaxParallel: 1, Enabled: true, Status: BuildHostPending, Facts: slices.Clone(d.Facts), AgentVersion: d.AgentVersion, CreatedAt: now.UTC()}
+	h := BuildHost{RunningJobIDs: []int64{}, Name: d.Name, OS: d.OS, Arch: d.Arch, PublicKey: d.PublicKey, Capabilities: slices.Clone(d.Capabilities), MaxParallel: 1, Enabled: true, Status: BuildHostPending, Facts: slices.Clone(d.Facts), AgentVersion: d.AgentVersion, CreatedAt: now.UTC()}
 	if d.MaxParallel != nil {
 		h.MaxParallel = *d.MaxParallel
 	}
@@ -90,6 +92,9 @@ func NewBuildHost(d BuildHostDraft, now time.Time) (BuildHost, error) {
 
 // Validate validates and canonicalizes management fields and identity encoding.
 func (h *BuildHost) Validate() error {
+	if err := ValidateBuildHostTelemetry(h.RunningJobIDs, h.FreeDiskBytes); err != nil {
+		return err
+	}
 	var err error
 	if h.Name, err = RequireText("name", h.Name, 200); err != nil {
 		return err
@@ -208,4 +213,9 @@ func (h *BuildHost) Revoke(now time.Time) {
 	h.Status = BuildHostRevoked
 	h.Enabled = false
 	h.RevokedAt = &now
+}
+
+// Online projects recent approved connectivity without persisting another state.
+func (h BuildHost) Online(now time.Time) bool {
+	return h.Status == BuildHostApproved && h.LastSeenAt != nil && now.Sub(*h.LastSeenAt) < 3*time.Minute
 }

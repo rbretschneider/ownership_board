@@ -14,8 +14,16 @@ type BuildHostRepository interface {
 	Approve(context.Context, domain.BuildHost) error
 	Update(context.Context, domain.BuildHost) error
 	Revoke(context.Context, int64, time.Time) error
+	RecordHeartbeat(context.Context, int64, domain.BuildHostReport, time.Time) error
 }
 
 type BuildHostPairingCodeRepository interface {
 	Insert(context.Context, domain.BuildHostPairingCode) error
+	GetByHash(context.Context, string) (domain.BuildHostPairingCode, error)
+	Consume(context.Context, string, int64, time.Time) error
+}
+
+type BuildHostEventRepository interface {
+	Append(context.Context, *domain.BuildHostEvent) error
+	ForHost(context.Context, int64, int64, int) ([]domain.BuildHostEvent, error)
 }

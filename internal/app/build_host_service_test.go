@@ -19,7 +19,7 @@ import (
 func TestBuildHostService(t *testing.T) {
 	f := newFixture(t)
 	var logs bytes.Buffer
-	s := app.NewBuildHostService(f.store, f.clock, slog.New(slog.NewTextHandler(&logs, nil)))
+	s := app.NewBuildHostService(f.store, f.clock, slog.New(slog.NewTextHandler(&logs, nil)), nil)
 	if _, err := f.store.SQL().Exec(`INSERT INTO users (id,name,email,created_at) VALUES (1,'Owner','owner@example.com','2026-01-01T00:00:00.000Z')`); err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestBuildHostService(t *testing.T) {
 func TestBuildHostFailedCommitHasNoAuditOrCode(t *testing.T) {
 	f := newFixture(t)
 	var logs bytes.Buffer
-	s := app.NewBuildHostService(f.store, f.clock, slog.New(slog.NewTextHandler(&logs, nil)))
+	s := app.NewBuildHostService(f.store, f.clock, slog.New(slog.NewTextHandler(&logs, nil)), nil)
 	// The actor does not exist, so the foreign key prevents persistence.
 	code, err := s.CreatePairingCode(f.ctx, owner)
 	if err == nil || code.Code.Reveal() != "" || logs.Len() != 0 {
@@ -167,7 +167,7 @@ func TestBuildHostFailedCommitHasNoAuditOrCode(t *testing.T) {
 func TestBuildHostMutationRollbackAndSafeAudit(t *testing.T) {
 	f := newFixture(t)
 	var logs bytes.Buffer
-	s := app.NewBuildHostService(f.store, f.clock, slog.New(slog.NewTextHandler(&logs, nil)))
+	s := app.NewBuildHostService(f.store, f.clock, slog.New(slog.NewTextHandler(&logs, nil)), nil)
 	if _, err := f.store.SQL().Exec(`INSERT INTO users (id,name,email,created_at) VALUES (1,'Owner','owner@example.com','2026-01-01T00:00:00.000Z')`); err != nil {
 		t.Fatal(err)
 	}

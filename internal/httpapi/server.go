@@ -56,21 +56,22 @@ type Deps struct {
 }
 
 type server struct {
-	deps    Deps
-	cookies cookieJar
-	network network
+	deps        Deps
+	cookies     cookieJar
+	network     network
+	pairLimiter *buildHostPairLimiter
 }
 
 // New builds the board's root handler.
 func New(deps Deps) http.Handler {
 	net := network{trustedHops: deps.TrustedHops}
-	s := &server{deps: deps, cookies: cookieJar{network: net}, network: net}
+	s := &server{deps: deps, cookies: cookieJar{network: net}, network: net, pairLimiter: newBuildHostPairLimiter(time.Now)}
 	mux := http.NewServeMux()
-	rt := &router{mux: mux, auth: deps.Auth, origin: deps.PublicBaseURL, logger: deps.Logger, network: net, writes: newWriteLimiter(time.Now)}
+	rt := &router{mux: mux, hosts: deps.BuildHosts, auth: deps.Auth, origin: deps.PublicBaseURL, logger: deps.Logger, network: net, writes: newWriteLimiter(time.Now)}
 	s.routes(rt)
 	mux.Handle("/api/", http.HandlerFunc(apiNotFound))
 	mux.Handle("/", readOnly(newSPA(deps.Frontend)))
-	return securityHeaders(mux)
+	return securityHeaders(rejectHostPathRedirects(mux, deps.Logger))
 }
 
 func (s *server) routes(rt *router) {

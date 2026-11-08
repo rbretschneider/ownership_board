@@ -65,7 +65,7 @@ func newServer(t *testing.T) *apiClient {
 		t.Fatalf("catalog: %v", err)
 	}
 	handler := httpapi.New(httpapi.Deps{
-		BuildHosts: app.NewBuildHostService(db, clk, logger),
+		BuildHosts: app.NewBuildHostService(db, clk, logger, nil),
 		Board:      services.Board, Agents: services.Agents, Repos: services.Repos, Auth: authService,
 		OIDC: auth.NewOIDC(auth.OIDCConfig{}, authService), Broker: hub, Health: db, Logger: logger,
 		MCP:         mcp.NewServer("test", logger, mcp.BoardTools(services)...),
