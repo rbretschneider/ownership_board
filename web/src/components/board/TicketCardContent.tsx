@@ -42,7 +42,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
   const at = now ?? clock;
   const liveLease = hasLiveLease(ticket, at);
   const activity = cardActivity(ticket, at);
-  const showActivity = !isCompletedStage(ticket.stage) && (ticket.is_autonomous || ticket.lease !== null || ticket.lane !== "todo" || activity.blocked);
+  const showActivity = ticket.stage === "deploying" || !isCompletedStage(ticket.stage) && (ticket.is_autonomous || ticket.lease !== null || ticket.lane !== "todo" || activity.blocked);
   const model = parseWorkModel(ticket.work_model);
   const showModel = !isCompletedStage(ticket.stage) && (liveLease || (activity.buildServer === true && model !== undefined));
   const isBlocked = ticket.blocked_reason !== "";
@@ -85,7 +85,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
         <span className="card__id">#{ticket.id}</span>
         <KindTag kind={ticket.kind} />
         {(showModel || showActivity) && (
-          <span className="card__top-right">
+          <span className={`card__top-right${ticket.stage === "deploying" ? " card__top-right--deploying" : ""}`}>
             {showModel && (
               <span className={`card__model${escalated ? " card__model--escalated" : ""}`}
                 title={escalated ? `Escalated to ${model?.name} at high reasoning after ${model?.escalatedAfter} rejected code passes` : liveLease ? `Assigned model for ${ticket.lease?.holder}` : "Last reported model"}>
@@ -107,6 +107,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
                 {!pr && activity.buildServer && activity.target && <span className="card__activity-target">{shortTarget(activity.target)}</span>}
               </span>
             )}
+            {ticket.stage === "deploying" && liveLease && !activity.blocked && <span className="card__lease-holder">{ticket.lease?.holder}</span>}
           </span>
         )}
       </div>

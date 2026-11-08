@@ -47,5 +47,15 @@ it("keeps deployed work completed even if old worker metadata remains", () => {
 
 it("renders leased deployment with the generic activity indicator", () => {
  expect(cardActivity({...ticket, stage: "deploying", lane: "merged"})).toMatchObject({label: "Deploying", working: true});
- expect(cardActivity({...ticket, stage: "deploying", lane: "merged", lease: null})).toMatchObject({label: "Queued", working: false});
+ expect(cardActivity({...ticket, stage: "deploying", lane: "merged", lease: null})).toMatchObject({label: "Deploying", working: false});
+});
+
+it("keeps deployment independent of stale worker signals and live lease status", () => {
+ const deployment = {...ticket, stage: "deploying" as const, lane: "merged" as const};
+ for (const work_model of ["model · preparing workspace", "model · awaiting review", "model · adversarial review"]) {
+  expect(cardActivity({...deployment, work_model})).toEqual({label: "Deploying", working: true, blocked: false});
+ }
+ expect(cardActivity({...deployment, lease: {holder: "runner", expires_at: "2000-01-01"}})).toEqual({label: "Deploying", working: false, blocked: false});
+ expect(cardActivity({...deployment, blocked_reason: "Deployment failed"}).label).toBe("Blocked");
+ expect(cardActivity({...deployment, waiting_on: [2]}).label).toBe("Waiting");
 });

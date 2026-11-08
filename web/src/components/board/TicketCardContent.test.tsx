@@ -186,3 +186,20 @@ it("shows deployment waits only for agent deployment and hides completed worker 
  expect(html).not.toContain("card__model");
  expect(html).not.toContain('aria-current=');
 });
+
+it("shows deployment, animation and the live holder while suppressing stale models", () => {
+ const card = dom({stage: "deploying", lane: "merged", work_model: "model · adversarial review"});
+ expect(card.querySelector(".card__activity-label")?.textContent).toBe("Deploying");
+ expect(card.querySelector(".pixel-loader")).not.toBeNull();
+ expect(card.querySelector(".card__lease-holder")?.textContent).toBe("runner-2");
+ expect(card.querySelector(".card__model")).toBeNull();
+ for (const lease of [null, {holder: "old-worker", expires_at: "2000-01-01"}]) {
+  const idle = dom({stage: "deploying", lane: "merged", lease});
+  expect(idle.querySelector(".card__activity-label")?.textContent).toBe("Deploying");
+  expect(idle.querySelector(".pixel-loader")).toBeNull();
+  expect(idle.querySelector(".card__lease-holder")).toBeNull();
+ }
+ const blocked = dom({stage: "done", lane: "merged", blocked_reason: "Deployment failed"});
+ expect(blocked.querySelector(".badge--blocked")?.textContent).toContain("Blocked");
+ expect(blocked.querySelector(".badge--blocked")?.getAttribute("title")).toContain("Deployment failed");
+});

@@ -1,3 +1,4 @@
+import { BoardTestProviders } from "./boardTestProviders";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it } from "vitest";
@@ -10,7 +11,7 @@ it("keeps five Deployed cards and expands without affecting other lanes", async 
  const host = document.createElement("div"); document.body.append(host);
  const root = createRoot(host);
  const props = {tickets, stages: [], reposById: new Map(), draggedId: null, target: null, onPointerDown: () => {}, shouldIgnoreClick: () => false};
- await act(async () => { root.render(<LaneList lane="deployed" {...props} />); });
+ await act(async () => { root.render(<BoardTestProviders><LaneList lane="deployed" {...props} /></BoardTestProviders>); });
  expect(host.querySelectorAll("[data-card-id]")).toHaveLength(5);
  const button = host.querySelector("button")!;
  expect(button.textContent).toBe("See 3 more");
@@ -21,7 +22,7 @@ it("keeps five Deployed cards and expands without affecting other lanes", async 
  expect(button.textContent).toBe("Show fewer");
  await act(async () => { button.click(); });
  expect(host.querySelectorAll("[data-card-id]")).toHaveLength(5);
- await act(async () => { root.render(<LaneList lane="merged" {...props} tickets={tickets.map(t => ({...t, lane: "merged", stage: "done"}))} />); });
+ await act(async () => { root.render(<BoardTestProviders><LaneList lane="merged" {...props} tickets={tickets.map(t => ({...t, lane: "merged", stage: "done"}))} /></BoardTestProviders>); });
  expect(host.querySelectorAll("[data-card-id]")).toHaveLength(8);
  expect(host.querySelector("button")).toBeNull();
  await act(async () => { root.unmount(); });

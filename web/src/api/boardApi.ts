@@ -65,6 +65,7 @@ export interface BoardApi {
   logout(): Promise<void>;
   board(filter: RepoFilter): Promise<Board>;
   ticket(id: number): Promise<TicketDetail>;
+  deployTicket(id: number): Promise<TicketDetail>;
   createTicket(input: CreateTicket): Promise<TicketDetail>;
   editTicket(id: number, input: EditTicket): Promise<TicketDetail>;
   moveTicket(id: number, lane: LaneId, afterId: number | null): Promise<TicketDetail>;
@@ -125,6 +126,7 @@ export function createBoardApi(http: HttpClient): BoardApi {
     logout: () => http.request("POST", "/auth/logout"),
     board: (filter) => http.request("GET", `/board${boardQuery(filter)}`),
     ticket: (id) => http.request("GET", t(id)),
+    deployTicket: (id) => http.request("POST", `${t(id)}/deploy`, {}),
     createTicket: (input) => http.request("POST", "/tickets", input),
     editTicket: (id, input) => http.request("PATCH", t(id), input),
     moveTicket: (id, lane, afterId) => http.request("POST", `${t(id)}/move`, { lane, after_id: afterId }),

@@ -33,7 +33,7 @@ export function isCompletedStage(stage: StageId): boolean {
 export function stageLabel(stages: Stage[], id: StageId, repo?: Repo): string {
   if (id === "done" && repo?.deploy_mode === "agent") return "Awaiting deploy";
   if (id === "deployed") return "Deployed";
-  return stages.find((s) => s.id === id)?.label ?? id;
+  return stages.find((s) => s.id === id)?.label ?? (id === "deploying" ? "Deploying" : id);
 }
 
 /** Tickets waiting on the owner: the "Your move" filter. */
