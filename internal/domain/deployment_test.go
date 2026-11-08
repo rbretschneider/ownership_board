@@ -25,7 +25,7 @@ func TestDeploymentVocabulary(t *testing.T) {
 
 func TestDeploymentCompletionAndLabels(t *testing.T) {
 	for _, stage := range domain.Stages() {
-		want := stage.ID == domain.StageDone || stage.ID == domain.StageDeployed
+		want := stage.ID == domain.StageDone || stage.ID == domain.StageDeploying || stage.ID == domain.StageDeployed
 		if stage.ID.IsCompleted() != want {
 			t.Fatalf("completion for %s", stage.ID)
 		}

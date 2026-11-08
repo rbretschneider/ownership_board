@@ -91,3 +91,64 @@ func TestDeploymentReadContractsAndCompletionStats(t *testing.T) {
 		t.Fatal("policy moved existing ticket")
 	}
 }
+
+func TestDeployRequestRouteAndReportTool(t *testing.T) {
+	browser, token := signedIn(t)
+	repo := browser.expect(http.StatusCreated, "POST", "/api/v1/repos", `{"full_name":"acme/service"}`)
+	rid := jsonNumber(repo["id"])
+	ticket := browser.expect(http.StatusCreated, "POST", "/api/v1/tickets", `{"kind":"story","title":"Release candidate","repo_id":`+rid+`}`)
+	path := "/api/v1/tickets/" + jsonNumber(ticket["id"])
+	agent := browser.asAgent(token)
+	agent.expect(http.StatusForbidden, "POST", path+"/deploy", `{}`)
+	browser.asAgent("").expect(http.StatusUnauthorized, "POST", path+"/deploy", `{}`)
+	browser.withOrigin("").expect(http.StatusForbidden, "POST", path+"/deploy", `{}`)
+	browser.withOrigin("https://foreign.example").expect(http.StatusForbidden, "POST", path+"/deploy", `{}`)
+	browser.expect(http.StatusConflict, "POST", path+"/deploy", `{}`)
+	browser.expect(http.StatusOK, "POST", path+"/move", `{"lane":"merged"}`)
+	browser.expect(http.StatusConflict, "POST", path+"/deploy", `{}`)
+	browser.expect(http.StatusOK, "PATCH", "/api/v1/repos/"+rid, `{"deploy_mode":"agent"}`)
+	browser.expect(http.StatusBadRequest, "POST", path+"/deploy", `{"name":"forged"}`)
+	browser.expect(http.StatusNotFound, "POST", "/api/v1/tickets/99999/deploy", `{}`)
+	browser.expect(http.StatusBadRequest, "POST", "/api/v1/tickets/no/deploy", `{}`)
+	got := browser.expect(http.StatusOK, "POST", path+"/deploy", "")
+	if got["stage"] != "deploying" || got["owner"] != "agent" || got["lease"] != nil {
+		t.Fatalf("queued: %v", got)
+	}
+	browser.expect(http.StatusConflict, "POST", path+"/deploy", `{}`)
+	call := func(args string) map[string]any {
+		reply := agent.expect(http.StatusOK, "POST", "/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"report_deploy","arguments":`+args+`}}`)
+		return reply["result"].(map[string]any)
+	}
+	args := `{"id":` + jsonNumber(ticket["id"]) + `,"outcome":"deployed","summary":"Running revision verified"}`
+	if call(args)["isError"] != true {
+		t.Fatal("unleased report accepted")
+	}
+	work := agent.expect(http.StatusOK, "POST", "/api/v1/agent/claim", `{}`)
+	if work["action"] != "deploy" {
+		t.Fatalf("claim: %v", work)
+	}
+	for _, bad := range []string{`{"extra":1}`, `{"id":1,"outcome":"invalid","summary":"x"}`, `{"id":1,"outcome":"failed"}`} {
+		if call(bad)["isError"] != true {
+			t.Fatal("invalid report accepted")
+		}
+	}
+	failedArgs := `{"id":` + jsonNumber(ticket["id"]) + `,"outcome":"failed","summary":"Runtime identity unavailable"}`
+	if result := call(failedArgs); result["isError"] == true {
+		t.Fatalf("failed report: %v", result)
+	}
+	got = browser.expect(http.StatusOK, "GET", path, "")
+	if got["stage"] != "done" || got["lane"] != "merged" || got["blocked_reason"] != "Runtime identity unavailable" || got["lease"] != nil {
+		t.Fatalf("failed state: %v", got)
+	}
+	browser.expect(http.StatusConflict, "POST", path+"/deploy", `{}`)
+	browser.expect(http.StatusOK, "POST", path+"/unblock", `{}`)
+	browser.expect(http.StatusOK, "POST", path+"/deploy", `{}`)
+	agent.expect(http.StatusOK, "POST", "/api/v1/agent/claim", `{}`)
+	if result := call(args); result["isError"] == true {
+		t.Fatalf("report: %v", result)
+	}
+	got = browser.expect(http.StatusOK, "GET", path, "")
+	if got["stage"] != "deployed" || got["lease"] != nil {
+		t.Fatalf("reported: %v", got)
+	}
+}

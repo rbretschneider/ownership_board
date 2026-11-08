@@ -129,3 +129,30 @@ func firstNonEmpty(values ...string) string {
 	}
 	return ""
 }
+
+type reportDeploy struct{ s Services }
+
+func (reportDeploy) Definition() Definition {
+	return Definition{
+		Name:        "report_deploy",
+		Description: "Report the result of a person-requested deployment. Requires your live lease in deploying. Report deployed only with verified runtime version/digest and health evidence; failed blocks the merged ticket for the owner.",
+		InputSchema: object(map[string]any{
+			"id":      ticketIDProp(),
+			"outcome": map[string]any{"type": "string", "enum": []string{"deployed", "failed"}},
+			"summary": prop("string", "Runtime verification evidence or failure reason, at most 1000 characters."),
+		}, "id", "outcome", "summary"),
+	}
+}
+
+func (t reportDeploy) Call(ctx context.Context, actor domain.Actor, raw json.RawMessage) (string, error) {
+	var args struct {
+		ID      int64  `json:"id"`
+		Outcome string `json:"outcome"`
+		Summary string `json:"summary"`
+	}
+	if err := decodeArguments(raw, &args); err != nil {
+		return "", err
+	}
+	detail, err := t.s.Board.ReportDeploy(ctx, actor, args.ID, app.DeployOutcome(args.Outcome), args.Summary)
+	return outcome(detail, "Deployment result recorded; your lease has ended. Stop work on this ticket.", err)
+}

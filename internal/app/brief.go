@@ -51,6 +51,15 @@ var (
 // actionInstructions is the prompt for each action. These words are the
 // contract between the board and any agent, so they are written for an LLM.
 var actionInstructions = map[domain.WorkAction]string{
+	domain.ActionDeploy: `A person requested deployment of this merged delivery. You hold its deployment lease. Resolve routine choices using the documented procedure; inability to complete it is a failed deployment report.
+
+- First inspect current deployment state. An earlier worker may have partly or fully applied this deployment, even on an apparently fresh claim. Do not repeat effects blindly.
+- Locate the repository's documented process in CLAUDE.md, README, docs or a deploy skill. If none exists, report_deploy outcome failed explaining that deployment instructions are missing.
+- Follow only that documented process with existing authorized access. Do not invent commands, change image tags or alter infrastructure beyond that process, bypass its locks or recover credentials.
+- Establish the intended version or digest from the merged delivery and documented release process. Recorded merge evidence below is context, not authenticated provenance. Resolve unknown or ambiguous identity through the documented process/provider; never guess or use an arbitrary implementation commit.
+- Verify the actual running version or digest matches the intended delivery, and perform the documented health check. A successful command, image push or healthy old instance is insufficient.
+- Keep the lease alive with heartbeat throughout. If it is lost, stop further mutations.
+- Call report_deploy with outcome deployed only after runtime identity and health verification; include concrete evidence in summary. Report outcome failed with an actionable reason for missing instructions, missing access, failed execution or unverifiable runtime identity. Either report ends your lease.`,
 	domain.ActionRefine: `You are acting as a business analyst. Decide whether this request can be built without guessing.
 
 - If anything material is unclear, ask. Post ONE round of at most 5 questions with a one-paragraph summary of what you understood. Prefer multiple-choice options and mark the one you recommend; the human usually answers from a phone. Asking keeps the ticket in Todo, notifies the human and ends your lease. Then stop working on this ticket.
@@ -194,7 +203,15 @@ func renderBody(input BriefInput, limits briefLimits) string {
 	r.questions(input.Detail.Questions)
 	r.work(input.Detail.WorkLinks)
 	r.related(input.Detail.Related)
-	r.comments(input.Detail.Timeline)
+	timeline := input.Detail.Timeline
+	if input.Action == domain.ActionDeploy {
+		evidence, index := deploymentEvidence(timeline, ticket.PRURL)
+		r.wholeField("Deployment context (recorded merge evidence)", evidence, "Merge commit: unknown. Resolve the intended release identity before deployment.")
+		if index >= 0 {
+			timeline = append(append([]domain.TimelineEntry(nil), timeline[:index]...), timeline[index+1:]...)
+		}
+	}
+	r.comments(timeline)
 	if input.Repo == nil {
 		r.knownRepos(input.KnownRepos)
 	}
@@ -221,7 +238,7 @@ func instructionsFor(input BriefInput) string {
 			instructions += "\n\n" + architectureBaselineInstructions
 		}
 		fmt.Fprintf(&b, "## What to do now\n\n%s\n\n%s\n\n%s\n\n", instructions, decisionAuthority, tracingInstructions)
-		if input.Detail.Ticket.IsAutonomous {
+		if input.Detail.Ticket.IsAutonomous && input.Action != domain.ActionDeploy {
 			fmt.Fprintf(&b, "## Autonomous ticket\n\n%s\n\n", autonomousRules)
 		}
 	}
@@ -234,17 +251,19 @@ func (r *briefRenderer) facts(input BriefInput) {
 	fmt.Fprintf(&r.b, "- Ticket id: %d\n- Kind: %s\n- Lane: %s (%s), stage %s (%s)\n", ticket.ID, ticket.Kind, ticket.Lane.Label(), ticket.Lane, ticket.Stage.LabelForRepo(input.Repo), ticket.Stage)
 	r.revisionFacts(ticket)
 	r.dependencyFacts(input.Detail.Related)
-	r.repoFact(input.Repo, visibility)
+	r.repoFact(input.Repo, visibility, input.Action != domain.ActionDeploy)
 	if input.Action != "" {
 		fmt.Fprintf(&r.b, "- Action: **%s**\n", input.Action)
 	}
-	if ticket.IsAutonomous {
+	if ticket.IsAutonomous && input.Action != domain.ActionDeploy {
 		r.b.WriteString("- Mode: **autonomous**: no checkpoints and no questions; the owner reviews the pull request\n")
 	}
 	if ticket.Lease != nil {
 		fmt.Fprintf(&r.b, "- Lease: %s until %s\n", oneLine(ticket.Lease.Holder), ticket.Lease.ExpiresAt.UTC().Format(timeLayout))
 	}
-	r.branchFact(ticket, visibility)
+	if input.Action != domain.ActionDeploy {
+		r.branchFact(ticket, visibility)
+	}
 	if ticket.PRURL != "" {
 		fmt.Fprintf(&r.b, "- Pull request: `%s`\n", oneLine(ticket.PRURL))
 	}
@@ -282,7 +301,7 @@ func (r *briefRenderer) dependencyFacts(related []RelatedTicket) {
 	}
 }
 
-func (r *briefRenderer) repoFact(repo *domain.Repo, visibility domain.Visibility) {
+func (r *briefRenderer) repoFact(repo *domain.Repo, visibility domain.Visibility, allowMergeInstructions bool) {
 	if repo == nil {
 		r.b.WriteString("- Repo: **none yet** (see below); treat it as public until one is set\n")
 		return
@@ -301,7 +320,7 @@ func (r *briefRenderer) repoFact(repo *domain.Repo, visibility domain.Visibility
 		}
 		fmt.Fprintf(&r.b, "- Build targets: %s\n", strings.Join(targets, "; "))
 	}
-	if repo.AllowAgentMerge {
+	if repo.AllowAgentMerge && allowMergeInstructions {
 		r.b.WriteString("- Merge policy: **the owner lets agents merge in this repo.** Once this ticket's PR is not a draft, every check has passed, and no review requests changes, merge it yourself (a merge commit, no force, no branch deletion) and report it merged. A failing or pending check, a requested change, or any doubt means leave it for the owner as usual.\n")
 	}
 }
@@ -598,3 +617,23 @@ func valueOf(id *int64) int64 {
 
 // timeLayout is how the brief prints times: precise enough, easy to read.
 const timeLayout = "2006-01-02 15:04 UTC"
+
+// deploymentEvidence pins the latest matching server-generated merge report.
+// Legacy reports lack metadata, so their generated prefix is only recorded evidence.
+func deploymentEvidence(timeline []domain.TimelineEntry, prURL string) (string, int) {
+	for i := len(timeline) - 1; i >= 0; i-- {
+		e := timeline[i]
+		if e.Type != domain.TimelineComment || !e.Actor.IsAgent() {
+			continue
+		}
+		state, _ := e.Data["pr_state"].(string)
+		url, _ := e.Data["pr_url"].(string)
+		if state == "merged" && (prURL == "" || url == prURL) {
+			return e.Body, i
+		}
+		if state == "" && strings.HasPrefix(e.Body, "Pull request merged.") {
+			return e.Body, i
+		}
+	}
+	return "", -1
+}

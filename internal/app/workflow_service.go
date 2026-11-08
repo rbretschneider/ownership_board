@@ -134,7 +134,10 @@ func (s *BoardService) Block(ctx context.Context, actor domain.Actor, id int64, 
 	if err := rejectHiddenFromAgent(actor, map[string]string{"reason": reason}); err != nil {
 		return TicketDetail{}, err
 	}
-	return s.writer.change(ctx, actor, id, func(_ context.Context, _ Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
+	return s.writer.change(ctx, actor, id, func(ctx context.Context, repos Repos, ticket *domain.Ticket) ([]domain.TimelineEntry, error) {
+		if ticket.Stage == domain.StageDeploying {
+			return s.failDeploy(ctx, repos, ticket, actor, reason)
+		}
 		if err := ticket.Block(reason, s.clock.Now()); err != nil {
 			return nil, err
 		}

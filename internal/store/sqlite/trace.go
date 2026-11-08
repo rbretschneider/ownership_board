@@ -254,7 +254,7 @@ func (r relationRepo) CountOutgoing(ctx context.Context, ticketID int64) (int, e
 
 // waitingQuery lists depends_on links whose target is not completed yet.
 const waitingQuery = `SELECT r.from_id, r.to_id FROM relations r JOIN tickets dep ON dep.id = r.to_id
-	WHERE r.kind = 'depends_on' AND dep.stage NOT IN ('done', 'deployed')`
+	WHERE r.kind = 'depends_on' AND dep.stage NOT IN ('done', 'deploying', 'deployed')`
 
 func (r relationRepo) Waiting(ctx context.Context) (map[int64][]int64, error) {
 	return r.edges(ctx, waitingQuery+` ORDER BY r.from_id, r.to_id`)

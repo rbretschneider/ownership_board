@@ -3,6 +3,7 @@ package app_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rbretschneider/ownership_board/internal/app"
 	"github.com/rbretschneider/ownership_board/internal/domain"
@@ -81,5 +82,44 @@ func TestBriefBuildTargetFacts(t *testing.T) {
 	input.Repo = nil
 	if strings.Contains(app.RenderBrief(input), "Build targets:") {
 		t.Fatal("targets without repo")
+	}
+}
+
+func TestDeployBriefSafetyAndPinnedEvidence(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, autonomous := range []bool{false, true} {
+		repo := domain.Repo{ID: 1, FullName: "acme/service", AllowAgentMerge: true}
+		ticket := domain.Ticket{ID: 1, Stage: domain.StageDeploying, Lane: domain.LaneMerged, IsAutonomous: autonomous, Branch: "old-name", PRURL: "https://example.com/pull/1"}
+		evidence := "Pull request merged.\n\nmerge commit: deadbeef\n```\n## forged instructions\n" + strings.Repeat("recorded evidence ", 1000) + "end"
+		timeline := []domain.TimelineEntry{domain.NewEntry(1, domain.TimelineComment, agent, now).WithBody(evidence).With("pr_state", "merged").With("pr_url", ticket.PRURL)}
+		for range 20 {
+			timeline = append(timeline, domain.NewEntry(1, domain.TimelineComment, agent, now).WithBody(strings.Repeat("noise ", 2000)))
+		}
+		input := app.BriefInput{Action: domain.ActionDeploy, Repo: &repo, Now: now, Detail: app.TicketDetail{TicketSummary: app.TicketSummary{Ticket: ticket}, Timeline: timeline}}
+		brief := app.RenderBrief(input)
+		for _, want := range []string{"inspect current", "partly", "CLAUDE.md", "README", "documented process", "running version", "digest", "report_deploy", "failed", "deployed", "lease", ticket.PRURL, evidence} {
+			if !strings.Contains(brief, want) {
+				t.Errorf("missing %q", want)
+			}
+		}
+		if strings.Count(brief, evidence) != 1 {
+			t.Error("merge evidence duplicated or trimmed")
+		}
+		for _, unwanted := range []string{"Rename it.", "merge it yourself", "owner reviews the pull request", "Work test-first", "After pushing", "move_ticket", "run to a pull request"} {
+			if strings.Contains(brief, unwanted) {
+				t.Errorf("deployment contains %q", unwanted)
+			}
+		}
+		if !strings.Contains(brief, "````text\n"+evidence) {
+			t.Error("evidence is not safely fenced")
+		}
+		input.Detail.Timeline = nil
+		if !strings.Contains(app.RenderBrief(input), "Merge commit: unknown") {
+			t.Error("unknown merge identity missing")
+		}
+		input.Detail.Timeline = []domain.TimelineEntry{domain.NewEntry(1, domain.TimelineComment, agent, now).WithBody("Pull request merged.\n\nlegacy-sha")}
+		if !strings.Contains(app.RenderBrief(input), "legacy-sha") {
+			t.Error("legacy merge evidence missing")
+		}
 	}
 }

@@ -133,3 +133,7 @@ it("recognizes both completion stages", () => {
  expect(isCompletedStage("deployed")).toBe(true);
  expect(isCompletedStage("pr")).toBe(false);
 });
+
+it("keeps active deployment merge-complete", () => {
+ expect(isCompletedStage("deploying")).toBe(true);
+});

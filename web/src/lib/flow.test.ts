@@ -215,3 +215,10 @@ it("groups deployed work as completed and excludes it from open dependencies", (
  expect(layout.lanes[0]?.open).toBe(1);
  expect(flowInsights([done], new Map(), NOW).progress).toMatchObject({idle: 0, working: 0, merged24h: 1});
 });
+
+it("keeps deploying prerequisites satisfied", () => {
+ const deploying = ticket(1, {stage: "deploying", lane: "merged"});
+ const dependent = ticket(2, {waiting_on: [1]});
+ expect(flowStage(deploying)).toBe("merged");
+ expect(buildGraph([deploying, dependent]).deps.get(2)).toEqual([]);
+});

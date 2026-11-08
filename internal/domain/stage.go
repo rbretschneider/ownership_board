@@ -14,6 +14,7 @@ const (
 	StageBuild        Stage = "build"
 	StagePR           Stage = "pr"
 	StageDone         Stage = "done"
+	StageDeploying    Stage = "deploying"
 	StageDeployed     Stage = "deployed"
 )
 
@@ -35,6 +36,7 @@ var stageCatalog = []StageInfo{
 	{StageBuild, LaneInProgress, "Making it happen", false},
 	{StagePR, LaneInProgress, "PR open", true},
 	{StageDone, LaneMerged, "Merged", false},
+	{StageDeploying, LaneMerged, "Deploying", false},
 	{StageDeployed, LaneDeployed, "Deployed", false},
 }
 
@@ -73,7 +75,7 @@ func (s Stage) IsOwnerReview() bool {
 
 // IsAgentStage reports whether agents work in this stage.
 func (s Stage) IsAgentStage() bool {
-	return s == StageRefine || s == StageReady || s == StageDesign || s == StageBuild
+	return s == StageDeploying || s == StageRefine || s == StageReady || s == StageDesign || s == StageBuild
 }
 
 // IsInFlight reports whether an autonomous ticket in this stage takes one of
@@ -99,7 +101,7 @@ func stageInfo(s Stage) (StageInfo, bool) {
 }
 
 // IsCompleted reports merge-level completion, including work awaiting deployment.
-func (s Stage) IsCompleted() bool { return s == StageDone || s == StageDeployed }
+func (s Stage) IsCompleted() bool { return s == StageDone || s == StageDeploying || s == StageDeployed }
 
 // LabelForRepo describes a stage in the repository's release process.
 func (s Stage) LabelForRepo(repo *Repo) string {

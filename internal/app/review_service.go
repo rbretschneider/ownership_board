@@ -68,6 +68,7 @@ func (s *BoardService) reviewOutcome(actor domain.Actor, state PullRequestState,
 		}
 		comment := domain.NewEntry(ticket.ID, domain.TimelineComment, actor, s.clock.Now()).WithBody(body)
 		if state == PullRequestMerged {
+			comment = comment.With("pr_state", "merged").With("pr_url", ticket.PRURL)
 			repo, err := repoOf(ctx, repos, ticket.RepoID)
 			if err != nil {
 				return nil, err

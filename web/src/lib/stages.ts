@@ -26,7 +26,7 @@ export function stageSummary(counts: StageCount[]): string {
 
 /** Whether work has reached merge-level completion. */
 export function isCompletedStage(stage: StageId): boolean {
-  return stage === "done" || stage === "deployed";
+  return stage === "done" || stage === "deploying" || stage === "deployed";
 }
 
 /** The current stage label, using repository policy for deployment waits. */

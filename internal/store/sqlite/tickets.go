@@ -110,7 +110,7 @@ func (r ticketRepo) NextClaimable(ctx context.Context, stage domain.Stage, filte
 		 WHERE stage = ? AND blocked_reason = '' AND (lease_holder = '' OR lease_expires_at <= ?)
 		   AND NOT EXISTS (SELECT 1 FROM questions q WHERE q.ticket_id = tickets.id AND q.answered_at IS NULL)
 		   AND NOT EXISTS (SELECT 1 FROM relations r JOIN tickets dep ON dep.id = r.to_id
-		                   WHERE r.from_id = tickets.id AND r.kind = 'depends_on' AND dep.stage NOT IN ('done', 'deployed'))
+		                   WHERE r.from_id = tickets.id AND r.kind = 'depends_on' AND dep.stage NOT IN ('done', 'deploying', 'deployed'))
 		   AND `+clause+`
 		 ORDER BY rank, id LIMIT 1`, args...)
 	ticket, err := scanTicket(row)
@@ -242,7 +242,7 @@ func parseTicketTimes(t *domain.Ticket, created, updated, laneChanged string) er
 }
 
 func (r ticketRepo) MergedSinceHealthCheck(ctx context.Context, repoID, afterSequence int64) ([]domain.Ticket, error) {
-	rows, err := r.q.QueryContext(ctx, `SELECT `+ticketColumns+` FROM tickets WHERE repo_id = ? AND stage IN ('done', 'deployed') AND is_health_check = 0 AND health_check_merge_sequence > ? ORDER BY health_check_merge_sequence`, repoID, afterSequence)
+	rows, err := r.q.QueryContext(ctx, `SELECT `+ticketColumns+` FROM tickets WHERE repo_id = ? AND stage IN ('done', 'deploying', 'deployed') AND is_health_check = 0 AND health_check_merge_sequence > ? ORDER BY health_check_merge_sequence`, repoID, afterSequence)
 	if err != nil {
 		return nil, err
 	}
@@ -260,6 +260,6 @@ func (r ticketRepo) MergedSinceHealthCheck(ctx context.Context, repoID, afterSeq
 
 func (r ticketRepo) HasOpenHealthCheck(ctx context.Context, repoID int64) (bool, error) {
 	var found bool
-	err := r.q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM tickets WHERE repo_id = ? AND is_health_check = 1 AND stage NOT IN ('done', 'deployed'))`, repoID).Scan(&found)
+	err := r.q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM tickets WHERE repo_id = ? AND is_health_check = 1 AND stage NOT IN ('done', 'deploying', 'deployed'))`, repoID).Scan(&found)
 	return found, err
 }
