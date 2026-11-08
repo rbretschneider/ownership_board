@@ -213,6 +213,8 @@ export interface TicketSummary {
   needs_owner: boolean;
   /** Runs to a pull request with no checkpoints or questions; set by a delegate agent or the owner. */
   is_autonomous: boolean;
+  /** Server-owned marker for a scheduled architecture review. */
+  readonly is_health_check?: boolean;
   /** "" when not blocked. Plain text, written by an agent. */
   blocked_reason: string;
   spec_revision: number;
@@ -638,5 +640,25 @@ export interface StatsReport {
   all: StatsSegment;
   autonomous: StatsSegment;
   owner: StatsSegment;
-  repos: { repo_id: number; name: string; autonomous: RepoDelivery; owner: RepoDelivery }[];
+  repos: StatsRepo[];
+}
+
+/** Current architecture review status, independent of the delivery period. */
+export interface RepoHealth {
+  every: number;
+  merges_since_check: number;
+  next_in: number | null;
+  last_check_ticket: number | null;
+  /** Filing/checkpoint time, rather than completion time. */
+  last_checked_at: string | null;
+  open_follow_ups: number;
+}
+
+/** Delivery counts and current review status for one repository. */
+export interface StatsRepo {
+  repo_id: number;
+  name: string;
+  autonomous: RepoDelivery;
+  owner: RepoDelivery;
+  health: RepoHealth | null;
 }

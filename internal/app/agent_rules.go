@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"time"
 
 	"github.com/rbretschneider/ownership_board/internal/domain"
@@ -37,6 +38,35 @@ func rejectHiddenFromAgent(actor domain.Actor, fields map[string]string) error {
 		if err := domain.RejectHiddenText(field, value); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// maxHealthCheckFollowUps bounds agent-generated work from a single review.
+const maxHealthCheckFollowUps = 3
+
+// requireHealthCheckFollowUpRoom runs in the same write transaction as linking.
+func requireHealthCheckFollowUpRoom(ctx context.Context, repos Repos, parent domain.Ticket, childID int64, actor domain.Actor) error {
+	if !actor.IsAgent() || !parent.IsHealthCheck {
+		return nil
+	}
+	relations, err := repos.Relations().ForTicket(ctx, parent.ID)
+	if err != nil {
+		return err
+	}
+	count := 0
+	for _, relation := range relations {
+		if relation.Kind != domain.RelationFollowUpOf || relation.ToID != parent.ID {
+			continue
+		}
+		if relation.FromID == childID {
+			// Let insertion retain the normal duplicate-link error.
+			return nil
+		}
+		count++
+	}
+	if count >= maxHealthCheckFollowUps {
+		return domain.Invalidf("health check %d allows at most %d follow-up tickets", parent.ID, maxHealthCheckFollowUps)
 	}
 	return nil
 }

@@ -1,4 +1,4 @@
-import { Bot, CircleAlert, CircleCheck, CircleX, GitPullRequest, Hand, Hourglass, MessageCircleQuestion, Server, Zap } from "lucide-react";
+import { Bot, CircleAlert, CircleCheck, CircleX, GitPullRequest, Hand, HeartPulse, Hourglass, MessageCircleQuestion, Server, Zap } from "lucide-react";
 import { windowsStatus } from "../../lib/progress";
 import type { Repo, Stage, TicketSummary } from "../../api/types";
 import { useLeaseClock } from "../../hooks/useLeaseClock";
@@ -112,6 +112,12 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
       <p className="card__title">{ticket.title}</p>
       <div className="card__meta">
         <RepoChip repo={repo} />
+        {ticket.is_health_check === true && (
+          <span className="badge badge--health-check">
+            <HeartPulse size={13} aria-hidden="true" />
+            Health check
+          </span>
+        )}
         {/* Without a status pill, the stage and owner signals still need a place. */}
         {!showActivity && ticket.stage !== "done" && <StageChip stage={ticket.stage} stages={stages} />}
         {!showActivity && ticket.needs_owner && (

@@ -83,6 +83,7 @@ type NamedCount struct {
 
 // RepoBreakdown is one repo's delivery, split like the report.
 type RepoBreakdown struct {
+	Health *RepoHealth `json:"health"`
 	// RepoID is zero for tickets without a repo.
 	RepoID     int64      `json:"repo_id"`
 	Name       string     `json:"name"`
@@ -95,4 +96,14 @@ type RepoCounts struct {
 	Merged    int `json:"merged"`
 	PRsOpened int `json:"prs_opened"`
 	Open      int `json:"open"`
+}
+
+// RepoHealth describes current review cadence, independent of the delivery window.
+type RepoHealth struct {
+	Every            int        `json:"every"`
+	MergesSinceCheck int        `json:"merges_since_check"`
+	NextIn           *int       `json:"next_in"`
+	LastCheckTicket  *int64     `json:"last_check_ticket"`
+	LastCheckedAt    *time.Time `json:"last_checked_at"`
+	OpenFollowUps    int        `json:"open_follow_ups"`
 }

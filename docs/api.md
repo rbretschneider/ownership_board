@@ -380,3 +380,41 @@ There is currently no host enrollment or code-redemption endpoint. Enrollment
 must eventually consume an unused, unexpired code and insert its pending host
 atomically. Host execution, heartbeats, and scheduling are separate features;
 `enabled` alone does not establish approval or eligibility for execution.
+
+## Delivery statistics (human only)
+
+`GET /api/v1/stats?days=7&tz_offset=0` returns delivery metrics for the selected
+period. `days` accepts 1–365 (default 30); `tz_offset` is the local UTC offset
+in minutes (default 0). Agents receive `403`.
+
+Each entry in `repos` includes `health`, describing the repository's current
+architecture review status independently of the delivery period:
+
+```json
+{
+  "every": 8,
+  "merges_since_check": 3,
+  "next_in": 5,
+  "last_check_ticket": 42,
+  "last_checked_at": "2026-03-10T15:00:00Z",
+  "open_follow_ups": 2
+}
+```
+
+`every` is the configured merge interval, with zero disabling scheduling.
+`merges_since_check` counts currently completed ordinary tickets beyond the
+persisted merge checkpoint; review tickets do not advance this count.
+`next_in` is the remaining merge count, floored at zero, or null when disabled.
+A zero may indicate a backlog waiting for an open review to finish.
+
+`last_check_ticket` identifies the most recently filed review still associated
+with the repository, or null. `last_checked_at` is the filing/checkpoint time,
+not the completion time; it can survive deletion of the review ticket, and
+can be null even when a ticket exists. `open_follow_ups` counts distinct existing
+unfinished tickets with a direct outgoing `follow_up_of` relation to that
+latest review, including blocked or waiting tickets.
+
+Configured repositories appear even without delivery activity. Synthetic rows
+for unassigned work and unresolved repository references have `health: null`.
+Delivery counters keep their period-based semantics. Statistics are read-only
+and may reflect concurrent updates across reads.
