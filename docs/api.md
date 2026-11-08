@@ -665,3 +665,45 @@ plain text with `Cache-Control: no-store`. No board address, enrollment code or
 other caller data is injected into downloads. Pass the origin and code as
 installer arguments. See [build worker operations](../agent/build_host/README.md)
 for prerequisites, services, resource limits and uninstall instructions.
+
+### Build-host presentation
+
+Human sessions can manage registered hosts in Settings. The legacy
+`GET /api/v1/runners` feed remains independent of registered hosts.
+
+`POST /api/v1/build-hosts/pairing-codes` returns `code`, `expires_at`, and
+`public_base_url` from server configuration. The response is marked
+`Cache-Control: no-store`. Pairing plaintext is available only at issuance.
+An empty public URL requires configuration before installation commands can
+be copied; the browser does not substitute its own origin.
+
+Installation commands download `/install/build-host.ps1` or
+`/install/build-host.sh` from the configured public base URL. The installer
+integration contract is PowerShell `-BoardUrl <url> -PairingCode <code>`, or
+POSIX shell `--board-url <url> --pairing-code <code>`. Pairing codes are
+arguments, never download URL parameters. The UI can display these commands
+before installer routes are deployed; this does not implement installers.
+
+`GET /api/v1/build-hosts/runners` requires a human session and returns:
+
+- `observed_at`: the server observation timestamp.
+- `hosts`: approved hosts in ID order, each with `id`, `name`, `os`,
+  `enabled`, `max_parallel`, `online`, `last_seen_at`, and `jobs`.
+- Each job has `id`, `ticket_id`, `repo`, `sha`, `preset`, `status`, `phase`,
+  `detail`, `started_at`, and `attempt`.
+- `queued_by_os`: integer counts for `windows`, `linux`, and `macos`,
+  including zero counts.
+
+Jobs represent authoritative, unreleased assignments. Cancelled and
+superseded assignments remain visible as stopping until released. Chips
+identify assignments by job ID rather than persistent physical slot numbers.
+Queue depth includes all queued jobs for that OS, regardless of individual
+host capabilities or enabled state. Connectivity is independent of enabled
+state and uses the existing three-minute heartbeat threshold. This read-only
+projection is eventually consistent across concurrent assignment changes.
+
+`GET /api/v1/build-hosts/{id}/events?latest=true&limit=20` returns recent
+events in descending ID order. The optional limit is 1–200 (default 100).
+`latest` accepts `true` or `false`; it cannot accompany `after_id`. Duplicate
+or invalid pagination arguments are rejected. Without `latest=true`, the
+existing ascending `after_id` cursor behavior remains available.

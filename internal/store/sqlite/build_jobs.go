@@ -181,3 +181,45 @@ func (r buildJobRepo) Bundles(ctx context.Context) ([]app.BuildJobBundle, error)
 	}
 	return out, rows.Err()
 }
+
+func (r buildJobRepo) RunnerAssignments(ctx context.Context) ([]app.RunnerAssignment, error) {
+	rows, err := r.q.QueryContext(ctx, `SELECT host_id,id,ticket_id,repo,sha,preset,status,phase,detail,started_at,attempt FROM build_jobs WHERE host_id IS NOT NULL AND assignment_released_at IS NULL ORDER BY host_id,started_at,id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []app.RunnerAssignment{}
+	for rows.Next() {
+		var a app.RunnerAssignment
+		var started sql.NullString
+		if err = rows.Scan(&a.HostID, &a.ID, &a.TicketID, &a.Repo, &a.SHA, &a.Preset, &a.Status, &a.Phase, &a.Detail, &started, &a.Attempt); err != nil {
+			return nil, err
+		}
+		if started.Valid {
+			at, e := parseTime(started.String)
+			if e != nil {
+				return nil, e
+			}
+			a.StartedAt = &at
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+func (r buildJobRepo) QueuedCountsByOS(ctx context.Context) (map[domain.BuildHostOS]int, error) {
+	rows, err := r.q.QueryContext(ctx, `SELECT target_os,count(*) FROM build_jobs WHERE status='queued' GROUP BY target_os`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[domain.BuildHostOS]int{}
+	for rows.Next() {
+		var os domain.BuildHostOS
+		var n int
+		if err = rows.Scan(&os, &n); err != nil {
+			return nil, err
+		}
+		out[os] = n
+	}
+	return out, rows.Err()
+}

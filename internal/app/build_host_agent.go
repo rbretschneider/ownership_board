@@ -191,3 +191,22 @@ func (s *BuildHostService) Events(ctx context.Context, actor domain.Actor, id, a
 	})
 	return events, e
 }
+
+func (s *BuildHostService) RecentEvents(ctx context.Context, actor domain.Actor, id int64, limit int) ([]domain.BuildHostEvent, error) {
+	if e := requireBuildHostHuman(actor); e != nil {
+		return nil, e
+	}
+	if limit < 1 || limit > 200 {
+		return nil, domain.Invalidf("invalid pagination")
+	}
+	var events []domain.BuildHostEvent
+	e := s.store.Read(ctx, func(r Repos) error {
+		if _, e := r.BuildHosts().Get(ctx, id); e != nil {
+			return e
+		}
+		var e error
+		events, e = r.BuildHostEvents().RecentForHost(ctx, id, limit)
+		return e
+	})
+	return events, e
+}

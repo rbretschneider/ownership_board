@@ -1,7 +1,9 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useApi } from "../api/ApiContext";
-import type { RunnersSnapshot } from "../api/types";
+import type { RegisteredRunnersSnapshot, RunnersSnapshot } from "../api/types";
 import { EMPTY_RUNNERS } from "../lib/runners";
+
+import { useVisiblePolling } from "./useVisiblePolling";
 
 const POLL_MS = 5_000;
 
@@ -38,4 +40,18 @@ export const RunnersContext = createContext<{ snapshot: RunnersSnapshot; now: nu
 
 export function useRunners(): { snapshot: RunnersSnapshot; now: number } {
   return useContext(RunnersContext);
+}
+
+
+export interface RegisteredReading {
+ snapshot:RegisteredRunnersSnapshot|null;
+ stale:boolean;
+ error:string|null;
+ refresh:()=>void;
+}
+export const RegisteredRunnersContext=createContext<RegisteredReading>({snapshot:null,stale:false,error:null,refresh:()=>{}});
+export function useRegisteredRunnersPolling():RegisteredReading {
+ const api=useApi();const load=useCallback(()=>api.registeredRunners(),[api]);
+ const reading=useVisiblePolling(load);
+ return {snapshot:reading.value,stale:reading.value!==null&&reading.now-reading.receivedAt>=15000,error:reading.error,refresh:reading.refresh};
 }
