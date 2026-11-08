@@ -20,7 +20,7 @@ vi.mock("../../hooks/useMediaQuery", () => ({useMediaQuery: () => true}));
 vi.mock("../../hooks/useEventStream", () => ({useEventStream: () => true}));
 vi.mock("../../hooks/useOwnerAlerts", () => ({useOwnerAlerts: () => {}}));
 vi.mock("../../hooks/useDragDrop", () => ({useDragDrop: (drop: typeof mock.drop) => {mock.drop = drop; return {session: null, startPress: vi.fn(), consumeClick: () => false};}}));
-vi.mock("../../hooks/useRunners", async importOriginal => ({...await importOriginal<object>(), useRunnersPolling: () => ({snapshot: EMPTY_RUNNERS, now})}));
+vi.mock("../../hooks/useRunners", async importOriginal => ({...await importOriginal<object>(), useRegisteredRunnersPolling: () => ({snapshot:null,stale:false,error:null,refresh:vi.fn()}), useRunnersPolling: () => ({snapshot: EMPTY_RUNNERS, now})}));
 vi.mock("../../hooks/usePRStatus", async importOriginal => ({...await importOriginal<object>(), usePRStatusPolling: () => ({snapshot, now})}));
 vi.mock("../toast/ToastContext", () => ({useToast: () => ({error: vi.fn(), success: vi.fn()})}));
 vi.mock("./StatsSummary", () => ({StatsSummary: () => null}));

@@ -662,3 +662,28 @@ export interface StatsRepo {
   owner: RepoDelivery;
   health: RepoHealth | null;
 }
+
+export type BuildHostOS = "windows" | "linux" | "macos";
+export interface BuildHostFacts {
+ os?: BuildHostOS; os_version?: string; arch?: string; hostname?: string;
+ cpu_model?: string; cores?: number; threads?: number; ram_bytes?: number;
+ disks?: {mount:string;total:number;free:number;is_build_volume:boolean}[];
+ gpus?: {name:string;driver:string;opengl_version:string}[];
+ toolchains?: Record<string,string>; interactive_session?: boolean; build_user_is_admin?: boolean;
+}
+export interface BuildHost {
+ id:number; name:string; os:BuildHostOS; arch:string; status:"pending"|"approved"|"revoked";
+ capabilities:string[]; max_parallel:number; enabled:boolean; online:boolean; last_seen_at:string|null;
+ facts:BuildHostFacts; agent_version:string; free_disk_bytes?:number|null; revoked_at?:string|null;
+}
+export interface BuildHostEdit { enabled?:boolean; max_parallel?:number; capabilities?:string[] }
+export interface BuildHostPairingCode { code:string; expires_at:string; public_base_url:string }
+export interface BuildHostEvent { id:number; event_type:string; created_at:string; data:{before?:Record<string,string>;after?:Record<string,string>} }
+export interface RegisteredRunnerJob {
+ id:string;ticket_id:number;repo:string;sha:string;preset:string;status:string;phase:string;detail:string;started_at:string|null;attempt:number;
+}
+export interface RegisteredRunnersSnapshot {
+ observed_at:string;
+ hosts:{id:number;name:string;os:BuildHostOS;enabled:boolean;max_parallel:number;online:boolean;last_seen_at:string|null;jobs:RegisteredRunnerJob[]}[];
+ queued_by_os:Record<BuildHostOS,number>;
+}
