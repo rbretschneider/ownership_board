@@ -9,7 +9,6 @@ import { BOARD_HASH, navigate } from "../../lib/hashRoute";
 import { checkpointFor, isApprovedRevision } from "../../lib/stages";
 import { ErrorState } from "../common/ErrorState";
 import { LoadingState } from "../common/LoadingState";
-import { Markdown } from "../common/Markdown";
 import { Overlay } from "../common/Overlay";
 import { useToast } from "../toast/ToastContext";
 import { AnsweredHistory } from "./AnsweredHistory";
@@ -39,6 +38,9 @@ export interface TicketSheetProps {
   /** Called after any successful change so the board refetches. */
   onChanged: () => void;
 }
+
+/** What saving an owner edit to the spec or design does. */
+const REVISION_NOTE = "Saving makes a new revision. Agents follow it from their next pass; an earlier approval does not cover it.";
 
 /** A runner for ticket mutations: applies the result, toasts, reports success. */
 export type RunMutation = (action: () => Promise<TicketDetail>, success?: string) => Promise<boolean>;
@@ -135,16 +137,26 @@ export function TicketSheet({ ticketId, lanes, stages, repos, tickets, refreshSi
                 emptyText="No details yet."
                 onSave={(body) => run(() => api.editTicket(ticket.id, { body }), "Request updated")}
               />
-              <section className="section" aria-labelledby="spec-title">
-                <h3 id="spec-title" className="section__title">Spec <span className="section__hint">refined by the AI</span></h3>
+              <EditableMarkdown
+                title="Spec"
+                hint="refined by the AI"
+                value={ticket.spec}
+                emptyText="Not refined yet."
+                editNote={REVISION_NOTE}
+                onSave={(spec) => run(() => api.saveSpec(ticket.id, spec), "Spec updated")}
+              >
                 <ApprovedNote approved={ticket.approved_spec_revision} current={ticket.spec_revision} />
-                {ticket.spec.trim() === "" ? <p className="muted">Not refined yet.</p> : <Markdown source={ticket.spec} />}
-              </section>
-              <section className="section" aria-labelledby="design-title">
-                <h3 id="design-title" className="section__title">Design <span className="section__hint">written by the AI</span></h3>
+              </EditableMarkdown>
+              <EditableMarkdown
+                title="Design"
+                hint="written by the AI"
+                value={ticket.design}
+                emptyText="No design yet."
+                editNote={REVISION_NOTE}
+                onSave={(design) => run(() => api.saveDesign(ticket.id, design), "Design updated")}
+              >
                 <ApprovedNote approved={ticket.approved_design_revision} current={ticket.design_revision} />
-                {ticket.design.trim() === "" ? <p className="muted">No design yet.</p> : <Markdown source={ticket.design} />}
-              </section>
+              </EditableMarkdown>
               <DecisionsSection ticket={ticket} run={run} />
               <WorkSection ticket={ticket} run={run} />
               <RelatedSection ticket={ticket} tickets={tickets} lanes={lanes} run={run} />
