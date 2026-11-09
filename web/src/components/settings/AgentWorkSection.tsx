@@ -63,6 +63,12 @@ export function AgentWorkSection() {
    {hosts.error&&<ErrorState message={hosts.error} onRetry={hosts.refresh}/>}
    {hosts.value&&<p className="muted small" role="status">{hosts.value.hosts.length===0?"No approved build hosts":`${online.length} ${online.length===1?"host":"hosts"} online · ${capacity} ${capacity===1?"build":"builds"} at once`}{stale?" · Status reading is stale":""}</p>}
   </div>
+  {settings&&hosts.value?.hosts.length===0&&<div className="field">
+   {/* Before any Windows build host is approved, the pre-build-host switch still
+       governs Windows builds. The server accepts turning it off but not on. */}
+   <label className="switch"><input type="checkbox" role="switch" className="switch__input" checked={settings.windows_runner_enabled} disabled={busy||!settings.windows_runner_enabled} onChange={e=>{if(!e.target.checked)void change({windows_runner_enabled:false});}}/><span className="switch__track" aria-hidden="true"/><span className="switch__label">Windows builds (legacy runner)</span></label>
+   <p className="muted small">{settings.windows_runner_enabled?"On from before build hosts. Turning it off stops agents starting builds that wait on Windows; queued work holds. Turning it back on needs an approved Windows build host.":"Off. Register and approve a Windows build host to turn Windows builds back on."}</p>
+  </div>}
   {error&&<ErrorState message={error} onRetry={()=>window.location.reload()}/>}
   {settings&&<div className="field">
    {(["codex","claude"] as const).map(provider=>{
