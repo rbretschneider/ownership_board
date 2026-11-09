@@ -85,11 +85,16 @@ func (s *BoardService) UpdateSettings(ctx context.Context, actor domain.Actor, e
 		}
 		hosts = windowsHosts(hosts)
 		n := len(hosts)
-		if n == 0 && (edit.WindowsParallelBuilds != nil || (edit.WindowsRunnerEnabled != nil && *edit.WindowsRunnerEnabled)) {
-			return domain.Conflictf("register and approve a Windows build host before enabling or configuring Windows builds")
+		if n == 0 && edit.WindowsParallelBuilds != nil {
+			return domain.Conflictf("register and approve a Windows build host before configuring Windows builds")
 		}
-		if n == 0 && edit.WindowsRunnerEnabled != nil && !*edit.WindowsRunnerEnabled {
-			settings.LegacyWindowsRunnerEnabled = false
+		if n == 0 && edit.WindowsRunnerEnabled != nil {
+			// Until a Windows host is approved, the pre-build-host switch
+			// still turns Windows builds on and off, at its stored capacity.
+			if *edit.WindowsRunnerEnabled && settings.LegacyWindowsParallelBuilds == 0 {
+				return domain.Conflictf("register and approve a Windows build host before enabling Windows builds")
+			}
+			settings.LegacyWindowsRunnerEnabled = *edit.WindowsRunnerEnabled
 		}
 		if edit.WindowsParallelBuilds != nil && (*edit.WindowsParallelBuilds < n || *edit.WindowsParallelBuilds > 8*n) {
 			return domain.Invalidf("windows_parallel_builds must be between %d and %d for %d approved Windows hosts", n, 8*n, n)

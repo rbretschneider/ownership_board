@@ -53,9 +53,9 @@ it("shows host connectivity and enabled online capacity with a settings link",as
  expect(host.textContent).not.toContain("Parallel Windows builds");expect(host.querySelector('[role="switch"]')).toBeNull();
  await act(async()=>root.unmount());
 });
-it("lets the owner turn the legacy Windows switch off while no build host is approved",async()=>{
+it("lets the owner turn the legacy Windows switch off and back on while no build host is approved",async()=>{
  const initial={windows_runner_enabled:true,codex_workers:3,codex_worker_limit:6,autonomous_in_flight_cap:3};
- const editSettings=vi.fn().mockResolvedValue({...initial,windows_runner_enabled:false});
+ const editSettings=vi.fn().mockResolvedValueOnce({...initial,windows_runner_enabled:false}).mockResolvedValueOnce(initial);
  const api={registeredRunners:vi.fn().mockResolvedValue({hosts:[]}),settings:vi.fn().mockResolvedValue(initial),editSettings} as unknown as BoardApi;
  const host=document.createElement("div"),root=createRoot(host);
  await act(async()=>root.render(<ApiContext value={api}><ToastProvider><AgentWorkSection/></ToastProvider></ApiContext>));
@@ -63,8 +63,10 @@ it("lets the owner turn the legacy Windows switch off while no build host is app
  expect(toggle.checked).toBe(true);expect(toggle.disabled).toBe(false);
  await act(async()=>toggle.click());
  expect(editSettings).toHaveBeenCalledWith({windows_runner_enabled:false});
- expect(toggle.checked).toBe(false);expect(toggle.disabled).toBe(true);
- expect(host.textContent).toContain("Register and approve a Windows build host");
+ expect(toggle.checked).toBe(false);expect(toggle.disabled).toBe(false);
+ await act(async()=>toggle.click());
+ expect(editSettings).toHaveBeenLastCalledWith({windows_runner_enabled:true});
+ expect(toggle.checked).toBe(true);
  await act(async()=>root.unmount());
 });
 it("keeps account controls available when hosts fail and retries the host read",async()=>{

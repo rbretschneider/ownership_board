@@ -86,14 +86,13 @@ func (r settingsRepo) Save(ctx context.Context, settings domain.BoardSettings, a
 			return fmt.Errorf("sqlite: save account settings: %w", err)
 		}
 	}
-	// The legacy Windows switch can only be turned off, never on: new Windows
-	// capacity comes from approved build hosts.
-	if !settings.LegacyWindowsRunnerEnabled {
-		if _, err := r.q.ExecContext(ctx,
-			`UPDATE board_settings SET value = 'false', updated_by = ?, updated_at = ? WHERE key = ? AND value <> 'false'`,
-			actor.Name, formatTime(now), domain.SettingWindowsRunnerEnabled); err != nil {
-			return fmt.Errorf("sqlite: save legacy Windows setting: %w", err)
-		}
+	// The legacy Windows switch is only updated where it already exists: a
+	// board that never had the pre-build-host switch gets Windows capacity
+	// from approved build hosts only.
+	if _, err := r.q.ExecContext(ctx,
+		`UPDATE board_settings SET value = ?, updated_by = ?, updated_at = ? WHERE key = ? AND value <> ?`,
+		strconv.FormatBool(settings.LegacyWindowsRunnerEnabled), actor.Name, formatTime(now), domain.SettingWindowsRunnerEnabled, strconv.FormatBool(settings.LegacyWindowsRunnerEnabled)); err != nil {
+		return fmt.Errorf("sqlite: save legacy Windows setting: %w", err)
 	}
 	_, err := r.q.ExecContext(ctx,
 		`INSERT INTO board_settings (key, value, updated_by, updated_at) VALUES (?, ?, ?, ?)
