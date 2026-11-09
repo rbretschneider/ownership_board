@@ -65,9 +65,9 @@ export function AgentWorkSection() {
   </div>
   {settings&&hosts.value?.hosts.length===0&&<div className="field">
    {/* Before any Windows build host is approved, the pre-build-host switch still
-       governs Windows builds. The server accepts turning it off but not on. */}
-   <label className="switch"><input type="checkbox" role="switch" className="switch__input" checked={settings.windows_runner_enabled} disabled={busy||!settings.windows_runner_enabled} onChange={e=>{if(!e.target.checked)void change({windows_runner_enabled:false});}}/><span className="switch__track" aria-hidden="true"/><span className="switch__label">Windows builds (legacy runner)</span></label>
-   <p className="muted small">{settings.windows_runner_enabled?"On from before build hosts. Turning it off stops agents starting builds that wait on Windows; queued work holds. Turning it back on needs an approved Windows build host.":"Off. Register and approve a Windows build host to turn Windows builds back on."}</p>
+       turns Windows builds on and off. */}
+   <label className="switch"><input type="checkbox" role="switch" className="switch__input" checked={settings.windows_runner_enabled} disabled={busy} onChange={e=>void change({windows_runner_enabled:e.target.checked})}/><span className="switch__track" aria-hidden="true"/><span className="switch__label">Windows builds (legacy runner)</span></label>
+   <p className="muted small">The Windows PC set up before build hosts. Off stops agents starting builds that wait on Windows; queued work holds until it is back on. Once a Windows build host is approved, control moves to Build hosts.</p>
   </div>}
   {error&&<ErrorState message={error} onRetry={()=>window.location.reload()}/>}
   {settings&&<div className="field">

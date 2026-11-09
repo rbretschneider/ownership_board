@@ -122,6 +122,7 @@ func TestWindowsSettingsDistributeAndRollback(t *testing.T) {
 	}
 }
 func boolPointer(v bool) *bool { return &v }
+func intPointer(v int) *int    { return &v }
 func TestWindowsSettingsWithoutHosts(t *testing.T) {
 	f := settingsFixture(t)
 	total := 1
@@ -167,18 +168,33 @@ func TestWindowsLegacySettingsApplyUntilAHostIsApproved(t *testing.T) {
 	}
 }
 
-func TestWindowsLegacySettingsCanOnlyBeTurnedOff(t *testing.T) {
+func TestWindowsLegacySwitchTurnsOffAndBackOnUntilAHostIsApproved(t *testing.T) {
 	f := settingsFixture(t)
 	seedLegacyWindows(t, f, "true", "1")
-	if _, err := f.board.UpdateSettings(f.ctx, owner, domain.SettingsEdit{WindowsRunnerEnabled: boolPointer(true)}); err == nil {
-		t.Fatal("enabling without an approved host must stay refused")
-	}
 	got, err := f.board.UpdateSettings(f.ctx, owner, domain.SettingsEdit{WindowsRunnerEnabled: boolPointer(false)})
 	if err != nil || got.WindowsRunnerEnabled || got.WindowsParallelBuilds != 0 {
 		t.Fatal(got, err)
 	}
 	if got, err := f.board.Settings(f.ctx); err != nil || got.WindowsRunnerEnabled {
 		t.Fatal(got, err)
+	}
+	got, err = f.board.UpdateSettings(f.ctx, owner, domain.SettingsEdit{WindowsRunnerEnabled: boolPointer(true)})
+	if err != nil || !got.WindowsRunnerEnabled || got.WindowsParallelBuilds != 1 {
+		t.Fatal(got, err)
+	}
+	if got, err := f.board.Settings(f.ctx); err != nil || !got.WindowsRunnerEnabled || got.WindowsParallelBuilds != 1 {
+		t.Fatal(got, err)
+	}
+	if _, err := f.board.UpdateSettings(f.ctx, owner, domain.SettingsEdit{WindowsParallelBuilds: intPointer(2)}); err == nil {
+		t.Fatal("changing legacy capacity without an approved host must stay refused")
+	}
+}
+
+func TestWindowsCannotBeEnabledWithoutLegacyCapacityOrHost(t *testing.T) {
+	f := settingsFixture(t)
+	seedLegacyWindows(t, f, "false", "0")
+	if _, err := f.board.UpdateSettings(f.ctx, owner, domain.SettingsEdit{WindowsRunnerEnabled: boolPointer(true)}); err == nil {
+		t.Fatal("enabling with no stored capacity and no approved host must be refused")
 	}
 }
 
