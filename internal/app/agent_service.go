@@ -231,10 +231,12 @@ func (s *AgentService) nextClaimable(ctx context.Context, repos Repos, request c
 const maxOverlapSkips = 20
 
 // heldByOverlap reports whether a build that has not started yet shares
-// files with a build already under way in its repo: one with a branch, or
-// an open pull request. The first build to start goes on; the other waits
-// until it merges, so the two never conflict. A started build is never held
-// back, so held tickets only ever wait on work that can finish.
+// files with a build already under way in its repo (one with a branch, or
+// an open pull request), or with an unstarted build ahead of it in claim
+// order. The first build to start goes on; the other waits until it merges,
+// so the two never conflict, and the oldest waiting build keeps its turn. A
+// started build is never held back, so held tickets only ever wait on work
+// that can finish.
 func heldByOverlap(ctx context.Context, repos Repos, ticket domain.Ticket) (bool, error) {
 	if ticket.IsHealthCheck || ticket.RepoID == 0 || ticket.Branch != "" || ticket.PRURL != "" {
 		return false, nil
@@ -259,8 +261,11 @@ func heldByOverlap(ctx context.Context, repos Repos, ticket domain.Ticket) (bool
 		}
 		files := domain.DesignFiles(other.Design, repo.OverlapIgnore...)
 		designs = append(designs, files)
+		if other.ID == ticket.ID {
+			continue
+		}
 		started := (other.Stage == domain.StageBuild && other.Branch != "") || other.Stage == domain.StagePR
-		if started && other.ID != ticket.ID {
+		if started || waitsAhead(other, ticket) {
 			underWay = append(underWay, files)
 		}
 	}
@@ -271,6 +276,18 @@ func heldByOverlap(ctx context.Context, repos Repos, ticket domain.Ticket) (bool
 		}
 	}
 	return false, nil
+}
+
+// waitsAhead reports whether other is a build that has not started yet and
+// comes before ticket in claim order (rank, then id). An overlapping build
+// behind it waits too, so a held build is not overtaken forever by newer
+// builds that share its files. Blocked and health-check builds never hold
+// others back.
+func waitsAhead(other, ticket domain.Ticket) bool {
+	if other.Stage != domain.StageBuild || other.Branch != "" || other.PRURL != "" || other.IsBlocked() || other.IsHealthCheck {
+		return false
+	}
+	return other.Rank < ticket.Rank || (other.Rank == ticket.Rank && other.ID < ticket.ID)
 }
 
 // autonomousSlotsFull reports whether as many autonomous tickets as the

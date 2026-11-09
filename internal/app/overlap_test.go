@@ -47,6 +47,57 @@ func TestABuildSharingFilesWithOneUnderWayWaitsUntilItMerges(t *testing.T) {
 	}
 }
 
+func TestANewerBuildDoesNotOvertakeAnOlderHeldBuildSharingItsFiles(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	running, older, newer := f.ticket("running", api.ID), f.ticket("older", api.ID), f.ticket("newer", api.ID)
+	for _, id := range []int64{running, older, newer} {
+		f.toReady(id)
+	}
+	// Each move lands on top of In Progress, so the first one moved is last.
+	f.toBuildWith(newer, "Edit src/export/src/ExportPanel.cpp.")
+	f.toBuildWith(older, "Edit src/core/Engine.cpp and src/export/src/ExportPanel.cpp.")
+	f.toBuildWith(running, "Edit src/core/Engine.cpp.")
+
+	if work := f.mustClaim(agent, app.ClaimInput{}); work.Ticket.Ticket.ID != running {
+		t.Fatalf("claimed #%d, want #%d", work.Ticket.Ticket.ID, running)
+	}
+	branch := "ob/running"
+	if _, err := f.board.Edit(f.ctx, agent, running, domain.TicketEdit{Branch: &branch}); err != nil {
+		t.Fatalf("set branch: %v", err)
+	}
+	// older waits on running; newer shares only with older, but must not overtake it.
+	f.requireNoClaim(other, "a newer build sharing files with an older held build")
+
+	f.move(owner, running, domain.LaneMerged, nil)
+	if work := f.mustClaim(other, app.ClaimInput{}); work.Ticket.Ticket.ID != older {
+		t.Fatalf("claimed #%d after the running build merged, want the older #%d", work.Ticket.Ticket.ID, older)
+	}
+}
+
+func TestABlockedOlderBuildDoesNotHoldNewerOnesBack(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	older, newer := f.ticket("older", api.ID), f.ticket("newer", api.ID)
+	f.toReady(older)
+	f.toReady(newer)
+	f.toBuildWith(newer, "Edit src/core/Engine.cpp.")
+	f.toBuildWith(older, "Edit src/core/Engine.cpp.")
+	if err := f.store.Write(f.ctx, func(repos app.Repos) error {
+		ticket, err := repos.Tickets().Get(f.ctx, older)
+		if err != nil {
+			return err
+		}
+		ticket.BlockedReason = "waiting on the owner"
+		return repos.Tickets().Update(f.ctx, ticket)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if work := f.mustClaim(agent, app.ClaimInput{}); work.Ticket.Ticket.ID != newer {
+		t.Fatalf("claimed #%d, want #%d past the blocked one", work.Ticket.Ticket.ID, newer)
+	}
+}
+
 func TestAStartedBuildIsNeverHeldBack(t *testing.T) {
 	f := newFixture(t)
 	api := f.repo("acme/api")
