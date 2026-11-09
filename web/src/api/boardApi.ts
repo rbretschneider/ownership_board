@@ -70,6 +70,10 @@ export interface BoardApi {
   editTicket(id: number, input: EditTicket): Promise<TicketDetail>;
   moveTicket(id: number, lane: LaneId, afterId: number | null): Promise<TicketDetail>;
   comment(id: number, body: string): Promise<TicketDetail>;
+  /** Owner rewrite of the spec in any stage; it becomes a new, unapproved revision. */
+  saveSpec(id: number, spec: string): Promise<TicketDetail>;
+  /** Owner rewrite of the design in any stage; it becomes a new, unapproved revision. */
+  saveDesign(id: number, design: string): Promise<TicketDetail>;
   answer(id: number, answers: Answer[]): Promise<TicketDetail>;
   /** Resolves a checkpoint; 409 when the stage or revision changed. */
   approve(id: number, input: ApproveInput): Promise<TicketDetail>;
@@ -131,6 +135,8 @@ export function createBoardApi(http: HttpClient): BoardApi {
     editTicket: (id, input) => http.request("PATCH", t(id), input),
     moveTicket: (id, lane, afterId) => http.request("POST", `${t(id)}/move`, { lane, after_id: afterId }),
     comment: (id, body) => http.request("POST", `${t(id)}/comments`, { body }),
+    saveSpec: (id, spec) => http.request("PUT", `${t(id)}/spec`, { spec }),
+    saveDesign: (id, design) => http.request("PUT", `${t(id)}/design`, { design }),
     answer: (id, answers) => http.request("POST", `${t(id)}/answers`, { answers }),
     approve: (id, input) => http.request("POST", `${t(id)}/approve`, input),
     requestChanges: (id, input) => http.request("POST", `${t(id)}/request-changes`, input),
