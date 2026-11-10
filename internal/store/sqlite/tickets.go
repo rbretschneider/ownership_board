@@ -102,15 +102,30 @@ func (r ticketRepo) SetRank(ctx context.Context, id int64, rank float64) error {
 	return nil
 }
 
+// unmetDependency is true for a depends_on target that has not merged.
+const unmetDependency = `dep.stage NOT IN ('done', 'deploying', 'deployed')`
+
+// designAheadUnmet is true for a dependency that keeps a ticket from being
+// designed. A design may start once every dependency is being built on a
+// branch or is in review (2026-11-10, owner): the design is written while
+// the slow Windows queue holds the dependency, and the build still waits for
+// it to merge. Only started work counts, so designing ahead goes one level
+// deep and never chains through other designed-ahead tickets.
+const designAheadUnmet = unmetDependency + ` AND dep.stage <> 'pr' AND NOT (dep.stage = 'build' AND dep.branch <> '')`
+
 func (r ticketRepo) NextClaimable(ctx context.Context, stage domain.Stage, filter app.TicketFilter, now time.Time) (domain.Ticket, bool, error) {
 	clause, filterArgs := filterClause(filter)
 	args := append([]any{string(stage), formatTime(now)}, filterArgs...)
+	unmet := unmetDependency
+	if stage == domain.StageReady || stage == domain.StageDesign {
+		unmet = designAheadUnmet
+	}
 	row := r.q.QueryRowContext(ctx,
 		`SELECT `+ticketColumns+` FROM tickets
 		 WHERE stage = ? AND blocked_reason = '' AND (lease_holder = '' OR lease_expires_at <= ?)
 		   AND NOT EXISTS (SELECT 1 FROM questions q WHERE q.ticket_id = tickets.id AND q.answered_at IS NULL)
 		   AND NOT EXISTS (SELECT 1 FROM relations r JOIN tickets dep ON dep.id = r.to_id
-		                   WHERE r.from_id = tickets.id AND r.kind = 'depends_on' AND dep.stage NOT IN ('done', 'deploying', 'deployed'))
+		                   WHERE r.from_id = tickets.id AND r.kind = 'depends_on' AND `+unmet+`)
 		   AND `+clause+`
 		 ORDER BY rank, id LIMIT 1`, args...)
 	ticket, err := scanTicket(row)
@@ -121,7 +136,11 @@ func (r ticketRepo) NextClaimable(ctx context.Context, stage domain.Stage, filte
 }
 
 func (r ticketRepo) CountInFlightAutonomous(ctx context.Context) (int, error) {
-	return countRows(ctx, r.q, `SELECT COUNT(*) FROM tickets WHERE is_autonomous = 1 AND stage IN ('design', 'build')`)
+	// A designed-ahead build that waits for a dependency to merge holds no
+	// worker and no Windows slot, so it does not count against the cap.
+	return countRows(ctx, r.q, `SELECT COUNT(*) FROM tickets WHERE is_autonomous = 1 AND stage IN ('design', 'build')
+		AND NOT (stage = 'build' AND branch = '' AND EXISTS (SELECT 1 FROM relations r JOIN tickets dep ON dep.id = r.to_id
+		         WHERE r.from_id = tickets.id AND r.kind = 'depends_on' AND `+unmetDependency+`))`)
 }
 
 // CountAutonomousFiledSince compares stored times as text, which is correct
