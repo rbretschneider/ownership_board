@@ -16,7 +16,7 @@ type codeRepoRepo struct {
 
 const repoColumns = `id, provider, full_name, url, description, color, default_branch, is_private, is_archived, synced_at, created_at, missing_since, treat_as_public,
 	require_spec_approval, require_design_approval, allow_agent_merge,
-	health_check_every, health_checked_through_ticket, health_checked_at, merge_sequence, health_checked_through_merge_sequence, deploy_mode, build_targets, overlap_ignore`
+	health_check_every, health_checked_through_ticket, health_checked_at, merge_sequence, health_checked_through_merge_sequence, deploy_mode, build_targets, overlap_ignore, review_blocking`
 
 func (r codeRepoRepo) List(ctx context.Context) ([]domain.Repo, error) {
 	return r.query(ctx, `SELECT `+repoColumns+` FROM repos ORDER BY full_name COLLATE NOCASE, provider`)
@@ -56,11 +56,11 @@ func (r codeRepoRepo) Insert(ctx context.Context, repo *domain.Repo) error {
 	repo.BuildTargets = targets
 	result, err := r.q.ExecContext(ctx,
 		`INSERT INTO repos (provider, full_name, url, description, color, default_branch, is_private, is_archived, synced_at, created_at, missing_since, treat_as_public,
-			require_spec_approval, require_design_approval, allow_agent_merge, health_check_every, deploy_mode, build_targets, overlap_ignore)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			require_spec_approval, require_design_approval, allow_agent_merge, health_check_every, deploy_mode, build_targets, overlap_ignore, review_blocking)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		string(repo.Provider), repo.FullName, repo.URL, repo.Description, repo.Color, repo.DefaultBranch,
 		boolToInt(repo.IsPrivate), boolToInt(repo.IsArchived), formatOptionalTime(repo.SyncedAt), formatTime(repo.CreatedAt), formatOptionalTime(repo.MissingSince), boolToInt(repo.TreatAsPublic),
-		boolToInt(repo.RequireSpecApproval), boolToInt(repo.RequireDesignApproval), boolToInt(repo.AllowAgentMerge), repo.HealthCheckEvery, repo.DeployMode, string(raw), string(ignored))
+		boolToInt(repo.RequireSpecApproval), boolToInt(repo.RequireDesignApproval), boolToInt(repo.AllowAgentMerge), repo.HealthCheckEvery, repo.DeployMode, string(raw), string(ignored), reviewBlockingOrDefault(repo.ReviewBlocking))
 	if err != nil {
 		return conflictOr(err, "repo %s is already on the board", repo.FullName)
 	}
@@ -84,8 +84,8 @@ func (r codeRepoRepo) Update(ctx context.Context, repo domain.Repo) error {
 // SetGates writes the checkpoint, agent-merge and deployment settings. Update never
 // touches them, so a repo sync can never switch one.
 func (r codeRepoRepo) SetGates(ctx context.Context, repo domain.Repo) error {
-	_, err := r.q.ExecContext(ctx, `UPDATE repos SET require_spec_approval = ?, require_design_approval = ?, allow_agent_merge = ?, deploy_mode = ? WHERE id = ?`,
-		boolToInt(repo.RequireSpecApproval), boolToInt(repo.RequireDesignApproval), boolToInt(repo.AllowAgentMerge), repo.DeployMode, repo.ID)
+	_, err := r.q.ExecContext(ctx, `UPDATE repos SET require_spec_approval = ?, require_design_approval = ?, allow_agent_merge = ?, deploy_mode = ?, review_blocking = ? WHERE id = ?`,
+		boolToInt(repo.RequireSpecApproval), boolToInt(repo.RequireDesignApproval), boolToInt(repo.AllowAgentMerge), repo.DeployMode, reviewBlockingOrDefault(repo.ReviewBlocking), repo.ID)
 	if err != nil {
 		return fmt.Errorf("sqlite: set gates of repo %d: %w", repo.ID, err)
 	}
@@ -130,15 +130,18 @@ func (r codeRepoRepo) query(ctx context.Context, query string, args ...any) ([]d
 
 func scanRepo(row scanner) (domain.Repo, error) {
 	var repo domain.Repo
-	var provider, created, targets, ignored string
+	var provider, created, targets, ignored, blocking string
 	var isPrivate, isArchived, treatAsPublic, requireSpec, requireDesign, allowAgentMerge int
 	var synced, missing, checkedAt sql.NullString
 	var checkedThrough sql.NullInt64
 	err := row.Scan(&repo.ID, &provider, &repo.FullName, &repo.URL, &repo.Description, &repo.Color, &repo.DefaultBranch,
 		&isPrivate, &isArchived, &synced, &created, &missing, &treatAsPublic, &requireSpec, &requireDesign, &allowAgentMerge,
-		&repo.HealthCheckEvery, &checkedThrough, &checkedAt, &repo.MergeSequence, &repo.HealthCheckedThroughMergeSequence, &repo.DeployMode, &targets, &ignored)
+		&repo.HealthCheckEvery, &checkedThrough, &checkedAt, &repo.MergeSequence, &repo.HealthCheckedThroughMergeSequence, &repo.DeployMode, &targets, &ignored, &blocking)
 	if err != nil {
 		return domain.Repo{}, err
+	}
+	if repo.ReviewBlocking, err = domain.ParseReviewBlocking(blocking); err != nil {
+		repo.ReviewBlocking = domain.DefaultReviewBlocking
 	}
 	if err := json.Unmarshal([]byte(ignored), &repo.OverlapIgnore); err != nil {
 		return domain.Repo{}, fmt.Errorf("sqlite: repo %d overlap ignore: %w", repo.ID, err)
@@ -202,4 +205,12 @@ func (r codeRepoRepo) SetOverlapIgnore(ctx context.Context, repo domain.Repo) er
 	}
 	_, err = r.q.ExecContext(ctx, `UPDATE repos SET overlap_ignore = ? WHERE id = ?`, string(raw), repo.ID)
 	return err
+}
+
+// reviewBlockingOrDefault stores the default for a repo built without one.
+func reviewBlockingOrDefault(level domain.ReviewBlocking) string {
+	if level == "" {
+		return string(domain.DefaultReviewBlocking)
+	}
+	return string(level)
 }

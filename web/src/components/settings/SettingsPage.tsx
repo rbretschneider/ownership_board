@@ -6,6 +6,7 @@ import { useToast } from "../toast/ToastContext";
 import { AccountSection } from "./AccountSection";
 import { BuildHostsSection } from "./BuildHostsSection";
 import { AgentWorkSection } from "./AgentWorkSection";
+import { ReviewSection } from "./ReviewSection";
 import { AlertsSection } from "./AlertsSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { RepositoriesSection } from "./RepositoriesSection";
@@ -48,6 +49,7 @@ export function SettingsPage({ route, status, onSignedOut, onChanged }: Settings
     <PageShell page="settings" title="Settings">
       <div className="settings settings__body">
         <AgentWorkSection />
+        <ReviewSection />
         <BuildHostsSection />
         <RepositoriesSection onChanged={onChanged} />
         <TokensSection />

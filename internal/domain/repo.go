@@ -38,6 +38,9 @@ type Repo struct {
 	AllowAgentMerge bool
 	// DeployMode is a person-controlled policy preserved across provider refreshes.
 	DeployMode DeployMode
+	// ReviewBlocking is the lowest review finding priority that stops a
+	// publication in this repo; lower findings become PR follow-ups.
+	ReviewBlocking ReviewBlocking
 	// Merge sequences order ordinary completions independently of ticket IDs.
 	MergeSequence                     int64
 	HealthCheckedThroughMergeSequence int64
@@ -111,6 +114,8 @@ type RepoStyle struct {
 	RequireDesignApproval *bool
 	// AllowAgentMerge changes the agent-merge grant.
 	AllowAgentMerge *bool
+	// ReviewBlocking changes which review findings stop a publication.
+	ReviewBlocking *ReviewBlocking
 	// HealthCheckEvery changes the architecture check interval (0 = off).
 	HealthCheckEvery *int
 }
@@ -142,7 +147,7 @@ func NewManualRepo(draft ManualRepoDraft, now time.Time) (Repo, error) {
 
 // NewSyncedRepo validates a provider listing as a new repo.
 func NewSyncedRepo(listing RepoListing, now time.Time) (Repo, error) {
-	repo := Repo{OverlapIgnore: []string{}, BuildTargets: []RepoBuildTarget{}, DeployMode: DeployModeOff, Provider: listing.Provider, CreatedAt: now, RequireSpecApproval: true, HealthCheckEvery: DefaultHealthCheckEvery}
+	repo := Repo{OverlapIgnore: []string{}, BuildTargets: []RepoBuildTarget{}, DeployMode: DeployModeOff, ReviewBlocking: DefaultReviewBlocking, Provider: listing.Provider, CreatedAt: now, RequireSpecApproval: true, HealthCheckEvery: DefaultHealthCheckEvery}
 	if err := repo.Refresh(listing, now); err != nil {
 		return Repo{}, err
 	}
@@ -245,12 +250,19 @@ func (r *Repo) Restyle(style RepoStyle) error {
 	if style.AllowAgentMerge != nil {
 		r.AllowAgentMerge = *style.AllowAgentMerge
 	}
+	if style.ReviewBlocking != nil {
+		level, err := ParseReviewBlocking(string(*style.ReviewBlocking))
+		if err != nil {
+			return err
+		}
+		r.ReviewBlocking = level
+	}
 	return nil
 }
 
 // ChangesGates reports whether style changes a checkpoint or deployment setting.
 func (style RepoStyle) ChangesGates() bool {
-	return style.DeployMode != nil || style.RequireSpecApproval != nil || style.RequireDesignApproval != nil || style.AllowAgentMerge != nil
+	return style.DeployMode != nil || style.RequireSpecApproval != nil || style.RequireDesignApproval != nil || style.AllowAgentMerge != nil || style.ReviewBlocking != nil
 }
 
 // ChangesHealthCheck reports whether style changes the health check interval.

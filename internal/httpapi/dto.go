@@ -49,6 +49,7 @@ type repoDTO struct {
 	RequireSpec     bool                     `json:"require_spec_approval"`
 	RequireDesign   bool                     `json:"require_design_approval"`
 	DeployMode      domain.DeployMode        `json:"deploy_mode"`
+	ReviewBlocking  domain.ReviewBlocking    `json:"review_blocking"`
 	AllowAgentMerge bool                     `json:"allow_agent_merge"`
 	Visibility      domain.Visibility        `json:"visibility"`
 
@@ -181,6 +182,7 @@ func toRepo(repo domain.Repo) repoDTO {
 		RequireSpec: repo.RequireSpecApproval, RequireDesign: repo.RequireDesignApproval,
 		AllowAgentMerge:  repo.AllowAgentMerge,
 		DeployMode:       repo.DeployMode,
+		ReviewBlocking:   repo.ReviewBlocking,
 		HealthCheckEvery: repo.HealthCheckEvery, HealthCheckedThroughTicket: repo.HealthCheckedThroughTicket,
 		HealthCheckedAt: repo.HealthCheckedAt,
 	}

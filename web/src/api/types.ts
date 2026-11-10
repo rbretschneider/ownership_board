@@ -95,6 +95,8 @@ export interface Repo {
   /** The owner lets agents merge this repo's green, review-clean PRs themselves. */
   allow_agent_merge: boolean;
   deploy_mode: DeployMode;
+  /** The lowest review finding priority that stops publication in this repo. */
+  review_blocking: ReviewBlocking;
   /** Merges between architecture health checks; 0 turns the check off. */
   health_check_every: number;
   /** The last merged ticket a health check covered; null before the first check. */
@@ -131,6 +133,7 @@ export type RepoEdit = Partial<{
   require_design_approval: boolean;
   allow_agent_merge: boolean;
   deploy_mode: DeployMode;
+  review_blocking: ReviewBlocking;
   health_check_every: number;
 }>;
 
@@ -469,7 +472,19 @@ export interface BoardSettings {
   claude_weekly_limit: number;
   /** How many autonomous tickets may be in design or build at once (1–10). */
   autonomous_in_flight_cap: number;
+  /** Who reviews finished work before it is published. */
+  review_by: ReviewBy;
+  /** The reviewer starts with no author conversation. */
+  review_fresh_context: boolean;
+  /** The reviewer is told to hunt for defects, not just check the spec. */
+  review_adversarial: boolean;
 }
+
+/** Who reviews: another model than the author (default), the author's own model, or one account. */
+export type ReviewBy = "other_model" | "same_model" | "claude" | "codex";
+
+/** Lowest review finding priority that blocks publication: p0 critical only up to p3 nits too. */
+export type ReviewBlocking = "p0" | "p1" | "p2" | "p3";
 
 /** Body of POST /tickets/{id}/approve. */
 export interface ApproveInput {
