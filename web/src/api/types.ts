@@ -245,6 +245,21 @@ export interface TicketSummary {
   lane_changed_at: string;
   /** Passes through each delivery step, derived from the ticket's history. Absent from older servers. */
   attempts?: StageAttempts;
+  /** Model token usage agents reported for this ticket. Absent from older servers. */
+  usage?: TokenUsage;
+}
+
+/** Token usage summed over a ticket's model calls. */
+export interface TokenUsage {
+  calls: number;
+  input_tokens: number;
+  cache_write_tokens: number;
+  cache_read_tokens: number;
+  output_tokens: number;
+  /** Claude calls only; Codex reports no price. */
+  cost_usd: number;
+  /** New input, cache writes and output in full, cache reads at a tenth: comparable across providers. */
+  weighted_tokens: number;
 }
 
 /** Read-only step counts the board derives from stage moves and work-model reports. 0 = never started. */

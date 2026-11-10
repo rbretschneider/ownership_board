@@ -16,6 +16,8 @@ type TicketSummary struct {
 	// Attempts counts passes through build, test, review and PR, derived
 	// from the recorded history.
 	Attempts domain.StageAttempts
+	// Usage is the model token usage reported for the ticket so far.
+	Usage domain.TokenUsage
 }
 
 // TicketDetail is a ticket with everything needed to work on it.

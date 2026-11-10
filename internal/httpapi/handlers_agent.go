@@ -4,11 +4,13 @@ import (
 	"net/http"
 
 	"github.com/rbretschneider/ownership_board/internal/app"
+	"github.com/rbretschneider/ownership_board/internal/domain"
 )
 
 func (s *server) agentRoutes(rt *router) {
 	rt.agentOnly("POST /api/v1/agent/claim", s.claim)
 	rt.agentOnly("POST /api/v1/agent/tickets/{id}/model", s.workModel)
+	rt.agentOnly("POST /api/v1/agent/tickets/{id}/usage", s.recordUsage)
 	rt.agentOnly("POST /api/v1/agent/tickets/{id}/heartbeat", s.heartbeat)
 	rt.agentOnly("POST /api/v1/agent/tickets/{id}/release", s.release)
 	rt.agentOnly("GET /api/v1/agent/tickets/{id}/brief", s.brief)
@@ -105,6 +107,36 @@ func (s *server) reportPRState(w http.ResponseWriter, r *http.Request, who calle
 	}
 	detail, err := s.deps.Board.ReportPullRequest(r.Context(), who.actor, id, app.PullRequestState(body.State), body.Note)
 	return respondDetail(w, http.StatusOK, detail, err)
+}
+
+func (s *server) recordUsage(w http.ResponseWriter, r *http.Request, who caller) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	var body struct {
+		CallKey          string  `json:"call_key"`
+		Provider         string  `json:"provider"`
+		Model            string  `json:"model"`
+		InputTokens      int64   `json:"input_tokens"`
+		CacheWriteTokens int64   `json:"cache_write_tokens"`
+		CacheReadTokens  int64   `json:"cache_read_tokens"`
+		OutputTokens     int64   `json:"output_tokens"`
+		CostUSD          float64 `json:"cost_usd"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		return err
+	}
+	usage, err := s.deps.Agents.RecordUsage(r.Context(), who.actor, domain.UsageReport{
+		TicketID: id, CallKey: body.CallKey, Provider: body.Provider, Model: body.Model,
+		InputTokens: body.InputTokens, CacheWriteTokens: body.CacheWriteTokens,
+		CacheReadTokens: body.CacheReadTokens, OutputTokens: body.OutputTokens, CostUSD: body.CostUSD,
+	})
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, toUsage(usage))
+	return nil
 }
 
 func (s *server) workModel(w http.ResponseWriter, r *http.Request, who caller) error {

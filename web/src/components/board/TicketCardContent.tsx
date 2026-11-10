@@ -1,4 +1,4 @@
-import { Bot, CircleAlert, CircleCheck, CircleX, GitPullRequest, Hand, HeartPulse, Hourglass, MessageCircleQuestion, Server, Zap } from "lucide-react";
+import { Bot, CircleAlert, CircleCheck, CircleX, Coins, GitPullRequest, Hand, HeartPulse, Hourglass, MessageCircleQuestion, Server, Zap } from "lucide-react";
 import { isCompletedStage } from "../../lib/stages";
 import { windowsStatus } from "../../lib/progress";
 import type { Repo, Stage, TicketSummary } from "../../api/types";
@@ -11,6 +11,7 @@ import { useRunners } from "../../hooks/useRunners";
 import { slotStep, slotTone, ticketRun } from "../../lib/runners";
 import { usePRStatus } from "../../hooks/usePRStatus";
 import { prPill, ticketPR } from "../../lib/prStatus";
+import { usageBadge } from "../../lib/usage";
 
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
@@ -79,6 +80,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
   // A model building the ticket itself (not the Windows build server, not a PR wait) mines.
   const miner = !pr && !activity.buildServer && ticket.stage === "build" && liveLease && activity.working ? modelFamily(model?.name) : undefined;
   const windows = windowsStatus(ticket);
+  const usage = usageBadge(ticket.usage);
   return (
     <>
       <div className="card__top">
@@ -144,6 +146,12 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
           <span className={`badge badge--windows-${windows.passed ? "passed" : "failed"}`} title={windows.title} aria-label={windows.title}>
             {windows.passed ? <CircleCheck size={13} aria-hidden="true" /> : <CircleX size={13} aria-hidden="true" />}
             {windows.label}
+          </span>
+        )}
+        {usage && (
+          <span className={`badge badge--usage${usage.heavy ? " badge--usage-heavy" : ""}`} title={usage.title} aria-label={usage.title}>
+            <Coins size={13} aria-hidden="true" />
+            {usage.label}
           </span>
         )}
         {ticket.open_questions > 0 && (

@@ -31,6 +31,16 @@ type Repos interface {
 	Decisions() DecisionRepository
 	Relations() RelationRepository
 	Settings() SettingsRepository
+	Usage() UsageRepository
+}
+
+// UsageRepository persists the token usage reported for tickets.
+type UsageRepository interface {
+	// Record stores a report; false when its call key was already recorded.
+	Record(ctx context.Context, report domain.UsageReport) (bool, error)
+	ForTicket(ctx context.Context, ticketID int64) (domain.TokenUsage, error)
+	// Totals maps each ticket with reported usage to its sum.
+	Totals(ctx context.Context) (map[int64]domain.TokenUsage, error)
 }
 
 // TicketFilter narrows a ticket listing. The zero value matches every ticket.
