@@ -364,6 +364,31 @@ func requireHolder(ticket domain.Ticket, actor domain.Actor, now time.Time) erro
 	return nil
 }
 
+// RecordUsage stores the token usage of one model call made for a ticket.
+// No lease is needed: a reporter may send usage after the call's worker has
+// moved on, and a call key already recorded is ignored, so resending is safe.
+// It returns the ticket's usage including the report.
+func (s *AgentService) RecordUsage(ctx context.Context, actor domain.Actor, report domain.UsageReport) (domain.TokenUsage, error) {
+	report.ReportedBy = actor.Name
+	report.ReportedAt = s.clock.Now()
+	if err := report.Validate(); err != nil {
+		return domain.TokenUsage{}, err
+	}
+	var usage domain.TokenUsage
+	err := s.store.Write(ctx, func(repos Repos) error {
+		if _, err := repos.Tickets().Get(ctx, report.TicketID); err != nil {
+			return err
+		}
+		if _, err := repos.Usage().Record(ctx, report); err != nil {
+			return err
+		}
+		var err error
+		usage, err = repos.Usage().ForTicket(ctx, report.TicketID)
+		return err
+	})
+	return usage, err
+}
+
 // SetWorkModel records the actual worker model, independently of the coordinator token.
 func (s *AgentService) SetWorkModel(ctx context.Context, actor domain.Actor, id int64, model string) (TicketDetail, error) {
 	text, err := domain.RequireText("model", model, 120)

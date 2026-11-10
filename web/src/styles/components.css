@@ -210,6 +210,17 @@
   color: var(--danger);
 }
 
+/* Model tokens spent on the ticket: quiet, unless it ran away. */
+.badge--usage {
+  font-variant-numeric: tabular-nums;
+}
+
+.badge--usage-heavy {
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 750;
+}
+
 .stage-chip {
   display: inline-flex;
   align-items: center;

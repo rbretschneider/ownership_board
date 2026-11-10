@@ -203,3 +203,23 @@ it("shows deployment, animation and the live holder while suppressing stale mode
  expect(blocked.querySelector(".badge--blocked")?.textContent).toContain("Blocked");
  expect(blocked.querySelector(".badge--blocked")?.getAttribute("title")).toContain("Deployment failed");
 });
+
+describe("token usage", () => {
+ const usage = {calls: 4, input_tokens: 300, cache_write_tokens: 40_000, cache_read_tokens: 2_000_000, output_tokens: 9_700, cost_usd: 1.25, weighted_tokens: 250_000};
+ it("shows nothing until usage is reported", () => {
+  expect(dom().querySelector(".badge--usage")).toBeNull();
+  expect(dom({usage: {...usage, calls: 0, weighted_tokens: 0}}).querySelector(".badge--usage")).toBeNull();
+ });
+ it("shows weighted tokens quietly, with the breakdown on hover", () => {
+  const badge = dom({usage}).querySelector(".card__meta .badge--usage");
+  expect(badge?.textContent).toBe("250k tok");
+  expect(badge?.classList.contains("badge--usage-heavy")).toBe(false);
+  expect(badge?.getAttribute("title")).toBe("250k tokens over 4 model calls · 50k new input and output · 2M cache reads, counted at a tenth · Claude list price $1.25");
+ });
+ it("flags a runaway ticket in bold red", () => {
+  const badge = dom({usage: {...usage, weighted_tokens: 14_400_000}}).querySelector(".badge--usage");
+  expect(badge?.textContent).toBe("14.4M tok");
+  expect(badge?.classList.contains("badge--usage-heavy")).toBe(true);
+  expect(badge?.getAttribute("title")).toContain("far more than a tightly scoped story");
+ });
+});

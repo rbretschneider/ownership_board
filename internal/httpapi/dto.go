@@ -81,6 +81,7 @@ type ticketSummaryDTO struct {
 	UpdatedAt      time.Time     `json:"updated_at"`
 	LaneChangedAt  time.Time     `json:"lane_changed_at"`
 	Attempts       attemptsDTO   `json:"attempts"`
+	Usage          usageDTO      `json:"usage"`
 }
 
 type ticketDetailDTO struct {
@@ -207,7 +208,26 @@ func toSummary(summary app.TicketSummary) ticketSummaryDTO {
 		SpecRevision: t.SpecRevision, DesignRevision: t.DesignRevision,
 		PRURL: t.PRURL, Branch: t.Branch, OpenQuestions: summary.OpenQuestions, WaitingOn: nonNilIDs(summary.WaitingOn), Lease: activeLease(t),
 		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, LaneChangedAt: t.LaneChangedAt,
-		Attempts: attemptsDTO(summary.Attempts),
+		Attempts: attemptsDTO(summary.Attempts), Usage: toUsage(summary.Usage),
+	}
+}
+
+// usageDTO is a ticket's reported model token usage. Weighted counts cache
+// reads at a tenth, so Claude and Codex calls compare.
+type usageDTO struct {
+	Calls            int     `json:"calls"`
+	InputTokens      int64   `json:"input_tokens"`
+	CacheWriteTokens int64   `json:"cache_write_tokens"`
+	CacheReadTokens  int64   `json:"cache_read_tokens"`
+	OutputTokens     int64   `json:"output_tokens"`
+	CostUSD          float64 `json:"cost_usd"`
+	Weighted         int64   `json:"weighted_tokens"`
+}
+
+func toUsage(u domain.TokenUsage) usageDTO {
+	return usageDTO{
+		Calls: u.Calls, InputTokens: u.InputTokens, CacheWriteTokens: u.CacheWriteTokens,
+		CacheReadTokens: u.CacheReadTokens, OutputTokens: u.OutputTokens, CostUSD: u.CostUSD, Weighted: u.Weighted(),
 	}
 }
 

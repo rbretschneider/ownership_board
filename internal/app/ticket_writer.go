@@ -107,8 +107,12 @@ func loadDetail(ctx context.Context, repos Repos, ticket domain.Ticket) (TicketD
 	if err != nil {
 		return TicketDetail{}, err
 	}
+	usage, err := repos.Usage().ForTicket(ctx, ticket.ID)
+	if err != nil {
+		return TicketDetail{}, err
+	}
 	detail := TicketDetail{
-		TicketSummary: TicketSummary{Ticket: ticket, OpenQuestions: countOpen(questions), WaitingOn: waitingOn, Attempts: domain.CountStageAttempts(timeline)},
+		TicketSummary: TicketSummary{Ticket: ticket, OpenQuestions: countOpen(questions), WaitingOn: waitingOn, Attempts: domain.CountStageAttempts(timeline), Usage: usage},
 		Questions:     questions, Timeline: timeline,
 	}
 	if detail.Repo, err = repoOf(ctx, repos, ticket.RepoID); err != nil {
