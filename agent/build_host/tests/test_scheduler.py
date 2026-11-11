@@ -193,7 +193,7 @@ class SchedulerTests(unittest.TestCase):
     def test_successful_claim_is_journaled_before_marker_settlement(self):
         with tempfile.TemporaryDirectory() as tmp:
             loop,board,clock=self.setup_loop(tmp)
-            job={'id':'a'*64,'attempt':1,'host_id':7,'sha':'b'*40,
+            job={'id':'a'*64,'attempt':1,'host_id':7,'repo':'acme/app','sha':'b'*40,
                  'bundle_sha256':'c'*64,'bundle_bytes':1,'preset':'script',
                  'target':{'os':host.OS,'required_capabilities':[]}}
             board.claims.append(job)
@@ -271,7 +271,7 @@ class SchedulerTests(unittest.TestCase):
     def test_claim_journal_failure_withholds_health_until_assignment_expires(self):
         with tempfile.TemporaryDirectory() as tmp:
             loop,board,clock=self.setup_loop(tmp)
-            job={'id':'a'*64,'attempt':1,'host_id':7,'sha':'b'*40,
+            job={'id':'a'*64,'attempt':1,'host_id':7,'repo':'acme/app','sha':'b'*40,
                  'bundle_sha256':'c'*64,'bundle_bytes':1,'preset':'script',
                  'target':{'os':host.OS,'required_capabilities':[]}}
             board.claims.append(job)

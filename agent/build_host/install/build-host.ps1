@@ -1,8 +1,9 @@
 # Download, inspect, then run as the build user with -Board and -Code.
+# To upgrade an enrolled worker, re-run with -Board only; its identity is kept.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][string]$Board,
-    [Parameter(Mandatory=$true)][string]$Code,
+    [string]$Code,
     [string]$Name = $env:COMPUTERNAME,
     [string]$BuildRoot,
     [string]$CacheRoot,
@@ -41,7 +42,11 @@ function Protect-UserPath([string]$Path, [bool]$Directory, [bool]$Existing) {
     $acl.SetAccessRuleProtection($true,$false)
     $rule = New-Object Security.AccessControl.FileSystemAccessRule($identity.User,'FullControl','Allow')
     $acl.AddAccessRule($rule)
-    Set-Acl -LiteralPath $Path -AclObject $acl
+    # Write only the owner and DACL sections that changed. Set-Acl also writes the
+    # SACL on an existing path, which needs SeSecurityPrivilege an unprivileged
+    # user lacks, so an upgrade re-run failed there.
+    $item = Get-Item -LiteralPath $Path -Force
+    if ($item.PSObject.Methods['SetAccessControl']) { $item.SetAccessControl($acl) } else { [IO.FileSystemAclExtensions]::SetAccessControl($item,$acl) }
 }
 $existing = Test-Path -LiteralPath $application
 if (!$existing) { New-Item -ItemType Directory -Path $application | Out-Null }
@@ -64,7 +69,8 @@ $interpreter = Join-Path $venv 'Scripts/python.exe'
 if ($LASTEXITCODE) { throw 'Hash-locked Python dependency installation failed.' }
 $config = Join-Path $application 'config.json'
 $agent = Join-Path $application 'build_host.py'
-$pairArgs = @($agent,'pair','--config',$config,'--board',$Board,'--code',$Code,'--name',$Name,'--reserve-gib',$ReserveGiB.ToString([Globalization.CultureInfo]::InvariantCulture),'--max-jobs',"$MaxJobs",'--max-parallel',"$MaxParallel")
+$pairArgs = @($agent,'pair','--config',$config,'--board',$Board,'--name',$Name,'--reserve-gib',$ReserveGiB.ToString([Globalization.CultureInfo]::InvariantCulture),'--max-jobs',"$MaxJobs",'--max-parallel',"$MaxParallel")
+if ($Code) { $pairArgs += @('--code',$Code) }
 if ($BuildRoot) { $pairArgs += @('--build-root',$BuildRoot) }
 if ($CacheRoot) { $pairArgs += @('--cache-root',$CacheRoot) }
 & $interpreter @pairArgs

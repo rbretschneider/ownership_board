@@ -35,6 +35,21 @@ API = '/api/v1/build-host'
 GIB = 1024 ** 3
 BUNDLE_LIMIT = 100 * 1024 ** 2
 OS = {'Windows': 'windows', 'Darwin': 'macos', 'Linux': 'linux'}.get(platform.system(), '')
+# A cold Qt/OCCT dependency build must fit; matches the legacy dispatcher bound.
+COMMAND_TIMEOUT = 3 * 3600
+# A desktop test that stops writing output is hung and would hold the desktop.
+DESKTOP_SILENCE_LIMIT = 20 * 60
+# One persistent checkout per repository per parallel assignment (max_parallel <= 8).
+CHECKOUT_SLOTS = 8
+# Scripts that reference this variable lock the desktop around their own UI tests.
+DESKTOP_LOCK_VARIABLE = 'OWNERSHIP_DESKTOP_LOCK'
+SCRIPT_NAMES = {'windows': ('windows_verify.ps1', 'verify.ps1'), 'linux': ('verify.sh',), 'macos': ('verify.sh',)}
+SECRET_VARIABLES = ('GH_TOKEN', 'GITHUB_TOKEN', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'OWNERSHIP_TOKEN')
+CACHE_DIRECTORIES = {'NUGET_PACKAGES': 'nuget', 'NUGET_HTTP_CACHE_PATH': 'nuget-http', 'DOTNET_CLI_HOME': 'dotnet',
+                     'CCACHE_DIR': 'ccache', 'SCCACHE_DIR': 'sccache',
+                     'VCPKG_DEFAULT_BINARY_CACHE': 'vcpkg-archives', 'VCPKG_DOWNLOADS': 'vcpkg-downloads'}
+# vcpkg rejects a binary cache or download directory that does not exist yet.
+CREATED_CACHE_VARIABLES = ('VCPKG_DEFAULT_BINARY_CACHE', 'VCPKG_DOWNLOADS')
 
 
 def json_bytes(value):
@@ -219,10 +234,15 @@ def private_dir(path):
     path = Path(path).absolute()
     if path.exists() or path.is_symlink():
         check_private(path, directory=True)
-    else:
+        return path
+    try:
         path.mkdir(mode=0o700, parents=True)
-        if os.name == 'nt':
-            windows_protect(path)
+    except FileExistsError:
+        # Parallel assignments can create a shared cache directory concurrently.
+        check_private(path, directory=True)
+        return path
+    if os.name == 'nt':
+        windows_protect(path)
     return path
 
 
@@ -249,7 +269,8 @@ class FileLock:
     def __init__(self, path):
         self.path, self.file = Path(path), None
 
-    def try_acquire(self):
+    def create(self):
+        """Open (creating if needed) the private lock file without locking it."""
         if self.file is None:
             if self.path.exists() or self.path.is_symlink():
                 check_private(self.path)
@@ -259,6 +280,10 @@ class FileLock:
             self.file = os.fdopen(fd, 'r+b', buffering=0)
             if self.path.stat().st_size == 0:
                 self.file.write(b'0')
+        return self
+
+    def try_acquire(self):
+        self.create()
         try:
             if os.name == 'nt':
                 import msvcrt
@@ -662,6 +687,23 @@ if os.name == 'nt':
                 self.handle = None
 
 
+class CommandTimeout(TimeoutError):
+    """A command stopped at its time or output-silence limit; carries its actual exit and log."""
+    def __init__(self, reason, code, log):
+        super().__init__(reason)
+        self.code, self.log = code, log
+
+
+def exceeded_limit(started, last_output, timeout, silence, now=None):
+    """Returns why a running command must stop, or '' while it is within its limits."""
+    now = time.monotonic() if now is None else now
+    if timeout is not None and now - started > timeout:
+        return f'stopped: exceeded its {timeout}-second time limit'
+    if silence is not None and now - last_output > silence:
+        return f'stopped as hung: no output for {silence // 60} minutes'
+    return ''
+
+
 class ProcessTree:
     def __init__(self, cancel_event):
         self.event = cancel_event
@@ -681,7 +723,7 @@ class ProcessTree:
                 os.close(self.control)
                 self.control = None
 
-    def run(self, command, cwd, env, log_path=None, timeout=None):
+    def run(self, command, cwd, env, log_path=None, timeout=None, silence=None):
         if self.event.is_set():
             raise Cancelled('assignment stopped')
         status_r = status_w = control_r = None
@@ -709,6 +751,7 @@ class ProcessTree:
             process = self.process
         excerpt = Excerpt()
         reader_error = []
+        last_output = [time.monotonic()]
         def drain():
             output = None
             written = 0
@@ -720,6 +763,7 @@ class ProcessTree:
                     if not raw:
                         break
                     excerpt.add(raw)
+                    last_output[0] = time.monotonic()
                     if output and written < 8*1024*1024:
                         part = raw[:8*1024*1024-written]
                         output.write(part)
@@ -736,10 +780,17 @@ class ProcessTree:
         reader = threading.Thread(target=drain, daemon=True)
         reader.start()
         start = time.monotonic()
+        limit_reason = ''
         try:
             while process.poll() is None:
-                if self.event.is_set() or timeout is not None and time.monotonic()-start > timeout:
+                if self.event.is_set():
                     self.cancel()
+                    process.wait(timeout=6)
+                    break
+                limit_reason = exceeded_limit(start, last_output[0], timeout, silence)
+                if limit_reason:
+                    # Stop only this command tree; the assignment itself is not cancelled.
+                    self._terminate()
                     process.wait(timeout=6)
                     break
                 time.sleep(.05)
@@ -756,8 +807,8 @@ class ProcessTree:
             if status_r is not None:
                 raw = os.read(status_r,64)
                 code = int(raw) if raw else -127
-            if timeout is not None and time.monotonic()-start > timeout:
-                raise TimeoutError('command exceeded its time limit')
+            if limit_reason and code != 0:
+                raise CommandTimeout(limit_reason, code, excerpt.text())
             return code, excerpt.text()
         finally:
             with self.guard:
@@ -834,6 +885,7 @@ def validate_job(job, host_id):
         valid = (isinstance(job,dict) and re.fullmatch('[a-f0-9]{64}', job['id']) and
                  type(job['attempt']) is int and 1 <= job['attempt'] <= 3 and
                  type(job['host_id']) is int and job['host_id'] == host_id and
+                 isinstance(job['repo'],str) and 0 < len(job['repo']) <= 512 and
                  re.fullmatch('(?:[a-f0-9]{40}|[a-f0-9]{64})',job['sha']) and
                  re.fullmatch('[a-f0-9]{64}',job['bundle_sha256']) and
                  type(job['bundle_bytes']) is int and 0 < job['bundle_bytes'] <= BUNDLE_LIMIT and
@@ -939,87 +991,142 @@ def app_root():
     return Path(os.environ.get('XDG_DATA_HOME',str(Path.home()/'.local/share')))/'ownership-build-host'
 
 
-class DesktopLock:
-    def __init__(self, event, path=None):
-        self.event, self.handle, self.file = event, None, None
-        if os.name == 'nt':
-            create = win_function(K32,'CreateMutexW',wt.HANDLE,wt.LPVOID,wt.BOOL,wt.LPCWSTR)
-            self.handle = create(None,False,'Global\\OwnershipBuildHostDesktop-' + windows_sid())
-            if not self.handle:
-                raise ctypes.WinError(ctypes.get_last_error())
-        else:
-            root = private_dir(app_root()) if path is None else Path(path).parent
-            self.file = FileLock(Path(path) if path else root/'desktop.lock')
+class HostLock:
+    """An exclusive lock file shared by every process of the build user, waited for until the assignment stops.
+
+    A file (not a named mutex) so verification scripts can take the same lock
+    themselves: PowerShell's FileStream.Lock(0,1) and msvcrt.locking exclude each other.
+    """
+    def __init__(self, event, path):
+        self.event, self.file = event, FileLock(path)
 
     def __enter__(self):
         while not self.event.is_set():
-            if self.handle:
-                wait = win_function(K32,'WaitForSingleObject',wt.DWORD,wt.HANDLE,wt.DWORD)
-                status = wait(self.handle,100)
-                if status in (0,0x80):
-                    return self
-                if status != 0x102:
-                    self.close()
-                    raise RuntimeError('cannot acquire desktop mutex')
-            elif self.file.try_acquire():
+            if self.file.try_acquire():
                 return self
-            else:
-                self.event.wait(.1)
+            self.event.wait(.1)
         self.close()
-        raise Cancelled('stopped while waiting for desktop')
+        raise Cancelled('stopped while waiting for a shared host lock')
 
     def close(self):
-        if self.handle:
-            win_function(K32,'ReleaseMutex',wt.BOOL,wt.HANDLE)(self.handle)
-            close_handle(self.handle)
-            self.handle = None
-        if self.file:
-            self.file.close()
+        self.file.close()
 
     def __exit__(self,*args):
         self.close()
+
+
+def physical_path(path):
+    """Resolves SUBST drives, junctions and links: Qt and vcpkg reject aliased build paths."""
+    return Path(os.path.realpath(path, strict=True))
+
+
+def is_secret_variable(name):
+    upper = name.upper()
+    return upper in SECRET_VARIABLES or upper.startswith('OWNERSHIP_TOKEN_')
+
+
+def workload_environment(inherited, cache_root, limit):
+    """The environment every verification command runs with: no Git configuration, no secrets, local caches."""
+    env = {k:v for k,v in inherited.items() if not k.startswith('GIT_') and not is_secret_variable(k)}
+    # Git preparation is entirely local and must not inherit external configuration.
+    env.update(GIT_CONFIG_GLOBAL=os.devnull,GIT_CONFIG_SYSTEM=os.devnull,GIT_CONFIG_NOSYSTEM='1',GIT_TERMINAL_PROMPT='0',GIT_NO_REPLACE_OBJECTS='1',GIT_LFS_SKIP_SMUDGE='1',
+               DOTNET_CLI_UI_LANGUAGE='en-US',VSLANG='1033',DOTNET_CLI_TELEMETRY_OPTOUT='1',DOTNET_NOLOGO='1',
+               # Reused MSBuild nodes would outlive the command and leak state between assignments.
+               MSBUILDDISABLENODEREUSE='1',VCPKG_MAX_CONCURRENCY=str(limit))
+    root = physical_path(cache_root)
+    for name,directory in CACHE_DIRECTORIES.items():
+        env[name] = str(root/directory)
+    return env
+
+
+def checkout_key(repo):
+    """A path-safe, collision-free directory name for a repository full name."""
+    readable = re.sub(r'[^A-Za-z0-9_.-]','_',repo.replace('/','__'))[:60]
+    return readable + '-' + hashlib.sha256(repo.encode()).hexdigest()[:8]
+
+
+def preferred_preset(names):
+    """The one configure preset the legacy dispatcher verified: the first release preset, else the first."""
+    return next((name for name in names if 'release' in name.lower()), names[0])
 
 
 class JobRunner:
     def __init__(self, client, config, assignment):
         self.client, self.config, self.assignment = client, config, assignment
         self.job = validate_job(assignment.job,config['host_id'])
-        self.limit,self.env = resource_limits(config)
-        # Git preparation is entirely local and must not inherit external configuration.
-        self.env = {k:v for k,v in self.env.items() if not k.startswith('GIT_')}
-        self.env.update(GIT_CONFIG_GLOBAL=os.devnull,GIT_CONFIG_SYSTEM=os.devnull,GIT_CONFIG_NOSYSTEM='1',GIT_TERMINAL_PROMPT='0',GIT_NO_REPLACE_OBJECTS='1',GIT_LFS_SKIP_SMUDGE='1',DOTNET_CLI_UI_LANGUAGE='en-US',VSLANG='1033',DOTNET_CLI_TELEMETRY_OPTOUT='1')
-        for name,directory in {'NUGET_PACKAGES':'nuget','NUGET_HTTP_CACHE_PATH':'nuget-http','DOTNET_CLI_HOME':'dotnet','CCACHE_DIR':'ccache','SCCACHE_DIR':'sccache'}.items():
-            self.env[name] = str(Path(config['cache_root'])/directory)
+        self.limit,limited = resource_limits(config)
+        self.env = workload_environment(limited,config['cache_root'],self.limit)
+        self.desktop_required = OS == 'windows' or 'gl' in self.job['target']['required_capabilities']
         self.commands = []
+        self.log_count = 0
         self.folder = None
         self.checkout = None
+        self.slot = None
+        self.slot_lock = None
+        self.git = None
 
     def check_cancel(self):
         if self.assignment.cancel.is_set():
             raise Cancelled('assignment stopped')
 
-    def command(self,label,args,phase='preparing',timeout=None,infrastructure=False):
+    def command(self,label,args,phase='preparing',timeout=None,infrastructure=False,silence=None):
         self.check_cancel()
         if len(self.commands) >= 128:
             raise InfrastructureError('command plan exceeds the report limit')
         label = clean_text(label,200).encode()[:200].decode('utf-8','ignore') or 'command'
         self.assignment.phase = phase
+        failure = InfrastructureError if infrastructure else CommandFailed
+        # Local logs keep every attempt, including reported commands later dropped.
+        self.log_count += 1
         try:
-            code,log = self.assignment.tree.run(args,self.checkout,self.env,self.folder/f'{len(self.commands):03d}.log',timeout=timeout)
+            code,log = self.assignment.tree.run(args,self.checkout,self.env,self.folder/f'{self.log_count:03d}.log',timeout=timeout,silence=silence)
+        except CommandTimeout as exc:
+            self.commands.append({'label':label,'exit_code':exc.code,'log':exc.log+f'\n[{exc}]\n'})
+            raise failure(f'{label} {exc}') from exc
         except OSError as exc:
             raise InfrastructureError(f'cannot start {label}: required tool or log location unavailable') from exc
         self.commands.append({'label':label,'exit_code':code,'log':log})
         self.check_cancel()
         if code != 0:
-            raise (InfrastructureError if infrastructure else CommandFailed)(f'{label} failed (exit {code})')
+            raise failure(f'{label} failed (exit {code})')
         return log
+
+    def desktop(self):
+        """Exclusive use of the interactive desktop for UI/GL tests, shared with other assignments and scripts."""
+        if not self.desktop_required:
+            return contextlib.nullcontext()
+        return HostLock(self.assignment.cancel,self.lock_path('desktop.lock'))
+
+    def desktop_command(self,label,args):
+        with self.desktop():
+            return self.command(label,args,'testing',timeout=COMMAND_TIMEOUT,silence=DESKTOP_SILENCE_LIMIT if self.desktop_required else None)
+
+    def lock_path(self,name):
+        return physical_path(self.config['build_root'])/name
 
     def prepare(self):
         self.check_cancel()
-        self.folder = Path(tempfile.mkdtemp(prefix=f"{self.job['id']}-{self.job['attempt']}-",dir=self.config['build_root']))
+        build_root = physical_path(self.config['build_root'])
+        self.folder = Path(tempfile.mkdtemp(prefix=f"{self.job['id']}-{self.job['attempt']}-",dir=build_root))
         if os.name == 'nt':
             windows_protect(self.folder)
-        self.checkout = private_dir(self.folder/'checkout')
+        bundle = self.download_bundle()
+        for name in CREATED_CACHE_VARIABLES:
+            private_dir(self.env[name])
+        hooks = private_dir(self.folder/'empty-hooks')
+        self.git = ['git','-c','core.hooksPath='+str(hooks),'-c','core.fsmonitor=false','-c','core.longpaths=true',
+                    # Keep automatic maintenance inside the command tree, never detached past it.
+                    '-c','gc.autoDetach=false','-c','maintenance.autoDetach=false']
+        self.slot = self.reserve_slot(build_root)
+        self.checkout = self.slot/'source'
+        # A damaged checkout must fail, never fall through to a repository above the build root.
+        self.env['GIT_CEILING_DIRECTORIES'] = str(self.slot)
+        self.sync_checkout(bundle)
+        attrs = self.checkout/'.gitattributes'
+        if self.job['preset'] != 'script' and attrs.exists() and 'filter=lfs' in attrs.read_text(errors='replace'):
+            raise InfrastructureError('LFS material requires an explicit verification script')
+
+    def download_bundle(self):
         bundle = self.folder/'source.bundle'
         count = 0
         digest = hashlib.sha256()
@@ -1036,23 +1143,65 @@ class JobRunner:
                 target.write(raw)
         if count != self.job['bundle_bytes'] or digest.hexdigest() != self.job['bundle_sha256']:
             raise InfrastructureError('bundle length or SHA-256 mismatch')
-        hooks = private_dir(self.folder/'empty-hooks')
-        git = ['git','-c','core.hooksPath='+str(hooks),'-c','protocol.file.allow=always']
-        fmt = 'sha256' if len(self.job['sha']) == 64 else 'sha1'
-        self.command('initialize checkout',git+['init','--object-format='+fmt],timeout=30,infrastructure=True)
+        return bundle
+
+    def reserve_slot(self,build_root):
+        """Locks this repository's first free checkout slot; parallel assignments never share a tree."""
+        # The runs/<slot>/source layout matches the legacy dispatcher, which
+        # verification scripts use to locate their persistent dependency caches.
+        runs = private_dir(build_root/'runs')
+        key = checkout_key(self.job['repo'])
+        for slot in range(1,CHECKOUT_SLOTS+1):
+            lock = FileLock(runs/f'slot{slot}_{key}.lock')
+            if lock.try_acquire():
+                self.slot_lock = lock
+                return runs/f'slot{slot}_{key}'
+            lock.close()
+        raise InfrastructureError('every checkout slot for this repository is busy')
+
+    def sync_checkout(self,bundle):
+        """Moves the slot's persistent checkout to the exact commit, keeping ignored build output for incremental builds."""
+        if (self.checkout/'.git').is_dir():
+            first = len(self.commands)
+            try:
+                self.checkout_commit(bundle)
+                return
+            except InfrastructureError as exc:
+                # The fresh checkout below is the reported preparation.
+                del self.commands[first:]
+                self.park_checkout(exc)
+        private_dir(self.slot)
+        private_dir(self.checkout)
+        # SHA-1 is Git's default; only SHA-256 needs (and newer Git supports) the option.
+        object_format = ['--object-format=sha256'] if len(self.job['sha']) == 64 else []
+        self.command('initialize checkout',self.git+['init',*object_format],timeout=30,infrastructure=True)
+        self.checkout_commit(bundle)
+
+    def checkout_commit(self,bundle):
+        sha = self.job['sha']
+        git = self.git+['-c','protocol.file.allow=always']
         self.command('verify bundle',git+['bundle','verify',str(bundle)],timeout=60,infrastructure=True)
-        self.command('fetch exact commit',git+['fetch','--no-tags',str(bundle),self.job['sha']],timeout=120,infrastructure=True)
-        obj = self.command('verify commit type',git+['cat-file','-t',self.job['sha']],timeout=30,infrastructure=True).strip()
+        self.command('fetch exact commit',git+['fetch','--no-tags',str(bundle),sha],timeout=600,infrastructure=True)
+        obj = self.command('verify commit type',git+['cat-file','-t',sha],timeout=30,infrastructure=True).strip()
         if obj != 'commit':
             raise InfrastructureError('requested object is not a commit')
-        self.command('checkout exact commit',git+['-c','advice.detachedHead=false','checkout','--detach',self.job['sha']],timeout=120,infrastructure=True)
+        self.command('checkout exact commit',git+['-c','advice.detachedHead=false','checkout','--detach','--force',sha],timeout=600,infrastructure=True)
+        # Without -x: git-ignored build output stays, so a reused build is incremental.
+        self.command('remove untracked files',git+['clean','-ffd'],timeout=600,infrastructure=True)
         actual = self.command('verify checkout SHA',git+['rev-parse','HEAD'],timeout=30,infrastructure=True).strip()
-        if actual != self.job['sha']:
+        if actual != sha:
             raise InfrastructureError('checkout SHA mismatch')
-        if self.job['preset'] != 'script':
-            attrs = self.checkout/'.gitattributes'
-            if (self.checkout/'.gitmodules').exists() or attrs.exists() and 'filter=lfs' in attrs.read_text(errors='replace'):
-                raise InfrastructureError('external submodule/LFS material requires an explicit verification script')
+
+    def park_checkout(self,cause):
+        # A checkout that cannot be updated is set aside, never deleted.
+        parked = self.slot.with_name(self.slot.name+'.broken-'+self.folder.name)
+        self.slot.rename(parked)
+        atomic_private(self.folder/'checkout-parked.txt',clean_text(f'{parked}: {cause}',2048).encode())
+
+    def update_submodules(self):
+        if (self.checkout/'.gitmodules').is_file():
+            # Submodules come from their declared remotes, never local paths.
+            self.command('update submodules',self.git+['-c','protocol.file.allow=never','submodule','update','--init','--recursive'],timeout=COMMAND_TIMEOUT,infrastructure=True)
 
     def dotnet(self):
         solutions = sorted([*self.checkout.glob('*.sln'),*self.checkout.glob('*.slnx')])
@@ -1061,35 +1210,51 @@ class JobRunner:
             raise InfrastructureError('missing or ambiguous root .NET solution/project')
         target = str(targets[0])
         limits = [f'-maxcpucount:{self.limit}']
-        self.command('dotnet restore',['dotnet','restore',target,*limits],infrastructure=True)
-        self.command('dotnet Release build',['dotnet','build',target,'--configuration','Release','--no-restore',*limits],'building')
-        log = self.command('dotnet Release tests',['dotnet','test',target,'--configuration','Release','--no-build','--no-restore',*limits,'--',f'RunConfiguration.MaxCpuCount={self.limit}'],'testing')
+        self.command('dotnet restore',['dotnet','restore',target,'--disable-parallel',*limits],timeout=COMMAND_TIMEOUT)
+        self.command('dotnet Release build',['dotnet','build',target,'--configuration','Release','--no-restore',*limits],'building',timeout=COMMAND_TIMEOUT)
+        log = self.desktop_command('dotnet Release tests',['dotnet','test',target,'--configuration','Release','--no-build','--no-restore',*limits,'--',f'RunConfiguration.MaxCpuCount={self.limit}'])
         if not re.search(r'(?:Total tests:|total:)\s*[1-9][0-9]*',log,re.IGNORECASE):
             raise InfrastructureError('no runnable .NET tests were confirmed by the test summary')
 
     def cmake(self):
-        categories = {}
-        for category,tool in [('configure','cmake'),('build','cmake'),('test','ctest')]:
-            log = self.command('list '+category+' presets',[tool,'--list-presets='+category] if tool == 'cmake' else [tool,'--list-presets'],timeout=30,infrastructure=True)
-            names = re.findall(r'^\s*"([^"\r\n]+)"',log,re.MULTILINE)
-            if OS == 'windows':
-                names = [n for n in names if n.startswith(('win-','windows'))]
-            else:
-                names = [n for n in names if n.startswith(OS+'-')]
-            if not names or '[output truncated]' in log:
-                raise InfrastructureError('missing available '+category+' presets for '+OS)
-            categories[category] = sorted(set(names))
-        if sum(map(len,categories.values())) + len(self.commands) > 128:
-            raise InfrastructureError('too many presets for one report')
-        for name in categories['configure']:
-            self.command('configure '+name,['cmake','--preset',name],infrastructure=True)
-        for name in categories['build']:
-            self.command('build '+name,['cmake','--build','--preset',name,'--parallel',str(self.limit),'--config','Release'],'building')
-        for name in categories['test']:
-            self.command('test '+name,['ctest','--preset',name,'--parallel',str(self.limit),'--build-config','Release','--output-on-failure','--no-tests=error','--repeat','until-pass:3'],'testing')
+        presets = {category:self.list_presets(category) for category in ('configure','build','test')}
+        name = preferred_preset(presets['configure'])
+        for category in ('build','test'):
+            if name not in presets[category]:
+                raise InfrastructureError(f'missing {category} preset {name}')
+        self.update_submodules()
+        # Concurrent dependency installs share the download and binary caches.
+        with HostLock(self.assignment.cancel,self.lock_path('configure.lock')):
+            self.command('configure '+name,['cmake','--preset',name],timeout=COMMAND_TIMEOUT)
+        self.command('build '+name,['cmake','--build','--preset',name,'--parallel',str(self.limit)],'building',timeout=COMMAND_TIMEOUT)
+        # A real bug fails all three tries; a busy shared desktop must not fail a timing-sensitive UI test.
+        self.desktop_command('test '+name,['ctest','--preset',name,'--parallel',str(self.limit),'--output-on-failure','--no-tests=error','--repeat','until-pass:3'])
+
+    def list_presets(self,category):
+        args = ['ctest','--list-presets'] if category == 'test' else ['cmake','--list-presets='+category]
+        log = self.command('list '+category+' presets',args,timeout=30,infrastructure=True)
+        prefixes = ('win-','windows') if OS == 'windows' else (OS+'-',)
+        # Listing order is declaration order, which decides the preferred preset.
+        names = [n for n in dict.fromkeys(re.findall(r'^\s*"([^"\r\n]+)"',log,re.MULTILINE)) if n.startswith(prefixes)]
+        if not names or '[output truncated]' in log:
+            raise InfrastructureError('missing available '+category+' presets for '+OS)
+        return names
 
     def script(self):
-        path = self.checkout/'.ownership'/('verify.ps1' if OS == 'windows' else 'verify.sh')
+        for name in SCRIPT_NAMES[OS]:
+            path = self.checkout/'.ownership'/name
+            if path.exists() or path.is_symlink():
+                self.run_script(path)
+                return
+        raise InfrastructureError('missing verification script')
+
+    def follow_up_script(self):
+        """Project-specific checks that also run after the standard presets, as the legacy dispatcher did."""
+        path = self.checkout/'.ownership'/SCRIPT_NAMES['windows'][0]
+        if OS == 'windows' and (path.exists() or path.is_symlink()):
+            self.run_script(path)
+
+    def run_script(self,path):
         try:
             path.resolve(strict=True).relative_to(self.checkout.resolve())
         except (OSError,ValueError) as exc:
@@ -1097,21 +1262,33 @@ class JobRunner:
         if not path.is_file():
             raise InfrastructureError('verification script is not a regular file')
         if OS == 'windows':
-            args = ['powershell.exe','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',str(path),'-MaxJobs',str(self.limit)]
+            # PowerShell 7 like the legacy dispatcher: 5.1 turns redirected native stderr into terminating errors.
+            shell = shutil.which('pwsh',path=self.env.get('PATH')) or 'powershell.exe'
+            args = [shell,'-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',str(path),'-MaxJobs',str(self.limit)]
         else:
             args = ['/bin/sh',str(path),'--max-jobs',str(self.limit)]
-        self.command('verify script',args,'building')
+        if DESKTOP_LOCK_VARIABLE in path.read_text(encoding='utf-8',errors='replace'):
+            # The script locks the desktop around its own UI tests, so its long
+            # compile does not hold every other assignment's tests.
+            # Created here so it is private; a file the script created would not be.
+            lock = FileLock(self.lock_path('desktop.lock')).create()
+            lock.close()
+            self.env[DESKTOP_LOCK_VARIABLE] = str(lock.path)
+            self.command('verify script',args,'building',timeout=COMMAND_TIMEOUT)
+            return
+        with self.desktop():
+            self.command('verify script',args,'building',timeout=COMMAND_TIMEOUT)
 
     def execute(self):
         failure = ''
         try:
             self.assignment.tree = ProcessTree(self.assignment.cancel)
             self.prepare()
-            desktop = OS == 'windows' or 'gl' in self.job['target']['required_capabilities']
             if 'gl' in self.job['target']['required_capabilities'] and not interactive_session():
                 raise InfrastructureError('GL workload requires an interactive desktop session')
-            with DesktopLock(self.assignment.cancel) if desktop else contextlib.nullcontext():
-                getattr(self,self.job['preset'])()
+            getattr(self,self.job['preset'])()
+            if self.job['preset'] != 'script':
+                self.follow_up_script()
             self.assignment.phase = 'verifying'
             self.check_cancel()
         except Cancelled:
@@ -1126,6 +1303,8 @@ class JobRunner:
         finally:
             if self.assignment.tree:
                 self.assignment.tree.close()
+            if self.slot_lock:
+                self.slot_lock.close()
         if self.assignment.cancel.is_set() and not failure:
             failure = self.assignment.failure_kind or 'cancelled'
         return completion_bytes(self.job['attempt'],self.commands,failure)
@@ -1430,8 +1609,9 @@ def run_cli(argv):
         config = state.load()
         if origin and config.get('board') and origin != config['board']:
             raise ValueError('existing identity belongs to a different board; archive it explicitly first')
-        if args.command == 'pair' and (not origin or not args.code):
-            parser.error('pair requires --board and --code')
+        # An upgrade re-run keeps the existing identity and needs no new enrollment code.
+        if args.command == 'pair' and (not origin or not (args.code or config.get('host_id'))):
+            parser.error('pair requires --board, and --code unless this identity is already enrolled')
         if args.command == 'run' and not config.get('host_id'):
             raise RuntimeError('pair and obtain approval before starting run')
         config['board'] = origin or config['board']

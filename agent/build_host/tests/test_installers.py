@@ -64,10 +64,15 @@ os.execv(os.environ['FIXTURE_REAL_PYTHON'],[os.environ['FIXTURE_REAL_PYTHON'],*a
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
             self.assertEqual(marker.read_bytes(),b'identity fixture')
             self.assertEqual((app/'build_host.py').read_bytes(),(ROOT/'build_host.py').read_bytes())
+            # An upgrade re-run keeps the enrolled identity and needs no code.
+            upgrade=command[:command.index('--code')]+command[command.index('--code')+2:]
+            result=subprocess.run(upgrade,env=env,capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stdout+result.stderr)
             invocations=[json.loads(line) for line in calls.read_text().splitlines()]
             pairs=[args for args in invocations if len(args)>1 and args[1]=='pair']
-            self.assertEqual(len(pairs),2)
+            self.assertEqual(len(pairs),3)
             self.assertEqual(pairs[0][pairs[0].index('--code')+1],'public-fixture ;$&')
+            self.assertNotIn('--code',pairs[2])
             if host.OS=='linux':
                 unit=(home/'.config/systemd/user/ownership-build-host.service').read_text()
                 self.assertIn('%%',unit)
@@ -139,6 +144,8 @@ $seed=Join-Path $env:LOCALAPPDATA 'OwnershipBuildHost/identity.seed'
 [IO.File]::WriteAllText($seed,'retained identity fixture')
 & $Installer -Board 'http://127.0.0.1:8080' -Code 'public-fixture ;$&'
 if (!$?) { throw 'second installation failed' }
+& $Installer -Board 'http://127.0.0.1:8080'
+if (!$?) { throw 'upgrade re-run without an enrollment code failed' }
 ''',encoding='utf-8-sig')
             calls=root/'calls.txt';task=root/'task.json'
             env=dict(os.environ,LOCALAPPDATA=str(local),PATH=str(tools)+os.pathsep+os.environ['PATH'],FIXTURE_CALLS=str(calls),FIXTURE_TASK=str(task))
@@ -149,8 +156,12 @@ if (!$?) { throw 'second installation failed' }
             self.assertEqual((app/'build_host.py').read_bytes(),(ROOT/'build_host.py').read_bytes())
             entries=[base64.b64decode(line).decode().split('\0') for line in calls.read_text().splitlines()]
             pairs=[args for args in entries if len(args)>1 and args[1]=='pair']
-            self.assertEqual(len(pairs),2)
+            self.assertEqual(len(pairs),3)
             self.assertEqual(pairs[0][pairs[0].index('--code')+1],'public-fixture ;$&')
+            self.assertNotIn('--code',pairs[2])
+            # Re-runs rewrite owner and DACL only, and the result stays private.
+            for path,directory in ((app,True),(app/'build_host.py',False),(app/'run.ps1',False)):
+                host.check_private(path,directory=directory)
             saved=json.loads(task.read_text(encoding='utf-8-sig'))
             self.assertTrue(Path(saved['Action']['Execute']).is_file())
             self.assertEqual(Path(saved['Action']['Execute']).name.lower(),'powershell.exe')

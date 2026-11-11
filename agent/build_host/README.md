@@ -61,6 +61,9 @@ identity.
 `config.json` stores the origin, host ID and resource settings. `identity.seed`
 is a separate private signing seed. Neither belongs in a repository or support
 log. Reinstalling preserves an existing identity and resumes approval waiting.
+To upgrade an enrolled worker, re-run the installer with only the board
+(`--board`/`-Board`); no new code is needed. Re-runs rewrite only the owner and
+access rules of existing files, so an unprivileged user can upgrade.
 If an enrollment response is lost before the host ID is saved, automatic
 re-enrollment is intentionally refused. Stop the service, archive the application
 directory explicitly and obtain a fresh code from the owner. Do not copy a key
@@ -74,8 +77,17 @@ journals are automatically removed. Operators must monitor and clean retained
 files themselves while no affected build is active.
 
 Service output is under the application's `logs` directory. Each unique job
-folder retains its bundle, detached checkout, numbered command logs and any
-agent error diagnostic. Common .NET, ccache and sccache caches use the configured cache root.
+folder retains its bundle, numbered command logs and any agent error diagnostic.
+Checkouts persist per repository and parallel slot under
+`<build root>/runs/slotN_<owner>__<repo>-<hash>/source`, the same layout as the
+legacy Windows dispatcher, so build output and a script's dependency trees are
+reused instead of rebuilt (a fresh MakerCAD/Qt/OCCT build took about an hour).
+Each job fetches its exact commit into the slot, checks it out with `--force`,
+removes untracked files but keeps git-ignored build output (`git clean -ffd`,
+without `-x`), and verifies HEAD before running anything. A slot checkout that
+cannot be updated is renamed to `*.broken-<job folder>` and replaced, never
+deleted. Common .NET, vcpkg (`VCPKG_DEFAULT_BINARY_CACHE`, `VCPKG_DOWNLOADS`),
+ccache and sccache caches use the physical path of the configured cache root.
 Command logs retain at most 8 MiB each and note
 truncation; uploaded logs retain bounded head/tail excerpts. Result journals
 under `assignments` preserve completion bytes across retries. Restarted workers
@@ -91,24 +103,44 @@ Verification modes:
 
 - `dotnet`: one unambiguous root solution (or root project), restore, Release
   build and tests. A test summary must confirm runnable tests.
-- `cmake`: every available OS-prefixed configure, build and test preset,
-  including presets resolved through native includes/conditions. Prefixes are
-  `win-`/`windows`, `linux-` or `macos-`. CTest retries until pass up to three times;
-  no discovered tests is an error.
-- `script`: `.ownership/verify.ps1 -MaxJobs N` on Windows, or
-  `/bin/sh .ownership/verify.sh --max-jobs N` elsewhere. Shell scripts must obey
-  the POSIX shell contract. Scripts must resolve inside the checkout.
+- `cmake`: one OS-prefixed configure preset (the first whose name contains
+  `release`, else the first declared) and the build and test presets of the same
+  name, including presets resolved through native includes/conditions. Prefixes
+  are `win-`/`windows`, `linux-` or `macos-`. The presets choose the build
+  configuration. Declared submodules are updated from their remotes first
+  (local `file:` URLs are refused). Configure steps are serialized across
+  assignments. CTest retries until pass up to three times; no discovered tests
+  is an error.
+- `script`: on Windows `.ownership/windows_verify.ps1 -MaxJobs N` (or
+  `.ownership/verify.ps1` when that is absent), elsewhere
+  `/bin/sh .ownership/verify.sh --max-jobs N`. Shell scripts must obey the POSIX
+  shell contract. Scripts must resolve inside the checkout. PowerShell 7
+  (`pwsh`) is used when installed, else Windows PowerShell.
+
+On Windows, `.ownership/windows_verify.ps1` also runs after the `dotnet` and
+`cmake` steps whenever it exists, as with the legacy dispatcher.
+
+Each build, test and script command is limited to three hours. Desktop test
+commands that write no output for 20 minutes are stopped as hung and reported
+as failed commands with their actual exit code.
 
 Bundles are length/digest checked before Git sees them. Only the exact commit
-is fetched from the local bundle; no remote, hooks, submodule or LFS downloads
-are implicitly executed. A mismatch is an infrastructure failure. Projects
-needing external material must provide an explicit verification script.
+is fetched from the local bundle with hooks disabled; LFS content is never
+downloaded, so LFS repositories need an explicit verification script. A
+mismatch is an infrastructure failure.
 Windows commands enter a kill-on-close Job Object while suspended and run below
 normal priority. POSIX workloads have a process-group guardian. Stops terminate
 ordinary descendants, including descendants whose parent exits early. Deliberate
-daemonization is outside this containment model. Windows execution is serialized
-across workers with a per-user desktop mutex; GL work also requires an interactive
-session. Missing optional facts remain unknown and do not imply working OpenGL.
+daemonization is outside this containment model.
+
+Desktop tests are serialized across assignments with an exclusive lock on
+`<build root>/desktop.lock`; on Windows that is every `dotnet test`, `ctest` and
+script step, while builds run in parallel. A script whose text mentions
+`OWNERSHIP_DESKTOP_LOCK` receives that file's path in the variable and runs
+without the lock; it must lock byte 0 of the file itself (for example
+`[IO.File]::Open(...).Lock(0,1)`) around its UI tests. GL work also requires an
+interactive session. Missing optional facts remain unknown and do not imply
+working OpenGL.
 
 To run manually, use the installed venv interpreter:
 
