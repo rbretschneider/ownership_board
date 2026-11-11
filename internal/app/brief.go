@@ -242,6 +242,9 @@ func instructionsFor(input BriefInput) string {
 			instructions += "\n\n" + architectureBaselineInstructions
 		}
 		fmt.Fprintf(&b, "## What to do now\n\n%s\n\n%s\n\n%s\n\n", instructions, decisionAuthority, tracingInstructions)
+		if input.Action == domain.ActionDesign {
+			b.WriteString(designAheadNote(input.Detail.Related))
+		}
 		if input.Detail.Ticket.IsAutonomous && input.Action != domain.ActionDeploy {
 			fmt.Fprintf(&b, "## Autonomous ticket\n\n%s\n\n", autonomousRules)
 		}
@@ -275,6 +278,29 @@ func (r *briefRenderer) facts(input BriefInput) {
 	if input.Repo != nil && input.Repo.Description != "" {
 		r.field("About the repo", input.Repo.Description, "")
 	}
+}
+
+// designAheadNote tells a designer whose dependencies have not merged yet
+// that it is designing ahead of them (2026-11-10): the board lets a design
+// start once each dependency is being built, while the build waits for the
+// merge. Empty when every dependency has merged.
+func designAheadNote(related []RelatedTicket) string {
+	var pending []string
+	for _, item := range related {
+		if item.Relation.Kind != domain.RelationDependsOn || !item.IsOutgoing {
+			continue
+		}
+		if item.Other.Lane != domain.LaneMerged && item.Other.Lane != domain.LaneDeployed {
+			pending = append(pending, fmt.Sprintf("#%d", item.Other.ID))
+		}
+	}
+	if len(pending) == 0 {
+		return ""
+	}
+	return "## Designing ahead\n\nThese dependencies are still being built and have not merged: " + strings.Join(pending, ", ") +
+		". Design against the default branch plus their work in progress: their branches are in your checkout as " +
+		"`origin/ob/<ticket>-*`. Name every interface or file you take from them, " +
+		"so the build can adjust if they change before merging. This ticket's build waits until they merge.\n\n"
 }
 
 // dependencyFacts list the tickets this one depends on, with whether each is
