@@ -1,179 +1,208 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Ban, Info, Pencil, Server } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useApi } from "../../api/ApiContext";
-import type { BuildHost, BuildHostEdit } from "../../api/types";
-import { eventDescription, OS_LABELS } from "../../lib/buildHosts";
-import { useVisiblePolling } from "../../hooks/useVisiblePolling";
-import { ErrorState } from "../common/ErrorState";
+import type { BuildHost } from "../../api/types";
+import { describeHostSummary, describePresence, OS_LABELS } from "../../lib/buildHosts";
+import { relativeTime } from "../../lib/relativeTime";
+import { RowMenu, type RowMenuItem } from "../common/RowMenu";
 import { BuildHostCapabilities } from "./BuildHostCapabilities";
+import { BuildHostEditor } from "./BuildHostEditor";
+import { BuildHostEvents } from "./BuildHostEvents";
 import { BuildHostFacts } from "./BuildHostFacts";
 
-type Props = {
+/** Props for {@link BuildHostRow}. */
+export interface BuildHostRowProps {
   host: BuildHost;
   onMutate: (id: number, operation: () => Promise<BuildHost>) => Promise<void>;
+  /** Asks the owner to confirm revoking (or rejecting) this host. */
   onRevoke: () => void;
-};
-function HostEvents({ id }: { id: number }) {
-  const api = useApi();
-  const load = useCallback(() => api.buildHostEvents(id), [api, id]);
-  const events = useVisiblePolling(load);
-  return (
-    <div>
-      <h4>Recent host events</h4>
-      {events.error && <ErrorState message={events.error} onRetry={events.refresh} />}
-      {events.value === null && !events.error && <p role="status">Loading events…</p>}
-      {events.value?.length === 0 && <p>No host events.</p>}
-      <ul>
-        {events.value?.map((event) => (
-          <li key={event.id}>
-            <time dateTime={event.created_at}>{new Date(event.created_at).toLocaleString()}</time> ·{" "}
-            {eventDescription(event)}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
 }
-export function BuildHostRow({ host, onMutate, onRevoke }: Props) {
-  const api = useApi();
-  const [capabilities, setCapabilities] = useState(host.capabilities),
-    [capacity, setCapacity] = useState(String(host.max_parallel));
-  const dirty = useRef({ capabilities: false, capacity: false });
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState<string | null>(null),
-    [expanded, setExpanded] = useState(false);
-  useEffect(() => {
-    if (!dirty.current.capabilities) setCapabilities(host.capabilities);
-    if (!dirty.current.capacity) setCapacity(String(host.max_parallel));
-  }, [host]);
-  const mutate = async (operation: () => Promise<BuildHost>, clearDraft = false) => {
-    if (busy) return;
+
+/** One build host as a card: approved hosts collapse their configuration behind Edit. */
+export function BuildHostRow({ host, onMutate, onRevoke }: BuildHostRowProps) {
+  const [isBusy, setBusy] = useState(false),
+    [error, setError] = useState<string | null>(null);
+  const run = async (operation: () => Promise<BuildHost>): Promise<boolean> => {
+    if (isBusy) {
+      return false;
+    }
     setBusy(true);
     setError(null);
     try {
-      await onMutate(host.id, async () => {
-        const next = await operation();
-        if (clearDraft) {
-          dirty.current = { capabilities: false, capacity: false };
-          setCapabilities(next.capabilities);
-          setCapacity(String(next.max_parallel));
-        }
-        return next;
-      });
+      await onMutate(host.id, operation);
+      return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
+      return false;
     } finally {
       setBusy(false);
     }
   };
-  const n = Number(capacity),
-    valid = Number.isInteger(n) && n >= 1 && n <= 8;
-  const pending = host.status === "pending",
-    revoked = host.status === "revoked";
-  const save = () => {
-    const edit: BuildHostEdit = {};
-    if (dirty.current.capacity) edit.max_parallel = n;
-    if (dirty.current.capabilities) edit.capabilities = capabilities;
-    void mutate(() => api.editBuildHost(host.id, edit), true);
+  if (host.status === "revoked") {
+    return <RevokedHost host={host} />;
+  }
+  if (host.status === "pending") {
+    return <PendingHost host={host} isBusy={isBusy} error={error} run={run} onReject={onRevoke} />;
+  }
+  return <ApprovedHost host={host} isBusy={isBusy} error={error} run={run} onRevoke={onRevoke} clearError={() => setError(null)} />;
+}
+
+type Run = (operation: () => Promise<BuildHost>) => Promise<boolean>;
+
+function HostHeading({ host, children }: { host: BuildHost; children?: ReactNode }) {
+  return (
+    <div className="connection__head build-host__head">
+      <Server size={18} className="build-host__glyph" aria-hidden="true" />
+      <div className="connection__text">
+        <span className="build-host__title">
+          <span className="connection__label">{host.name}</span>
+          <span className="badge">{OS_LABELS[host.os]}</span>
+          {host.status === "approved" && !host.enabled && <span className="badge badge--pr-idle">Paused</span>}
+        </span>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Presence({ host }: { host: BuildHost }) {
+  return (
+    <span className="build-host__presence">
+      <span className={`build-host__dot${host.online ? " build-host__dot--online" : ""}`} aria-hidden="true" />
+      <span title={host.last_seen_at ? new Date(host.last_seen_at).toLocaleString() : undefined}>{describePresence(host)}</span>
+    </span>
+  );
+}
+
+function CapabilityBadges({ values }: { values: string[] }) {
+  if (values.length === 0) {
+    return <span className="muted small">No capabilities</span>;
+  }
+  return (
+    <ul className="build-host__capabilities" aria-label="Capabilities">
+      {values.map((value) => (
+        <li key={value} className="badge">
+          {value}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ApprovedHost(props: { host: BuildHost; isBusy: boolean; error: string | null; run: Run; onRevoke: () => void; clearError: () => void }) {
+  const { host, isBusy, error, run } = props;
+  const api = useApi();
+  const [isEditing, setEditing] = useState(false),
+    [isExpanded, setExpanded] = useState(false);
+  const menu: RowMenuItem[] = [
+    { label: isExpanded ? "Hide details" : "Show details", icon: Info, onSelect: () => setExpanded((v) => !v) },
+    { label: "Revoke…", icon: Ban, onSelect: props.onRevoke, isDanger: true },
+  ];
+  const closeEditor = () => {
+    props.clearError();
+    setEditing(false);
   };
   return (
-    <article className="build-host-row" aria-label={host.name}>
-      <div className="build-host-row__heading">
-        <strong>{host.name}</strong>
-        <span>{OS_LABELS[host.os]}</span>
-        {!pending && !revoked && (
-          <>
-            <span className={`build-host-health ${host.online ? "build-host-health--online" : ""}`}>
-              {host.online ? "Online" : "Offline"}
-            </span>
-            <span>Last seen: {host.last_seen_at ? new Date(host.last_seen_at).toLocaleString() : "never seen"}</span>
-          </>
-        )}
-        <span>Agent: {host.agent_version || "Unknown"}</span>
-      </div>
-      {revoked ? (
-        <p>Revoked {host.revoked_at ? new Date(host.revoked_at).toLocaleString() : ""}</p>
-      ) : (
-        <>
-          {pending ? (
-            <BuildHostFacts host={host} />
-          ) : (
-            <label>
-              <input
-                type="checkbox"
-                role="switch"
-                aria-label={`Enable ${host.name}`}
-                checked={host.enabled}
-                disabled={busy}
-                onChange={(e) => void mutate(() => api.editBuildHost(host.id, { enabled: e.target.checked }))}
-              />{" "}
-              Enabled
-            </label>
-          )}
-          <fieldset disabled={busy}>
-            <legend>{pending ? "Approval capabilities" : "Host configuration"}</legend>
-            {!pending && (
-              <label>
-                Max parallel{" "}
-                <input
-                  className="input"
-                  type="number"
-                  min="1"
-                  max="8"
-                  step="1"
-                  value={capacity}
-                  onChange={(e) => {
-                    dirty.current.capacity = true;
-                    setCapacity(e.target.value);
-                  }}
-                />
-              </label>
-            )}
-            {!pending && !valid && <p role="alert">Max parallel must be an integer from 1 through 8.</p>}
-            <BuildHostCapabilities
-              values={capabilities}
-              onChange={(values) => {
-                dirty.current.capabilities = true;
-                setCapabilities(values);
-              }}
-            />
-            {pending ? (
-              <button
-                type="button"
-                className="button"
-                onClick={() => void mutate(() => api.approveBuildHost(host.id, { capabilities }), true)}
-              >
-                Approve
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="button"
-                disabled={!valid || (!dirty.current.capacity && !dirty.current.capabilities)}
-                onClick={save}
-              >
-                Save
-              </button>
-            )}
-            <button type="button" className="button button--danger" onClick={onRevoke}>
-              {pending ? "Reject" : "Revoke"}
+    <li className="connection build-host" aria-label={host.name}>
+      <div className="build-host__top">
+        <HostHeading host={host}>
+          <Presence host={host} />
+          <span className="muted small">{describeHostSummary(host)}</span>
+          {!isEditing && <CapabilityBadges values={host.capabilities} />}
+        </HostHeading>
+        <div className="build-host__actions">
+          {!isEditing && (
+            <button type="button" className="button button--secondary button--small" onClick={() => setEditing(true)}>
+              <Pencil size={14} aria-hidden="true" />
+              Edit
             </button>
-          </fieldset>
-          {error && <p role="alert">{error}</p>}
-          {!pending && (
-            <>
-              <button type="button" className="button" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
-                {expanded ? "Hide details" : "Show details"}
-              </button>
-              {expanded && (
-                <>
-                  <BuildHostFacts host={host} />
-                  <HostEvents id={host.id} />
-                </>
-              )}
-            </>
           )}
-        </>
+          <RowMenu label={host.name} items={menu} />
+        </div>
+      </div>
+      {isEditing && (
+        <BuildHostEditor
+          host={host}
+          isBusy={isBusy}
+          error={error}
+          onCancel={closeEditor}
+          onSave={async (edit) => {
+            const isSaved = await run(() => api.editBuildHost(host.id, edit));
+            if (isSaved) {
+              setEditing(false);
+            }
+            return isSaved;
+          }}
+        />
       )}
-    </article>
+      {!isEditing && error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+      {isExpanded && (
+        <div className="build-host__details">
+          <BuildHostFacts host={host} />
+          <BuildHostEvents id={host.id} />
+        </div>
+      )}
+    </li>
+  );
+}
+
+function PendingHost(props: { host: BuildHost; isBusy: boolean; error: string | null; run: Run; onReject: () => void }) {
+  const { host, isBusy, run } = props;
+  const api = useApi();
+  const [capabilities, setCapabilities] = useState(host.capabilities);
+  const isDirty = useRef(false);
+  useEffect(() => {
+    if (!isDirty.current) {
+      setCapabilities(host.capabilities);
+    }
+  }, [host]);
+  return (
+    <li className="connection connection--warning build-host build-host--pending" aria-label={host.name}>
+      <HostHeading host={host}>
+        <Presence host={host} />
+        <span className="muted small">{describeHostSummary(host)}</span>
+      </HostHeading>
+      <BuildHostFacts host={host} />
+      <BuildHostCapabilities
+        values={capabilities}
+        disabled={isBusy}
+        onChange={(values) => {
+          isDirty.current = true;
+          setCapabilities(values);
+        }}
+      />
+      {props.error && (
+        <p className="form-error" role="alert">
+          {props.error}
+        </p>
+      )}
+      <div className="row-actions">
+        <button type="button" className="button button--ghost button--small build-host__reject" disabled={isBusy} onClick={props.onReject}>
+          Reject
+        </button>
+        <button
+          type="button"
+          className="button button--primary button--small"
+          disabled={isBusy}
+          onClick={() => void run(() => api.approveBuildHost(host.id, { capabilities }))}
+        >
+          Approve
+        </button>
+      </div>
+    </li>
+  );
+}
+
+function RevokedHost({ host }: { host: BuildHost }) {
+  return (
+    <li className="connection build-host build-host--revoked" aria-label={host.name}>
+      <HostHeading host={host}>
+        <span className="muted small">Revoked {host.revoked_at ? relativeTime(host.revoked_at) : ""}</span>
+      </HostHeading>
+    </li>
   );
 }

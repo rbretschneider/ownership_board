@@ -1,8 +1,10 @@
 import type { BuildHost } from "../../api/types";
-import { factBoolean, formatBytes, OS_LABELS } from "../../lib/buildHosts";
+import { buildDiskFree, factBoolean, formatBytes, OS_LABELS } from "../../lib/buildHosts";
+
+/** The hardware and toolchain facts a host reported about itself. */
 export function BuildHostFacts({ host }: { host: BuildHost }) {
   const f = host.facts ?? {};
-  const disk = host.free_disk_bytes ?? f.disks?.find((d) => d.is_build_volume)?.free;
+  const disk = buildDiskFree(host);
   const rows: [string, string][] = [
     ["OS", `${OS_LABELS[host.os]} · ${f.os_version || "Unknown version"} · ${f.arch || host.arch}`],
     ["CPU", `${f.cpu_model || "Unknown"} · ${f.cores ?? "Unknown"} cores / ${f.threads ?? "Unknown"} threads`],
@@ -35,8 +37,8 @@ export function BuildHostFacts({ host }: { host: BuildHost }) {
     ["Administrator", factBoolean(f.build_user_is_admin)],
   ];
   return (
-    <div>
-      <p>Facts are self-reported by this host.</p>
+    <div className="build-host__facts">
+      <p className="muted small">Self-reported by this host.</p>
       <dl className="build-host-facts">
         {rows.map(([label, value]) => (
           <div key={label}>

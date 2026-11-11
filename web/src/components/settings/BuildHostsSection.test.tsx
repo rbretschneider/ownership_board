@@ -50,6 +50,8 @@ it("discovers pending hosts by polling and approves an intentionally empty capab
   const approveBuildHost = vi.fn().mockResolvedValue({ ...pending, status: "approved", capabilities: [] });
   const v = await mount({ buildHosts, approveBuildHost });
   expect(v.host.textContent).not.toContain("Builder");
+  expect(v.host.textContent).toContain("No build hosts yet");
+  expect(v.host.textContent).not.toContain("Waiting for approval");
   await act(async () => vi.advanceTimersByTime(5000));
   expect(v.host.textContent).toContain("Builder");
   expect(v.host.textContent).toContain("No");
@@ -118,7 +120,8 @@ it("rejects an obsolete poll after approval and preserves pending capability dra
   expect(v.host.textContent).not.toContain("ApproveReject");
   await act(async () => resolvePoll([pending]));
   expect(v.host.textContent).not.toContain("ApproveReject");
-  expect(v.host.textContent).toContain("Host configuration");
+  expect(v.host.textContent).not.toContain("Waiting for approval");
+  expect([...v.host.querySelectorAll("button")].some((b) => b.textContent === "Edit")).toBe(true);
   await v.unmount();
 });
 it("keeps failed approval edits for correction and displays the server error", async () => {
