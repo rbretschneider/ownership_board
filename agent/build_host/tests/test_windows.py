@@ -41,22 +41,29 @@ class WindowsNativeTests(unittest.TestCase):
         with patch.object(host,'is_elevated',return_value=True), self.assertRaises(PermissionError):
             host.main(['run'])
 
-    def test_desktop_mutex_is_exclusive_and_cancellable(self):
-        entered=threading.Event()
-        release=threading.Event()
-        def holder():
-            with host.DesktopLock(threading.Event()):
-                entered.set();release.wait(5)
-        thread=threading.Thread(target=holder)
-        thread.start()
-        try:
-            self.assertTrue(entered.wait(3))
-            stop=threading.Event()
-            timer=threading.Timer(.2,stop.set)
-            timer.start()
-            with self.assertRaises(host.Cancelled):
-                with host.DesktopLock(stop):
-                    self.fail('mutex admitted overlapping desktop execution')
-            timer.join()
-        finally:
-            release.set();thread.join(5)
+    def test_desktop_lock_excludes_a_powershell_script_holding_the_same_file(self):
+        # The legacy contract: a script given OWNERSHIP_DESKTOP_LOCK takes
+        # FileStream.Lock(0,1) around its UI tests; the agent must wait for it.
+        import subprocess
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            path=root/'desktop.lock'
+            host.FileLock(path).create().close()
+            ready=root/'ready'
+            script=root/'hold.ps1'
+            script.write_text('param($Lock,$Ready)\n$fs=[IO.File]::Open($Lock,"OpenOrCreate","ReadWrite","ReadWrite"); $fs.Lock(0,1)\nSet-Content -LiteralPath $Ready x\nStart-Sleep -Seconds 30\n')
+            holder=subprocess.Popen(['powershell.exe','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',str(script),str(path),str(ready)])
+            try:
+                deadline=time.monotonic()+20
+                while not ready.exists() and time.monotonic()<deadline: time.sleep(.05)
+                self.assertTrue(ready.exists())
+                stop=threading.Event()
+                timer=threading.Timer(.3,stop.set);timer.start()
+                with self.assertRaises(host.Cancelled):
+                    with host.HostLock(stop,path):
+                        self.fail('lock admitted overlapping desktop execution')
+                timer.join()
+            finally:
+                holder.kill();holder.wait()
+            with host.HostLock(threading.Event(),path):
+                pass

@@ -7,7 +7,7 @@ from common import host
 
 class ProtocolTests(unittest.TestCase):
     def test_shared_vectors(self):
-        for v in json.loads((Path(__file__).resolve().parents[3] / 'internal/auth/testdata/host_signature_vectors.json').read_text()):
+        for v in json.loads((Path(__file__).resolve().parents[3] / 'internal/auth/testdata/host_signature_vectors.json').read_text(encoding='utf-8')):
             body = v['body'].encode()
             self.assertEqual(host.signature_message(v['method'], v['path'], v['timestamp'], body).decode(), v['message'])
             key = host.SigningKey(bytes.fromhex(v['seed']))

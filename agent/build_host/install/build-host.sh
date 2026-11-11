@@ -1,5 +1,6 @@
 #!/bin/sh
 # Run from a downloaded file: sh build-host.sh --board https://board.example --code CODE
+# To upgrade an enrolled worker, re-run with --board only.
 set -eu
 umask 077
 if [ "$(id -u)" -eq 0 ]; then
@@ -21,7 +22,8 @@ parse_arguments() {
     done
 }
 parse_arguments "$@"
-[ -n "$board" ] && [ -n "$code" ] || { echo '--board and --code are required.' >&2; exit 1; }
+# --code is needed only for a first enrollment; an upgrade re-run keeps the identity.
+[ -n "$board" ] || { echo '--board is required.' >&2; exit 1; }
 python=''
 for candidate in python3 python; do
     if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c 'import sys; sys.exit(sys.version_info < (3,10))'; then

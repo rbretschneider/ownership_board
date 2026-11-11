@@ -134,8 +134,8 @@ class DesktopCoordinationTests(unittest.TestCase):
             root=Path(tmp)
             ready,entered=root/'ready',root/'entered'
             lockpath=root/'desktop.lock'
-            code='import sys,threading; from pathlib import Path; sys.path.insert(0,sys.argv[1]); import build_host as h; Path(sys.argv[3]).touch(); lock=h.DesktopLock(threading.Event(),Path(sys.argv[2])); lock.__enter__(); Path(sys.argv[4]).touch(); lock.close()'
-            with host.DesktopLock(threading.Event(),lockpath):
+            code='import sys,threading; from pathlib import Path; sys.path.insert(0,sys.argv[1]); import build_host as h; Path(sys.argv[3]).touch(); lock=h.HostLock(threading.Event(),Path(sys.argv[2])); lock.__enter__(); Path(sys.argv[4]).touch(); lock.close()'
+            with host.HostLock(threading.Event(),lockpath):
                 child=subprocess.Popen([sys.executable,'-c',code,str(Path(host.__file__).parent),str(lockpath),str(ready),str(entered)])
                 try:
                     deadline=time.monotonic()+8
@@ -154,14 +154,11 @@ class DesktopCoordinationTests(unittest.TestCase):
     def test_desktop_wait_is_cancellable(self):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'desktop.lock'
-            # Windows mutexes are recursive on their owning thread; its dedicated
-            # native test uses a separate holder thread.
-            if os.name=='nt': self.skipTest('covered by Windows mutex contention test')
-            with host.DesktopLock(threading.Event(),path):
+            with host.HostLock(threading.Event(),path):
                 event=threading.Event()
                 timer=threading.Timer(.2,event.set);timer.start()
                 try:
                     with self.assertRaises(host.Cancelled):
-                        with host.DesktopLock(event,path): self.fail('overlapping execution')
+                        with host.HostLock(event,path): self.fail('overlapping execution')
                 finally:
                     timer.join()
