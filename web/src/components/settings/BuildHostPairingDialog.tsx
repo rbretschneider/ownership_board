@@ -4,6 +4,7 @@ import type { BuildHostPairingCode } from "../../api/types";
 import { installCommands } from "../../lib/buildHosts";
 import { Overlay } from "../common/Overlay";
 import { CopyButton } from "../common/CopyButton";
+import { LoadingState } from "../common/LoadingState";
 
 export function BuildHostPairingDialog({
   issue,
@@ -64,42 +65,63 @@ export function BuildHostPairingDialog({
   return (
     <Overlay variant="dialog" label="Add build host" onClose={onClose}>
       <div className="sheet build-host-pairing">
-        <div className="sheet__header">
+        <header className="sheet__header">
           <h2 className="sheet__title">Add build host</h2>
-          <button type="button" className="button" onClick={onClose}>
-            Close
-          </button>
-        </div>
+        </header>
         <div className="sheet__body">
-          {busy && <p role="status">Creating pairing code…</p>}
-          {error && <p role="alert">{error}</p>}
+          <p className="muted">
+            Run the installer for its OS on the machine you want to add. It pairs with this code, then waits under Build hosts
+            for your approval.
+          </p>
+          {busy && <LoadingState label="Creating pairing code" />}
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
           {code && (
             <>
-              <p>
-                Pairing code: <strong>{code.code}</strong>{" "}
+              <div className="build-host-pairing__code">
+                <div className="build-host-pairing__code-text">
+                  <span className="field__label field__label--small">Pairing code</span>
+                  <strong className="build-host-pairing__value">{code.code}</strong>
+                  <span role="status" className={seconds > 0 ? "muted small" : "field__hint field__hint--error"}>
+                    {seconds > 0
+                      ? `Expires in ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
+                      : "Pairing code expired"}
+                  </span>
+                </div>
                 {seconds > 0 && <CopyButton text={code.code} label="Copy pairing code" />}
-              </p>
-              <p role="status">
-                {seconds > 0
-                  ? `Expires in ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
-                  : "Pairing code expired"}
-              </p>
-              {!code.public_base_url && <p role="alert">Configure PUBLIC_BASE_URL to create installation commands.</p>}
+              </div>
+              {!code.public_base_url && (
+                <p className="form-error" role="alert">
+                  Configure PUBLIC_BASE_URL to create installation commands.
+                </p>
+              )}
               {installCommands(code.public_base_url, code.code).map(({ label, command }) => (
-                <div key={label}>
-                  <h3>{label}</h3>
-                  <pre>{command}</pre>
-                  {seconds > 0 && <CopyButton text={command} label={`Copy ${label} command`} />}
+                <div key={label} className="snippet">
+                  <div className="snippet__head">
+                    <span className="field__label field__label--small">{label}</span>
+                    {seconds > 0 && <CopyButton text={command} label={`Copy ${label} command`} />}
+                  </div>
+                  <pre className="snippet__code">
+                    <code>{command}</code>
+                  </pre>
                 </div>
               ))}
             </>
           )}
+        </div>
+        <footer className="sheet__footer">
           {!busy && (seconds === 0 || error) && (
-            <button type="button" className="button" onClick={() => void replace()}>
+            <button type="button" className="button button--secondary" onClick={() => void replace()}>
               Create replacement code
             </button>
           )}
-        </div>
+          <button type="button" className="button button--primary" onClick={onClose}>
+            Close
+          </button>
+        </footer>
       </div>
     </Overlay>
   );

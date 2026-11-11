@@ -1,4 +1,5 @@
-import type { BuildHostEvent, BuildHostOS } from "../api/types";
+import type { BuildHost, BuildHostEvent, BuildHostOS } from "../api/types";
+import { relativeTime } from "./relativeTime";
 export const OS_LABELS: Record<BuildHostOS, string> = { windows: "Windows", linux: "Linux", macos: "macOS" };
 export const shellLiteral = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
 export const powershellLiteral = (value: string) => "'" + value.replaceAll("'", "''") + "'";
@@ -31,4 +32,31 @@ export function eventDescription(event: BuildHostEvent): string {
     return [`Changed ${key}: ${before[key]} → ${after[key]}`];
   });
   return changes.join("; ") || "Toolchains unchanged";
+}
+
+/** Free space on the build volume: the server's figure, else the host's self-reported build disk. */
+export function buildDiskFree(host: BuildHost): number | undefined {
+  return host.free_disk_bytes ?? host.facts?.disks?.find((d) => d.is_build_volume)?.free;
+}
+
+/** "Online · seen just now", "Offline · last seen 3h ago" or "Offline · never seen". */
+export function describePresence(host: Pick<BuildHost, "online" | "last_seen_at">, now: Date = new Date()): string {
+  const seen = host.last_seen_at ? relativeTime(host.last_seen_at, now) : "";
+  if (host.online) {
+    return seen ? `Online · seen ${seen}` : "Online";
+  }
+  return seen ? `Offline · last seen ${seen}` : "Offline · never seen";
+}
+
+/** The card's secondary line: "Agent 1.0 · 412.0 GiB free · 1 build at a time". */
+export function describeHostSummary(host: BuildHost): string {
+  const parts = [`Agent ${host.agent_version || "unknown"}`];
+  const disk = buildDiskFree(host);
+  if (disk !== undefined) {
+    parts.push(`${formatBytes(disk)} free`);
+  }
+  if (host.status === "approved") {
+    parts.push(host.max_parallel === 1 ? "1 build at a time" : `${host.max_parallel} builds at a time`);
+  }
+  return parts.join(" · ");
 }
