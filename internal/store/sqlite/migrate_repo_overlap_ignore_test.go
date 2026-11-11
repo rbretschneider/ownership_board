@@ -29,6 +29,10 @@ func TestRepoOverlapIgnoreMigration(t *testing.T) {
 		if err := db.QueryRow(`SELECT count(*) FROM repos`).Scan(&count); err != nil || count != 1 {
 			t.Fatal(count, err)
 		}
+		// The adapter reads every current repo column, so it needs the latest schema.
+		if err := m.Up(); err != nil {
+			t.Fatal(err)
+		}
 		adapter := codeRepoRepo{q: db}
 		ctx := context.Background()
 		if err := adapter.SetOverlapIgnore(ctx, domain.Repo{ID: 1, OverlapIgnore: []string{"src/*/Catalog.cpp"}}); err != nil {

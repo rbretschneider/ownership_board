@@ -49,16 +49,17 @@ func (s *server) restyleRepo(w http.ResponseWriter, r *http.Request, who caller)
 		return err
 	}
 	var body struct {
-		OverlapIgnore    json.RawMessage    `json:"overlap_ignore"`
-		BuildTargets     json.RawMessage    `json:"build_targets"`
-		Color            *string            `json:"color"`
-		TreatAsPublic    *bool              `json:"treat_as_public"`
-		Description      *string            `json:"description"`
-		RequireSpec      *bool              `json:"require_spec_approval"`
-		RequireDesign    *bool              `json:"require_design_approval"`
-		AllowAgentMerge  *bool              `json:"allow_agent_merge"`
-		HealthCheckEvery *int               `json:"health_check_every"`
-		DeployMode       *domain.DeployMode `json:"deploy_mode"`
+		OverlapIgnore    json.RawMessage        `json:"overlap_ignore"`
+		BuildTargets     json.RawMessage        `json:"build_targets"`
+		Color            *string                `json:"color"`
+		TreatAsPublic    *bool                  `json:"treat_as_public"`
+		Description      *string                `json:"description"`
+		RequireSpec      *bool                  `json:"require_spec_approval"`
+		RequireDesign    *bool                  `json:"require_design_approval"`
+		AllowAgentMerge  *bool                  `json:"allow_agent_merge"`
+		HealthCheckEvery *int                   `json:"health_check_every"`
+		DeployMode       *domain.DeployMode     `json:"deploy_mode"`
+		ReviewBlocking   *domain.ReviewBlocking `json:"review_blocking"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
@@ -113,7 +114,7 @@ func (s *server) restyleRepo(w http.ResponseWriter, r *http.Request, who caller)
 	style := domain.RepoStyle{OverlapIgnore: overlapIgnore, BuildTargets: targets,
 		Color: body.Color, Description: body.Description, TreatAsPublic: body.TreatAsPublic, DeployMode: body.DeployMode,
 		RequireSpecApproval: body.RequireSpec, RequireDesignApproval: body.RequireDesign,
-		AllowAgentMerge: body.AllowAgentMerge, HealthCheckEvery: body.HealthCheckEvery,
+		AllowAgentMerge: body.AllowAgentMerge, HealthCheckEvery: body.HealthCheckEvery, ReviewBlocking: body.ReviewBlocking,
 	}
 	repo, err := s.deps.Repos.Restyle(r.Context(), who.actor, id, style)
 	if err != nil {

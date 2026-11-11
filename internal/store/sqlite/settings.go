@@ -53,6 +53,33 @@ func (r settingsRepo) Get(ctx context.Context) (domain.BoardSettings, error) {
 			}
 		}
 	}
+	// Review settings: an unreadable stored value keeps the default.
+	err = r.q.QueryRowContext(ctx, `SELECT value FROM board_settings WHERE key = ?`, domain.SettingReviewBy).Scan(&raw)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return domain.BoardSettings{}, fmt.Errorf("sqlite: read review settings: %w", err)
+	}
+	if err == nil {
+		if value, parseErr := domain.ParseReviewBy(raw); parseErr == nil {
+			settings.ReviewBy = value
+		}
+	}
+	for _, field := range []struct {
+		key    string
+		target *bool
+	}{
+		{domain.SettingReviewFreshContext, &settings.ReviewFreshContext},
+		{domain.SettingReviewAdversarial, &settings.ReviewAdversarial},
+	} {
+		err = r.q.QueryRowContext(ctx, `SELECT value FROM board_settings WHERE key = ?`, field.key).Scan(&raw)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return domain.BoardSettings{}, fmt.Errorf("sqlite: read review settings: %w", err)
+		}
+		if err == nil {
+			if value, parseErr := strconv.ParseBool(raw); parseErr == nil {
+				*field.target = value
+			}
+		}
+	}
 	// Pre-build-host Windows values are read but never written here; the
 	// application decides whether they apply.
 	err = r.q.QueryRowContext(ctx, `SELECT value FROM board_settings WHERE key = ?`, domain.SettingWindowsRunnerEnabled).Scan(&raw)
@@ -84,6 +111,15 @@ func (r settingsRepo) Save(ctx context.Context, settings domain.BoardSettings, a
 	for key, value := range map[string]int{domain.SettingClaudeWorkers: settings.ClaudeWorkers, domain.SettingCodexWeeklyLimit: settings.CodexWeeklyLimit, domain.SettingClaudeWeeklyLimit: settings.ClaudeWeeklyLimit} {
 		if _, err := r.q.ExecContext(ctx, `INSERT INTO board_settings (key,value,updated_by,updated_at) VALUES (?,?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_by=excluded.updated_by,updated_at=excluded.updated_at`, key, strconv.Itoa(value), actor.Name, formatTime(now)); err != nil {
 			return fmt.Errorf("sqlite: save account settings: %w", err)
+		}
+	}
+	for key, value := range map[string]string{
+		domain.SettingReviewBy:           string(settings.ReviewBy),
+		domain.SettingReviewFreshContext: strconv.FormatBool(settings.ReviewFreshContext),
+		domain.SettingReviewAdversarial:  strconv.FormatBool(settings.ReviewAdversarial),
+	} {
+		if _, err := r.q.ExecContext(ctx, `INSERT INTO board_settings (key,value,updated_by,updated_at) VALUES (?,?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_by=excluded.updated_by,updated_at=excluded.updated_at`, key, value, actor.Name, formatTime(now)); err != nil {
+			return fmt.Errorf("sqlite: save review settings: %w", err)
 		}
 	}
 	// The legacy Windows switch is only updated where it already exists: a

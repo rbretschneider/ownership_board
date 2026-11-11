@@ -39,6 +39,11 @@ type BoardSettings struct {
 	// or build at once. While that many are, agents claim no further
 	// autonomous ticket from Ready; other work still flows.
 	AutonomousInFlightCap int
+	// ReviewBy, ReviewFreshContext and ReviewAdversarial decide how an agent's
+	// finished work is reviewed before it is published.
+	ReviewBy           ReviewBy
+	ReviewFreshContext bool
+	ReviewAdversarial  bool
 	// LegacyWindowsRunnerEnabled and LegacyWindowsParallelBuilds are the
 	// Windows settings stored before build hosts existed. They apply only
 	// while no Windows build host is approved, so a board whose Windows
@@ -60,11 +65,15 @@ type SettingsEdit struct {
 	CodexWeeklyLimit      *int
 	ClaudeWeeklyLimit     *int
 	AutonomousInFlightCap *int
+	ReviewBy              *ReviewBy
+	ReviewFreshContext    *bool
+	ReviewAdversarial     *bool
 }
 
 // DefaultBoardSettings are the settings of a new board.
 func DefaultBoardSettings() BoardSettings {
-	return BoardSettings{AutonomousInFlightCap: DefaultAutonomousInFlightCap, CodexWorkers: 3, CodexWeeklyLimit: 100, ClaudeWeeklyLimit: 100}
+	return BoardSettings{AutonomousInFlightCap: DefaultAutonomousInFlightCap, CodexWorkers: 3, CodexWeeklyLimit: 100, ClaudeWeeklyLimit: 100,
+		ReviewBy: ReviewByOtherModel, ReviewFreshContext: true, ReviewAdversarial: true}
 }
 
 // Apply validates edit and returns the settings with it applied.
@@ -103,6 +112,19 @@ func (s BoardSettings) Apply(edit SettingsEdit) (BoardSettings, error) {
 			return BoardSettings{}, Invalidf("%s must be between %d and %d", SettingAutonomousInFlightCap, MinAutonomousInFlightCap, MaxAutonomousInFlightCap)
 		}
 		next.AutonomousInFlightCap = value
+	}
+	if edit.ReviewBy != nil {
+		value, err := ParseReviewBy(string(*edit.ReviewBy))
+		if err != nil {
+			return BoardSettings{}, err
+		}
+		next.ReviewBy = value
+	}
+	if edit.ReviewFreshContext != nil {
+		next.ReviewFreshContext = *edit.ReviewFreshContext
+	}
+	if edit.ReviewAdversarial != nil {
+		next.ReviewAdversarial = *edit.ReviewAdversarial
 	}
 	return next, nil
 }

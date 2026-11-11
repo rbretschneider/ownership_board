@@ -95,3 +95,16 @@ it("shows Off for older repository responses without deployment metadata", async
  const v = await mount(vi.fn(), older);
  try {expect(v.select.value).toBe("off");} finally {await v.unmount();}
 });
+it("saves which review findings block publication in the repo", async () => {
+ const edit = vi.fn().mockImplementation(async (_id, patch) => ({...makeRepo(1, "app"), ...patch}));
+ const v = await mount(edit);
+ try {
+  const select = v.host.querySelectorAll("select")[1] as HTMLSelectElement;
+  expect(select.labels?.[0]?.textContent).toContain("Review blocks on");
+  expect([...select.options].map(o => o.value)).toEqual(["p0", "p1", "p2", "p3"]);
+  expect(select.value).toBe("p1");
+  await change(select, "p3");
+  expect(edit).toHaveBeenLastCalledWith(1, {review_blocking: "p3"});
+  expect(select.value).toBe("p3");
+ } finally {await v.unmount();}
+});

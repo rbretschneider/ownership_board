@@ -11,7 +11,7 @@ function repo(id: number, fullName: string, overrides: Partial<Repo> = {}): Repo
     url: "", description: "", color: "", default_branch: "main",
     is_private: false, is_archived: false, synced_at: null, missing_since: null,
     treat_as_public: false, visibility: "public",
-    require_spec_approval: true, require_design_approval: false, allow_agent_merge: false, deploy_mode: "off",
+    require_spec_approval: true, require_design_approval: false, allow_agent_merge: false, deploy_mode: "off", review_blocking: "p1",
     health_check_every: 8, health_checked_through_ticket: null, health_checked_at: null, ...overrides,
   };
 }
