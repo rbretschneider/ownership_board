@@ -167,7 +167,8 @@ func ticketValues(t domain.Ticket) []any {
 func filterClause(filter app.TicketFilter) (string, []any) {
 	clause, args := scopeClause(filter)
 	if filter.ExcludeAutonomous {
-		clause += " AND is_autonomous = 0"
+		// Bugs repair main, which held-back stories need before they can merge.
+		clause += " AND (is_autonomous = 0 OR kind = 'bug')"
 	}
 	if filter.ExcludeWindowsWaiting {
 		clause += " AND work_model NOT LIKE ?"

@@ -238,7 +238,10 @@ const maxOverlapSkips = 20
 // started build is never held back, so held tickets only ever wait on work
 // that can finish.
 func heldByOverlap(ctx context.Context, repos Repos, ticket domain.Ticket) (bool, error) {
-	if ticket.IsHealthCheck || ticket.RepoID == 0 || ticket.Branch != "" || ticket.PRURL != "" {
+	// A bug is never held back: it repairs main, and the stories it shares
+	// files with are often waiting on that repair to merge (2026-11-12: #160
+	// waited behind PRs that could not pass until #160 landed).
+	if ticket.IsHealthCheck || ticket.Kind == domain.KindBug || ticket.RepoID == 0 || ticket.Branch != "" || ticket.PRURL != "" {
 		return false, nil
 	}
 	repo, err := repos.CodeRepos().Get(ctx, ticket.RepoID)
