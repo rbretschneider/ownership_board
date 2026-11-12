@@ -795,3 +795,27 @@ func TestBuildJobsQueueOperationsExcludeHistoricalLogs(t *testing.T) {
 		})
 	}
 }
+
+// 2026-11-12: workers held their leases for an hour each while the build
+// server ran their Windows jobs. A build whose job is queued or running is
+// not claimable, so a worker can release it and take other work; it comes
+// back once the job reports.
+func TestABuildWaitingOnItsBuildHostJobIsNotClaimable(t *testing.T) {
+	f, s, m, h := jobFixture(t)
+	if _, err := f.store.SQL().Exec(`UPDATE tickets SET stage='build', lane='in_progress' WHERE id=1`); err != nil {
+		t.Fatal(err)
+	}
+	j := submitJob(t, f, s, m)
+	f.requireNoClaim(agent, "a build whose Windows job is queued")
+	if got, e := s.Claim(f.ctx, app.AuthenticatedBuildHost{ID: h.ID}); e != nil || got == nil || got.ID != j.ID {
+		t.Fatal(got, e)
+	}
+	f.requireNoClaim(agent, "a build whose Windows job is running")
+	report := domain.BuildJobCompletion{Attempt: 1, Status: "passed", Result: []byte(`{"commands":[{"label":"build","exit_code":0,"log":"ok"}]}`)}
+	if _, e := s.Complete(f.ctx, app.AuthenticatedBuildHost{ID: h.ID}, j.ID, report); e != nil {
+		t.Fatal(e)
+	}
+	if work := f.mustClaim(agent, app.ClaimInput{}); work.Ticket.Ticket.ID != 1 {
+		t.Fatalf("claimed #%d after the job reported, want #1", work.Ticket.Ticket.ID)
+	}
+}
