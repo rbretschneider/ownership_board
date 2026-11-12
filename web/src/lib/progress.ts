@@ -129,3 +129,72 @@ export function windowsStatus(ticket: Pick<TicketSummary, "stage" | "work_model"
     title: `Windows verification ${passed ? "passed" : "failed"} · ${history}`,
   };
 }
+
+export type Platform = "windows" | "linux" | "macos";
+export type PlatformState = "passed" | "failed" | "running";
+
+export interface PlatformStatus {
+  platform: Platform;
+  state: PlatformState;
+  /** The full wording, shown as the icon's tooltip and accessible name. */
+  title: string;
+}
+
+const PLATFORM_NAMES: Record<Platform, string> = { windows: "Windows", linux: "Linux", macos: "macOS" };
+const PLATFORM_ORDER: Platform[] = ["windows", "linux", "macos"];
+const FAILED_CONCLUSIONS = new Set(["FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "ERROR", "STARTUP_FAILURE"]);
+
+/** Which platform a CI check runs on, from its name (windows-msvc, linux (gcc), agent-macos, ...). */
+export function checkPlatform(name: string): Platform | undefined {
+  const n = name.toLowerCase();
+  if (/\b(mac|macos|darwin|osx)\b|-macos\b/.test(n)) return "macos";
+  if (/\bwin(dows)?\b|\bwin-|windows-|msvc/.test(n)) return "windows";
+  if (/\blinux\b|linux-|ubuntu|debian/.test(n)) return "linux";
+  return undefined;
+}
+
+type CheckLike = { name: string; status: string; conclusion: string };
+
+/** One state per platform from a PR's checks: any failure, else any still running, else passed. */
+function fromChecks(checks: CheckLike[]): Map<Platform, PlatformStatus> {
+  const groups = new Map<Platform, CheckLike[]>();
+  for (const check of checks) {
+    const platform = checkPlatform(check.name);
+    if (!platform || (check.status === "COMPLETED" && (check.conclusion === "SKIPPED" || check.conclusion === "NEUTRAL"))) continue;
+    groups.set(platform, [...(groups.get(platform) ?? []), check]);
+  }
+  const out = new Map<Platform, PlatformStatus>();
+  for (const [platform, group] of groups) {
+    const failed = group.filter((c) => c.status === "COMPLETED" && FAILED_CONCLUSIONS.has(c.conclusion));
+    const running = group.filter((c) => c.status !== "COMPLETED");
+    const state: PlatformState = failed.length ? "failed" : running.length ? "running" : "passed";
+    const detail = failed.length ? `failed: ${failed.map((c) => c.name).join(", ")}`
+      : running.length ? `running: ${running.map((c) => c.name).join(", ")}`
+      : `${plural(group.length, "check")} passed`;
+    out.set(platform, { platform, state, title: `${PLATFORM_NAMES[platform]} CI ${detail}` });
+  }
+  return out;
+}
+
+/**
+ * A compact per-platform result for the card: the board's own Windows
+ * verification (running while the build server has it, else the latest run's
+ * result), and each platform's checks on the ticket's PR. For Windows the PR's
+ * checks win when present, being newer than the verification that preceded
+ * publication.
+ */
+export function platformStatuses(
+  ticket: Pick<TicketSummary, "stage" | "work_model" | "attempts">,
+  checks: CheckLike[] = [],
+): PlatformStatus[] {
+  const statuses = fromChecks(checks);
+  if (!statuses.has("windows")) {
+    if (onWindows(ticket)) {
+      statuses.set("windows", { platform: "windows", state: "running", title: "Windows verification running on the build server" });
+    } else {
+      const board = windowsStatus(ticket);
+      if (board) statuses.set("windows", { platform: "windows", state: board.passed ? "passed" : "failed", title: board.title });
+    }
+  }
+  return PLATFORM_ORDER.flatMap((p) => (statuses.has(p) ? [statuses.get(p)!] : []));
+}

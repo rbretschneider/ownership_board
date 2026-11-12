@@ -1,6 +1,7 @@
-import { Bot, CircleAlert, CircleCheck, CircleX, Coins, GitPullRequest, Hand, HeartPulse, Hourglass, MessageCircleQuestion, Server, Zap } from "lucide-react";
+import { Bot, CircleAlert, Coins, GitPullRequest, Hand, HeartPulse, Hourglass, MessageCircleQuestion, Server, Zap } from "lucide-react";
 import { isCompletedStage } from "../../lib/stages";
-import { windowsStatus } from "../../lib/progress";
+import { platformStatuses } from "../../lib/progress";
+import { PlatformIcon } from "../common/PlatformIcon";
 import type { Repo, Stage, TicketSummary } from "../../api/types";
 import { useLeaseClock } from "../../hooks/useLeaseClock";
 import { cardActivity, hasLiveLease } from "../../lib/activity";
@@ -79,7 +80,8 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
   const escalated = model?.escalatedAfter !== undefined;
   // A model building the ticket itself (not the Windows build server, not a PR wait) mines.
   const miner = !pr && !activity.buildServer && ticket.stage === "build" && liveLease && activity.working ? modelFamily(model?.name) : undefined;
-  const windows = windowsStatus(ticket);
+  // Per-platform results as icons: board Windows verification and the PR's CI checks.
+  const platforms = platformStatuses(ticket, prStatus?.checks);
   const usage = usageBadge(ticket.usage);
   return (
     <>
@@ -142,10 +144,9 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
             Waiting on {ticketRefs(ticket.waiting_on)}
           </span>
         )}
-        {windows && (
-          <span className={`badge badge--windows-${windows.passed ? "passed" : "failed"}`} title={windows.title} aria-label={windows.title}>
-            {windows.passed ? <CircleCheck size={13} aria-hidden="true" /> : <CircleX size={13} aria-hidden="true" />}
-            {windows.label}
+        {platforms.length > 0 && (
+          <span className="platforms">
+            {platforms.map((p) => <PlatformIcon key={p.platform} status={p} />)}
           </span>
         )}
         {usage && (

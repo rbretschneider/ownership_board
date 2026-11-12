@@ -76,7 +76,10 @@ function dom(stale = false) {
 it("shows registered host connectivity, OS queues, all occupied slots and ticket links", () => {
   const d = dom();
   expect(d.querySelectorAll(".registered-runner")).toHaveLength(3);
-  expect(d.textContent).toContain("Windows queue: 2");
+  expect(d.querySelector('[aria-label="Windows queue: 2"]')?.textContent).toBe("2");
+  // Connectivity is a colored dot, the platform a colored icon; both keep their wording.
+  expect(d.querySelector(".host-dot--online")?.getAttribute("aria-label")).toBe("Online");
+  expect(d.querySelector('.registered-runner [data-platform="windows"]')).not.toBeNull();
   expect(d.textContent).toContain("never seen");
   expect(d.querySelector(".registered-runner--warning")?.textContent).toContain("Offline with queued work");
   expect(d.textContent).toContain("Disabled");
@@ -88,7 +91,7 @@ it("shows registered host connectivity, OS queues, all occupied slots and ticket
 it("marks retained readings stale separately from reported connectivity", () => {
   const d = dom(true);
   expect(d.textContent).toContain("Status reading is stale");
-  expect(d.textContent).toContain("Last reported online");
+  expect(d.querySelector('.host-dot--stale[aria-label="Last reported online"]')).not.toBeNull();
   expect(d.textContent).not.toContain("Offline with queued work");
 });
 

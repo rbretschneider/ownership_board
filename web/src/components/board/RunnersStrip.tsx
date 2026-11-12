@@ -1,5 +1,6 @@
 import { useContext } from "react";
-import { Monitor, Server, Laptop } from "lucide-react";
+import { ListOrdered } from "lucide-react";
+import { PlatformGlyph } from "../common/PlatformIcon";
 import { RegisteredRunnersContext } from "../../hooks/useRunners";
 import { OS_LABELS } from "../../lib/buildHosts";
 import { ticketHash } from "../../lib/hashRoute";
@@ -27,22 +28,20 @@ export function RunnersStrip() {
           {snapshot?.hosts.map((host) => {
             const queued = snapshot.queued_by_os[host.os] ?? 0;
             const warning = !stale && !host.online && queued > 0;
-            const Icon = host.os === "windows" ? Monitor : host.os === "macos" ? Laptop : Server;
+            const health = stale ? (host.online ? "Last reported online" : "Last reported offline") : host.online ? "Online" : "Offline";
+            // Status colors: the dot is connectivity; the platform icon is what the host is doing.
+            const work = !host.online ? "failed" : host.jobs.length > 0 ? "running" : "passed";
+            const workWords = !host.online ? "offline" : host.jobs.length > 0 ? `building ${host.jobs.length} of ${host.max_parallel}` : "idle";
+            const queueLabel = `${OS_LABELS[host.os]} queue: ${queued}`;
             return (
               <div key={host.id} className={`registered-runner${warning ? " registered-runner--warning" : ""}`}>
                 <span className="registered-runner__identity">
-                  <Icon size={14} aria-hidden="true" />
+                  <span className={`host-dot host-dot--${stale ? "stale" : host.online ? "online" : "offline"}`} role="img" title={health} aria-label={health} />
                   <strong title={host.name}>{host.name}</strong>
-                  <span>{OS_LABELS[host.os]}</span>
-                </span>
-                <span className={`build-host-health ${host.online ? "build-host-health--online" : ""}`}>
-                  {stale
-                    ? host.online
-                      ? "Last reported online"
-                      : "Last reported offline"
-                    : host.online
-                      ? "Online"
-                      : "Offline"}
+                  <span className={`platform platform--${work}`} role="img" data-platform={host.os}
+                    title={`${OS_LABELS[host.os]} build host · ${workWords}`} aria-label={`${OS_LABELS[host.os]} build host · ${workWords}`}>
+                    <PlatformGlyph platform={host.os} />
+                  </span>
                 </span>
                 {!host.enabled && <span>Disabled</span>}
                 {!host.last_seen_at && <span>never seen</span>}
@@ -68,8 +67,9 @@ export function RunnersStrip() {
                     </span>
                   ))}
                 </span>
-                <span>
-                  {OS_LABELS[host.os]} queue: {queued}
+                <span className="registered-runner__queue" title={queueLabel} aria-label={queueLabel}>
+                  <ListOrdered size={13} aria-hidden="true" />
+                  {queued}
                 </span>
                 {warning && <strong>Offline with queued work</strong>}
               </div>
