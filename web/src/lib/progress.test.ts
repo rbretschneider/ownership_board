@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StageAttempts } from "../api/types";
-import { currentStepIndex, onWindows, progressSteps, windowsStatus } from "./progress";
+import { checkPlatform, currentStepIndex, onWindows, platformStatuses, progressSteps, windowsStatus } from "./progress";
 
 const none: StageAttempts = { build: 0, test: 0, test_failures: 0, review: 0, review_fixes: 0, pr: 0, pr_repairs: 0 };
 const ON_WINDOWS = "gpt-6.1-sol · build-server:queued:Windows x64 · awaiting Windows";
@@ -81,4 +81,39 @@ it("keeps every delivery step completed after deployment", () => {
  expect(currentStepIndex({stage: "deployed"})).toBe(4);
  expect(progressSteps({stage: "deployed"})).toEqual(progressSteps({stage: "done"}));
  expect(progressSteps({stage: "deployed"}).every(s => s.state === "done")).toBe(true);
+});
+
+describe("platformStatuses", () => {
+  const check = (name: string, status: string, conclusion = "") => ({ name, status, conclusion });
+  it("maps CI check names to platforms", () => {
+    expect(checkPlatform("windows-msvc (Debug and RelWithDebInfo)")).toBe("windows");
+    expect(checkPlatform("win-asan (nightly real-GPU corpus replay)")).toBe("windows");
+    expect(checkPlatform("linux (linux-clang-tsan)")).toBe("linux");
+    expect(checkPlatform("linux-ci (clang ASan+UBSan, policy)")).toBe("linux");
+    expect(checkPlatform("agent-macos")).toBe("macos");
+    expect(checkPlatform("server")).toBeUndefined();
+  });
+  it("shows the board's Windows run as running while the build server has it", () => {
+    expect(platformStatuses({ stage: "build", work_model: ON_WINDOWS, attempts: { ...none, test: 1, test_failures: 1 } })).toEqual([
+      { platform: "windows", state: "running", title: "Windows verification running on the build server" },
+    ]);
+  });
+  it("reads each platform from the PR checks: failure first, then running, then passed", () => {
+    const statuses = platformStatuses({ stage: "pr", attempts: { ...none, test: 1, test_failures: 0 } }, [
+      check("linux (linux-gcc-debug)", "COMPLETED", "SUCCESS"),
+      check("linux (linux-clang-tsan)", "IN_PROGRESS"),
+      check("windows-msvc (Debug and RelWithDebInfo)", "COMPLETED", "SKIPPED"),
+      check("windows-fuzz-replay (same-run corpus, GL)", "COMPLETED", "FAILURE"),
+      check("agent-macos", "COMPLETED", "SUCCESS"),
+    ]);
+    expect(statuses.map((s) => [s.platform, s.state])).toEqual([["windows", "failed"], ["linux", "running"], ["macos", "passed"]]);
+    expect(statuses[0]?.title).toBe("Windows CI failed: windows-fuzz-replay (same-run corpus, GL)");
+  });
+  it("keeps the board's Windows result when the PR has no Windows check that ran", () => {
+    const statuses = platformStatuses({ stage: "pr", attempts: { ...none, test: 2, test_failures: 1 } }, [
+      check("windows-msvc (Debug and RelWithDebInfo)", "COMPLETED", "SKIPPED"),
+      check("linux (linux-gcc-debug)", "COMPLETED", "SUCCESS"),
+    ]);
+    expect(statuses.map((s) => [s.platform, s.state])).toEqual([["windows", "passed"], ["linux", "passed"]]);
+  });
 });

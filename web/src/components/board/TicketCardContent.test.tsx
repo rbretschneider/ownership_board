@@ -105,19 +105,22 @@ it("replaces the step count with a stage stepper showing retries", () => {
  expect(card.querySelectorAll(".stepper__step--done")).toHaveLength(1);
  expect(steps.map((s) => s.textContent)).toEqual(["Refine", "Build4", "Review", "PR"]);
  expect(card.querySelectorAll(".stepper__step--retried")).toHaveLength(1);
- expect(card.querySelector('[class*="badge--windows"]')).toBeNull();
+ expect(card.querySelector('.platform--passed, .platform--failed')).toBeNull();
  // Chevrons close the card: the stepper is its last element.
  expect(card.lastElementChild?.className).toBe("stepper");
 });
 
-it("shows the Windows result as a status once verification is over", () => {
+it("shows the Windows result as a colored icon once verification is over", () => {
  const passed = dom({stage: "pr", lane: "in_progress", attempts: {build: 2, test: 2, test_failures: 1, review: 1, review_fixes: 0, pr: 1, pr_repairs: 0}});
- const chip = passed.querySelector(".badge--windows-passed");
- expect(chip?.textContent).toBe("Windows passed");
- expect(chip?.getAttribute("title")).toBe("Windows verification passed · 2 Windows runs, 1 failed");
+ const icon = passed.querySelector('.platform[data-platform="windows"]');
+ expect(icon?.classList.contains("platform--passed")).toBe(true);
+ // The wording is not lost: it is the tooltip and the accessible name.
+ expect(icon?.getAttribute("title")).toBe("Windows verification passed · 2 Windows runs, 1 failed");
+ expect(icon?.getAttribute("aria-label")).toBe("Windows verification passed · 2 Windows runs, 1 failed");
+ expect(icon?.textContent).toBe("");
  // A repo without Windows checks shows nothing.
  const none = dom({stage: "pr", lane: "in_progress", attempts: {build: 1, test: 0, test_failures: 0, review: 1, review_fixes: 0, pr: 1, pr_repairs: 0}});
- expect(none.querySelector('[class*="badge--windows"]')).toBeNull();
+ expect(none.querySelector(".platform")).toBeNull();
 });
 
 describe("work model signal", () => {
