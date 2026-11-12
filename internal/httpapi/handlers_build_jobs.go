@@ -117,6 +117,11 @@ func (s *server) submitBuildJob(w http.ResponseWriter, r *http.Request, _ caller
 	status := 200
 	if created {
 		status = 201
+	} else if _, e = io.Copy(io.Discard, counter); e != nil {
+		// A duplicate returns the stored job without reading the bundle. Drain
+		// it so the client gets this reply: closing on an unread multi-MB body
+		// resets a client that sends everything before reading (makercad #159).
+		return uploadError(e)
 	}
 	writeJSON(w, status, j)
 	return nil

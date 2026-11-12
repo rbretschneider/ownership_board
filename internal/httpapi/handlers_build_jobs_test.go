@@ -1,6 +1,7 @@
 package httpapi_test
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/ed25519"
 	"crypto/sha256"
@@ -9,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -170,4 +172,62 @@ func TestBuildQueueHTTP(t *testing.T) {
 	browser.expect(409, "POST", "/api/v1/build-jobs/"+secondID+"/cancel", `{}`)
 	send("POST", resultPath, `{"attempt":1,"status":"passed","result":`+string(rawResult)+`}`, 200, nil)
 
+}
+
+// A worker resubmits a commit whose job already exists (a repair pass on an
+// unchanged PR). The server answers with the stored job before reading the
+// bundle; it must still drain the upload, or a bundle larger than the socket
+// buffers ends in a connection reset instead of the 200 (makercad #159,
+// 2026-11-12: the worker crashed and reclaimed the ticket every minute).
+func TestBuildJobDuplicateLargeUploadGetsReply(t *testing.T) {
+	browser, token := signedIn(t)
+	repo := browser.expect(201, "POST", "/api/v1/repos", `{"full_name":"example/tools"}`)
+	ticket := browser.expect(201, "POST", "/api/v1/tickets", fmt.Sprintf(`{"title":"Example","kind":"story","repo_id":%v}`, repo["id"]))
+	// Larger than loopback socket buffers, so an undrained body cannot hide in them.
+	bundle := bytes.Repeat([]byte("bundle-bytes."), (32<<20)/13)
+	metadata := fmt.Sprintf(`{"ticket_id":%v,"repo":"example/tools","sha":"%s","preset":"script","target":{"os":"linux","required_capabilities":[]},"bundle_bytes":%d,"bundle_sha256":"%x"}`,
+		ticket["id"], strings.Repeat("b", 40), len(bundle), sha256.Sum256(bundle))
+	host := strings.TrimPrefix(browser.base, "http://")
+	upload := func(want int) map[string]any {
+		t.Helper()
+		var body bytes.Buffer
+		mw := multipart.NewWriter(&body)
+		p, _ := mw.CreateFormField("metadata")
+		io.WriteString(p, metadata)
+		p, _ = mw.CreateFormFile("bundle", "commit.bundle")
+		p.Write(bundle)
+		mw.Close()
+		// Like the worker's urllib client: send the whole request, then read the reply.
+		// Go's own client reads the reply while still sending and so hides the reset.
+		conn, e := net.Dial("tcp", host)
+		if e != nil {
+			t.Fatal(e)
+		}
+		defer conn.Close()
+		head := fmt.Sprintf("POST /api/v1/build-jobs HTTP/1.1\r\nHost: %s\r\nAuthorization: Bearer %s\r\nContent-Type: %s\r\nContent-Length: %d\r\nConnection: close\r\n\r\n",
+			host, token, mw.FormDataContentType(), body.Len())
+		if _, e = io.WriteString(conn, head); e == nil {
+			_, e = conn.Write(body.Bytes())
+		}
+		if e != nil {
+			t.Fatalf("sending the upload: %v", e)
+		}
+		res, e := http.ReadResponse(bufio.NewReader(conn), nil)
+		if e != nil {
+			t.Fatalf("reading the reply: %v", e)
+		}
+		defer res.Body.Close()
+		var out map[string]any
+		json.NewDecoder(res.Body).Decode(&out)
+		if res.StatusCode != want {
+			t.Fatalf("upload %d: %v want %d", res.StatusCode, out, want)
+		}
+		return out
+	}
+	first := upload(201)
+	for i := 0; i < 3; i++ {
+		if again := upload(200); again["id"] != first["id"] {
+			t.Fatalf("duplicate returned job %v, want %v", again["id"], first["id"])
+		}
+	}
 }
