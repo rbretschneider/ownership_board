@@ -138,6 +138,9 @@ Two more rules hold a ticket back without moving it:
 - **Overlap.** A build that shares files with one already under way waits
   until that one merges. Bugs never wait: a story sharing files with a bug
   often cannot pass until the bug lands.
+- **Build server.** A build whose build-host job is queued or running is
+  skipped. Its worker releases it to take other work, and it is claimable
+  again once the job reports.
 
 | Claimed from | Action | Agent ends with |
 |---|---|---|

@@ -55,6 +55,10 @@ type TicketFilter struct {
 	// usually need before they can merge.
 	ExcludeAutonomous     bool
 	ExcludeWindowsWaiting bool
+	// ExcludeBuildingOnHost leaves out tickets whose build-host job is still
+	// queued or running: the worker released them to take other work, and the
+	// ticket is claimable again once the job reports.
+	ExcludeBuildingOnHost bool
 	// ExcludeIDs leaves out these tickets, such as builds held back for
 	// sharing files with a build already under way.
 	ExcludeIDs []int64

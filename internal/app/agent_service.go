@@ -199,6 +199,10 @@ func (s *AgentService) nextClaimable(ctx context.Context, repos Repos, request c
 	for _, stage := range domain.ClaimOrder {
 		filter := request.filterFor(stage)
 		filter.ExcludeWindowsWaiting = !settings.WindowsRunnerEnabled && stage == domain.StageBuild
+		// A worker releases a build while its Windows job runs (2026-11-12: two
+		// workers each held a lease for an hour waiting on the build server while
+		// a bug that repairs main sat unclaimed). It comes back once the job reports.
+		filter.ExcludeBuildingOnHost = stage == domain.StageBuild
 		if stage == domain.StageReady {
 			isFull, err := autonomousSlotsFull(ctx, repos)
 			if err != nil {

@@ -170,6 +170,9 @@ func filterClause(filter app.TicketFilter) (string, []any) {
 		// Bugs repair main, which held-back stories need before they can merge.
 		clause += " AND (is_autonomous = 0 OR kind = 'bug')"
 	}
+	if filter.ExcludeBuildingOnHost {
+		clause += " AND id NOT IN (SELECT ticket_id FROM build_jobs WHERE status IN ('queued','running'))"
+	}
 	if filter.ExcludeWindowsWaiting {
 		clause += " AND work_model NOT LIKE ?"
 		args = append(args, "% · awaiting Windows")
