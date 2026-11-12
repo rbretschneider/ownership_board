@@ -330,6 +330,11 @@ class ExecutionTests(unittest.TestCase):
                 self.assertEqual(runner.command('next',[sys.executable,'-c','print("still runs")']).strip(),'still runs')
                 with self.assertRaises(host.InfrastructureError):
                     runner.command('slow preparation',[sys.executable,'-c','import time; time.sleep(60)'],timeout=1,infrastructure=True)
+                # A verification step that outlives the overall time limit while still
+                # producing output (a cold dependency build) is the host's problem, not a verdict.
+                with self.assertRaises(host.InfrastructureError):
+                    runner.command('slow build',[sys.executable,'-c','import time\nwhile True: print("compiling",flush=True); time.sleep(0.2)'],timeout=1)
+                self.assertIn('time limit',runner.commands[-1]['log'])
 
     def test_limits_report_time_and_silence(self):
         self.assertEqual(host.exceeded_limit(0,0,None,None,now=10**6),'')
