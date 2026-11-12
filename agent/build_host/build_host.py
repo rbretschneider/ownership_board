@@ -692,13 +692,19 @@ class CommandTimeout(TimeoutError):
     def __init__(self, reason, code, log):
         super().__init__(reason)
         self.code, self.log = code, log
+        # The overall time limit measures the host (a cold dependency cache, a slow
+        # disk), not the commit; going silent past the hang limit still counts as a verdict.
+        self.time_limit = reason.startswith(TIME_LIMIT_PREFIX)
+
+
+TIME_LIMIT_PREFIX = 'stopped: exceeded its'
 
 
 def exceeded_limit(started, last_output, timeout, silence, now=None):
     """Returns why a running command must stop, or '' while it is within its limits."""
     now = time.monotonic() if now is None else now
     if timeout is not None and now - started > timeout:
-        return f'stopped: exceeded its {timeout}-second time limit'
+        return f'{TIME_LIMIT_PREFIX} {timeout}-second time limit'
     if silence is not None and now - last_output > silence:
         return f'stopped as hung: no output for {silence // 60} minutes'
     return ''
@@ -1082,7 +1088,7 @@ class JobRunner:
             code,log = self.assignment.tree.run(args,self.checkout,self.env,self.folder/f'{self.log_count:03d}.log',timeout=timeout,silence=silence)
         except CommandTimeout as exc:
             self.commands.append({'label':label,'exit_code':exc.code,'log':exc.log+f'\n[{exc}]\n'})
-            raise failure(f'{label} {exc}') from exc
+            raise (InfrastructureError if exc.time_limit else failure)(f'{label} {exc}') from exc
         except OSError as exc:
             raise InfrastructureError(f'cannot start {label}: required tool or log location unavailable') from exc
         self.commands.append({'label':label,'exit_code':code,'log':log})
