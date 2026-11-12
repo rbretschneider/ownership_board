@@ -220,3 +220,28 @@ func TestOverlapIgnoreIsRepositoryLocal(t *testing.T) {
 		}
 	}
 }
+
+// 2026-11-12: a bug repairing main waited behind PRs that shared its files,
+// and those PRs could not pass until the bug landed.
+func TestABugIsNotHeldBackByBuildsSharingItsFiles(t *testing.T) {
+	f := newFixture(t)
+	repo := f.repo("example/app")
+	story := f.ticket("story", repo.ID)
+	detail, err := f.board.Create(f.ctx, owner, domain.TicketDraft{Kind: "bug", Title: "repair main", RepoID: repo.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bug := detail.Ticket.ID
+	f.toReady(story)
+	f.toReady(bug)
+	f.toBuildWith(bug, "Fix the shutdown hang in src/core/Engine.cpp")
+	f.toBuildWith(story, "Edit src/core/Engine.cpp")
+	f.mustClaim(agent, app.ClaimInput{})
+	branch := "ob/story"
+	if _, err := f.board.Edit(f.ctx, agent, story, domain.TicketEdit{Branch: &branch}); err != nil {
+		t.Fatal(err)
+	}
+	if w := f.mustClaim(other, app.ClaimInput{}); w.Ticket.Ticket.ID != bug {
+		t.Fatalf("claimed #%d, want the bug #%d past the overlap hold", w.Ticket.Ticket.ID, bug)
+	}
+}

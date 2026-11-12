@@ -127,12 +127,17 @@ Two more rules hold a ticket back without moving it:
 - **In-flight cap.** The board setting `autonomous_in_flight_cap` (1 to 10,
   default 1) counts autonomous tickets in `design` or `build`, board-wide,
   including blocked ones and ones whose lease has expired. While the count is
-  at the cap, the `ready` step skips autonomous tickets and goes on to
-  ordinary ones. `design` and `build` are never skipped, so an autonomous
-  ticket already in flight with an expired lease is claimed again. An
-  autonomous ticket in `design` or `build` may not be linked to depend on an
-  autonomous ticket still in `todo` (409): it would hold its slot while the
-  cap kept the other one from starting.
+  at the cap, the `ready` step skips autonomous stories and goes on to
+  ordinary ones. Autonomous bugs are never skipped: they repair main, which
+  the stories in flight usually need before they can merge. `design` and
+  `build` are never skipped, so an autonomous ticket already in flight with
+  an expired lease is claimed again. An autonomous ticket in `design` or
+  `build` may not be linked to depend on an autonomous ticket still in
+  `todo` (409): it would hold its slot while the cap kept the other one from
+  starting.
+- **Overlap.** A build that shares files with one already under way waits
+  until that one merges. Bugs never wait: a story sharing files with a bug
+  often cannot pass until the bug lands.
 
 | Claimed from | Action | Agent ends with |
 |---|---|---|

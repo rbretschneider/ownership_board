@@ -50,7 +50,9 @@ type TicketFilter struct {
 	IsScoped          bool
 	RepoIDs           []int64
 	IncludeUnassigned bool
-	// ExcludeAutonomous leaves out autonomous tickets, whatever the scope.
+	// ExcludeAutonomous leaves out autonomous stories, whatever the scope.
+	// Autonomous bugs stay: they repair main, which the stories in flight
+	// usually need before they can merge.
 	ExcludeAutonomous     bool
 	ExcludeWindowsWaiting bool
 	// ExcludeIDs leaves out these tickets, such as builds held back for

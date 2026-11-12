@@ -465,3 +465,24 @@ func TestInheritedCreationRetainsValidationAndFilingLimit(t *testing.T) {
 		t.Fatal("filing limit left an orphan")
 	}
 }
+
+// 2026-11-12: the cap was full of stories waiting on a broken main, so the
+// autonomous bug that repairs main could never start.
+func TestTheInFlightCapDoesNotHoldBackAnAutonomousBug(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	f.mustCreateAutonomous(api.ID)
+	f.mustClaim(agent, app.ClaimInput{})
+	f.mustCreateAutonomous(api.ID)
+	draft := autonomousDraft(api.ID)
+	draft.Kind = "bug"
+	detail, err := f.board.CreateAutonomous(f.ctx, delegate, draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if work := f.mustClaim(other, app.ClaimInput{}); work.Ticket.Ticket.ID != detail.Ticket.ID {
+		t.Fatalf("claimed #%d, want the autonomous bug #%d past the full cap", work.Ticket.Ticket.ID, detail.Ticket.ID)
+	}
+	third := domain.Actor{Kind: domain.ActorAgent, ID: 9, Name: "loop-c"}
+	f.requireNoClaim(third, "the second autonomous story while the cap is full")
+}
