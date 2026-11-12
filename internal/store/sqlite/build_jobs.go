@@ -187,6 +187,10 @@ func (r buildJobRepo) Supersede(ctx context.Context, ticketID int64, target doma
 	_, err := r.q.ExecContext(ctx, `UPDATE build_jobs SET status='superseded',finished_at=? WHERE ticket_id=? AND target_os=? AND target=? AND sha<>? AND status IN ('queued','running')`, formatTime(now), ticketID, target.OS, target.Canonical(), sha)
 	return err
 }
+func (r buildJobRepo) SupersedeCompleted(ctx context.Context, now time.Time) error {
+	_, err := r.q.ExecContext(ctx, `UPDATE build_jobs SET status='superseded',finished_at=? WHERE status IN ('queued','running') AND ticket_id IN (SELECT id FROM tickets WHERE stage IN ('done','deploying','deployed'))`, formatTime(now))
+	return err
+}
 func (r buildJobRepo) Bundles(ctx context.Context) ([]app.BuildJobBundle, error) {
 	rows, err := r.q.QueryContext(ctx, `SELECT id,bundle_bytes,bundle_sha256 FROM build_jobs`)
 	if err != nil {
