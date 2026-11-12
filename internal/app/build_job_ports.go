@@ -17,6 +17,8 @@ type BuildJobRepository interface {
 	AssignmentCount(context.Context, int64) (int, error)
 	Candidate(context.Context, domain.BuildHost) (*domain.BuildJob, error)
 	CommitState(context.Context, int64, domain.BuildJobTarget, string) (known bool, latest string, err error)
+	// SupersedeCompleted ends queued and running jobs of tickets whose work is complete.
+	SupersedeCompleted(context.Context, time.Time) error
 	Supersede(context.Context, int64, domain.BuildJobTarget, string, time.Time) error
 	Bundles(context.Context) ([]BuildJobBundle, error)
 	Insert(context.Context, domain.BuildJob) error

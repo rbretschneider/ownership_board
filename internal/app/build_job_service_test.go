@@ -819,3 +819,20 @@ func TestABuildWaitingOnItsBuildHostJobIsNotClaimable(t *testing.T) {
 		t.Fatalf("claimed #%d after the job reported, want #1", work.Ticket.Ticket.ID)
 	}
 }
+
+// 2026-11-12: #161 merged while its Windows job still waited for the one
+// build host. A completed ticket's queued job is superseded instead of run.
+func TestACompletedTicketsQueuedJobIsNotRun(t *testing.T) {
+	f, s, m, h := jobFixture(t)
+	submitJob(t, f, s, m)
+	if _, err := f.store.SQL().Exec(`UPDATE tickets SET stage='done', lane='merged' WHERE id=1`); err != nil {
+		t.Fatal(err)
+	}
+	if got, e := s.Claim(f.ctx, app.AuthenticatedBuildHost{ID: h.ID}); e != nil || got != nil {
+		t.Fatal("ran a job for a completed ticket", got, e)
+	}
+	var status string
+	if err := f.store.SQL().QueryRow(`SELECT status FROM build_jobs WHERE ticket_id=1`).Scan(&status); err != nil || status != "superseded" {
+		t.Fatal(status, err)
+	}
+}

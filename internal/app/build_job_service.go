@@ -229,6 +229,12 @@ func (s *BuildJobService) Claim(ctx context.Context, who AuthenticatedBuildHost)
 		if e = s.recover(ctx, r, now); e != nil {
 			return e
 		}
+		// A ticket that merged needs no verdict: do not spend the build host on it
+		// (2026-11-12: #161 merged with its Windows job still queued). A running
+		// job sees the supersession on its next progress report and stops.
+		if e = r.BuildJobs().SupersedeCompleted(ctx, now); e != nil {
+			return e
+		}
 		if !h.Enabled {
 			return nil
 		}
