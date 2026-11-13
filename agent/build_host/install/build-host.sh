@@ -15,7 +15,7 @@ parse_arguments() {
         case "$1" in
             --board) board=$2 ;;
             --code) code=$2 ;;
-            --name|--build-root|--cache-root|--reserve-gib|--max-jobs|--max-parallel) ;;
+            --name|--build-root|--cache-root|--reserve-gib|--max-jobs|--max-parallel|--cpu-budget) ;;
             *) echo 'Unknown installer option.' >&2; exit 1 ;;
         esac
         shift 2
