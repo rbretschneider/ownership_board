@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -83,8 +84,11 @@ func (s *BuildJobService) Submit(ctx context.Context, m domain.BuildJobSubmissio
 		}
 		var e error
 		j, duplicate, e = existingJob(ctx, r, m)
-		if e != nil || duplicate {
+		if e != nil {
 			return e
+		}
+		if duplicate {
+			return s.requeueNoVerdict(ctx, r, &j)
 		}
 		sizes, e := s.bundles.PayloadSizes()
 		if e != nil {
@@ -465,4 +469,39 @@ func (s *BuildJobService) RecoverStorage(ctx context.Context) error {
 		}
 		return nil
 	})
+}
+
+// BuildJobAttempts is how many runs one commit's job gets in all: the reaper's
+// re-queues after a lost host and the re-queues of a resubmitted no-verdict job.
+const BuildJobAttempts = 3
+
+// requeueNoVerdict re-queues a job its host failed without a verdict (an
+// infrastructure failure or a stopped run) when a worker submits the same commit
+// again. The job id is derived from the commit, so before this a resubmission got
+// the same failed job back forever: on 2026-11-13 ticket 61's worker was told
+// "no verdict, it will be checked again" 245 times and paid for an author pass each
+// time. A job of an older commit, a job past its attempts, or one whose bundle is
+// gone keeps its failure.
+func (s *BuildJobService) requeueNoVerdict(ctx context.Context, r Repos, j *domain.BuildJob) error {
+	if j.Status != "failed" || j.Attempt >= BuildJobAttempts || !noVerdict(j.Result) {
+		return nil
+	}
+	_, latest, e := r.BuildJobs().CommitState(ctx, j.TicketID, j.Target, j.SHA)
+	if e != nil || latest != j.SHA {
+		return e
+	}
+	if s.bundles.Verify(j.ID, j.BundleBytes, j.BundleSHA256) != nil {
+		return nil
+	}
+	j.Status, j.Attempt, j.Phase, j.Detail, j.Result = "queued", j.Attempt+1, "", "", nil
+	j.HostID, j.StartedAt, j.FinishedAt, j.AssignmentReleasedAt = nil, nil, nil, nil
+	return r.BuildJobs().Save(ctx, *j)
+}
+
+// noVerdict reports whether a failed job's result blames the host, not the commit.
+func noVerdict(result []byte) bool {
+	var r struct {
+		FailureKind string `json:"failure_kind"`
+	}
+	return json.Unmarshal(result, &r) == nil && (r.FailureKind == "infrastructure" || r.FailureKind == "cancelled")
 }

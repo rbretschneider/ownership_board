@@ -35,7 +35,7 @@ func (s *BuildJobService) recover(ctx context.Context, r Repos, now time.Time) e
 		if j.Status == "superseded" || j.Status == "cancelled" {
 			j.AssignmentReleasedAt = &now
 		} else if j.Status == "running" {
-			if j.Attempt == 3 {
+			if j.Attempt >= BuildJobAttempts {
 				j.Status = "failed"
 				j.FinishedAt = &now
 				j.AssignmentReleasedAt = &now
