@@ -836,3 +836,52 @@ func TestACompletedTicketsQueuedJobIsNotRun(t *testing.T) {
 		t.Fatal(status, err)
 	}
 }
+
+// 2026-11-13: a resubmitted commit got its failed infrastructure job back forever,
+// and ticket 61's worker paid for 245 author passes waiting on "checked again".
+func TestBuildJobsResubmissionRequeuesNoVerdictFailures(t *testing.T) {
+	f, s, m, h := jobFixture(t)
+	host := app.AuthenticatedBuildHost{ID: h.ID}
+	fail := func(id string, attempt int, kind string) {
+		t.Helper()
+		got, e := s.Claim(f.ctx, host)
+		if e != nil || got == nil || got.ID != id || got.Attempt != attempt {
+			t.Fatal("claim", got, e)
+		}
+		result := fmt.Sprintf(`{"commands":[{"label":"build","exit_code":1,"log":"x"}],"failure_kind":%q}`, kind)
+		if _, e = s.Complete(f.ctx, host, id, domain.BuildJobCompletion{Attempt: attempt, Status: "failed", Result: []byte(result)}); e != nil {
+			t.Fatal("complete", e)
+		}
+	}
+	j := submitJob(t, f, s, m)
+	for attempt := 1; attempt <= app.BuildJobAttempts; attempt++ {
+		fail(j.ID, attempt, "infrastructure")
+		again := submitJob(t, f, s, m)
+		want := "queued"
+		if attempt == app.BuildJobAttempts {
+			want = "failed"
+		}
+		if again.ID != j.ID || again.Status != want {
+			t.Fatalf("after attempt %d: %+v", attempt, again)
+		}
+	}
+
+	// A real verification failure is a verdict: resubmitting does not re-run it.
+	m.SHA = fmt.Sprintf("%040x", 7)
+	v := submitJob(t, f, s, m)
+	fail(v.ID, 1, "")
+	if again := submitJob(t, f, s, m); again.Status != "failed" {
+		t.Fatal("verification failure re-queued", again)
+	}
+
+	// An older commit's no-verdict failure stays failed once a newer commit exists.
+	m.SHA = fmt.Sprintf("%040x", 8)
+	old := submitJob(t, f, s, m)
+	fail(old.ID, 1, "infrastructure")
+	newer := m
+	newer.SHA = fmt.Sprintf("%040x", 9)
+	submitJob(t, f, s, newer)
+	if again := submitJob(t, f, s, m); again.Status != "failed" {
+		t.Fatal("older commit re-queued", again)
+	}
+}
