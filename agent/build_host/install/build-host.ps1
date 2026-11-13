@@ -8,8 +8,11 @@ param(
     [string]$BuildRoot,
     [string]$CacheRoot,
     [double]$ReserveGiB = 50,
-    [ValidateRange(1,2)][int]$MaxJobs = 1,
-    [ValidateRange(1,8)][int]$MaxParallel = 1
+    [ValidateRange(1,16)][int]$MaxJobs = 1,
+    [ValidateRange(1,8)][int]$MaxParallel = 1,
+    # Threads for all jobs together. 0 keeps the desktop default (2); a dedicated build
+    # server sets it, e.g. -CpuBudget 8 -MaxJobs 4 -MaxParallel 2.
+    [ValidateRange(0,256)][int]$CpuBudget = 0
 )
 $ErrorActionPreference = 'Stop'
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -70,6 +73,7 @@ if ($LASTEXITCODE) { throw 'Hash-locked Python dependency installation failed.' 
 $config = Join-Path $application 'config.json'
 $agent = Join-Path $application 'build_host.py'
 $pairArgs = @($agent,'pair','--config',$config,'--board',$Board,'--name',$Name,'--reserve-gib',$ReserveGiB.ToString([Globalization.CultureInfo]::InvariantCulture),'--max-jobs',"$MaxJobs",'--max-parallel',"$MaxParallel")
+if ($CpuBudget -gt 0) { $pairArgs += @('--cpu-budget',"$CpuBudget") }
 if ($Code) { $pairArgs += @('--code',$Code) }
 if ($BuildRoot) { $pairArgs += @('--build-root',$BuildRoot) }
 if ($CacheRoot) { $pairArgs += @('--cache-root',$CacheRoot) }

@@ -942,8 +942,12 @@ def completion_bytes(attempt, commands, failure_kind=''):
     return encoded(payload)
 
 
-def cpu_budget():
-    budget = min(os.cpu_count() or 1, 2 if OS == 'windows' else 3)
+def cpu_budget(config=None):
+    """Threads this host may use across all its jobs. The default (2 on Windows, 3 elsewhere)
+    keeps a shared desktop usable; a dedicated build server sets cpu_budget at install
+    (2026-11-13: idaho has 8 threads, yet every job built with -j2 and a second job never fit)."""
+    ceiling = (config or {}).get('cpu_budget') or (2 if OS == 'windows' else 3)
+    budget = min(os.cpu_count() or 1, ceiling)
     if OS == 'linux':
         try:
             quota, period = Path('/sys/fs/cgroup/cpu.max').read_text().split()
@@ -964,7 +968,7 @@ def cpu_budget():
 
 def resource_limits(config, environ=None):
     env = dict(os.environ if environ is None else environ)
-    limit = min(config.get('max_jobs',1),cpu_budget())
+    limit = min(config.get('max_jobs',1),cpu_budget(config))
     if type(limit) is not int or limit < 1:
         raise ValueError('max-jobs must be a positive integer')
     for name in ('CMAKE_BUILD_PARALLEL_LEVEL','CTEST_PARALLEL_LEVEL','OMP_NUM_THREADS'):
@@ -1383,7 +1387,7 @@ class AgentLoop:
         approved = self.status.get('max_parallel',1) if self.status else 0
         if type(approved) is not int or not 1 <= approved <= 8:
             raise ValueError('invalid host capacity')
-        return min(approved,self.config.get('max_parallel',1),max(1,cpu_budget()//limit))
+        return min(approved,self.config.get('max_parallel',1),max(1,cpu_budget(self.config)//limit))
 
     def persist(self,assignment,settled=False):
         atomic_private(assignment.journal,json_bytes({'job':assignment.job,'completion':base64.b64encode(assignment.payload).decode() if assignment.payload else '', 'settled':settled}))
@@ -1603,6 +1607,7 @@ def run_cli(argv):
     parser.add_argument('--reserve-gib',type=float)
     parser.add_argument('--max-jobs',type=int)
     parser.add_argument('--max-parallel',type=int)
+    parser.add_argument('--cpu-budget',type=int)
     args = parser.parse_args(argv)
     if not OS:
         raise RuntimeError('unsupported operating system')
@@ -1621,7 +1626,7 @@ def run_cli(argv):
         if args.command == 'run' and not config.get('host_id'):
             raise RuntimeError('pair and obtain approval before starting run')
         config['board'] = origin or config['board']
-        for name in ('build_root','cache_root','reserve_gib','max_jobs','max_parallel'):
+        for name in ('build_root','cache_root','reserve_gib','max_jobs','max_parallel','cpu_budget'):
             value = getattr(args,name)
             if value is not None:
                 config[name] = str(value.absolute()) if isinstance(value,Path) else value
@@ -1634,6 +1639,8 @@ def run_cli(argv):
         config.setdefault('max_parallel',1)
         if not math.isfinite(config['reserve_gib']) or config['reserve_gib'] < 0 or not 1 <= config['max_parallel'] <= 8:
             raise ValueError('reserve must be nonnegative and max-parallel must be 1..8')
+        if 'cpu_budget' in config and (type(config['cpu_budget']) is not int or not 1 <= config['cpu_budget'] <= 256):
+            raise ValueError('cpu-budget must be 1..256')
         resource_limits(config)
         for name in ('build_root','cache_root'):
             private_dir(config[name])

@@ -218,6 +218,21 @@ class SchedulerTests(unittest.TestCase):
                 with self.subTest(value=value),self.assertRaises(ValueError):
                     self.setup_loop(tmp)
 
+    def test_a_dedicated_host_sets_its_cpu_budget(self):
+        # 2026-11-13: idaho (8 threads) built every job with -j2 and never fit a second job.
+        with patch.object(host,'OS','windows'),patch.object(host.os,'cpu_count',return_value=8):
+            self.assertEqual(host.cpu_budget({}),2)
+            self.assertEqual(host.cpu_budget({'cpu_budget':8}),8)
+            self.assertEqual(host.cpu_budget({'cpu_budget':64}),8)
+            limit,env=host.resource_limits({'max_jobs':4,'cpu_budget':8},{})
+            self.assertEqual((limit,env['CMAKE_BUILD_PARALLEL_LEVEL']),(4,'4'))
+        with tempfile.TemporaryDirectory() as tmp:
+            loop,board,clock=self.setup_loop(tmp)
+            loop.config.update(max_jobs=4,max_parallel=2,cpu_budget=8)
+            loop.status=dict(board.status,max_parallel=2)
+            with patch.object(host.os,'cpu_count',return_value=8),patch.object(host,'OS','windows'):
+                self.assertEqual(loop.capacity(),2)
+
     def test_resource_limits_honor_smaller_environment(self):
         config={'max_jobs':3}
         with patch.object(host,'cpu_budget',return_value=3):
