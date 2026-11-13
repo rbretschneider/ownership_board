@@ -411,6 +411,27 @@ func TestMergedPullRequestCompletesDefaultRepository(t *testing.T) {
 	f.requireLane(id, domain.LaneDeployed)
 }
 
+// 2026-11-13: #51's PR was merged by hand while the ticket was back in build for a repair;
+// the board refused the merge report, so the worker and a Windows job kept going.
+func TestAPullRequestMergedDuringARepairCompletesTheTicket(t *testing.T) {
+	f := newFixture(t)
+	id := f.inReview("repairing")
+	if _, err := f.board.ReportPullRequest(f.ctx, agent, id, app.PullRequestRepair, "failed check: fuzz replay"); err != nil {
+		t.Fatalf("repair: %v", err)
+	}
+	f.requireStage(id, domain.StageBuild)
+	if _, err := f.board.ReportPullRequest(f.ctx, agent, id, app.PullRequestClosed, "closed"); err == nil {
+		t.Fatal("only a merge may end a repair from the build stage")
+	}
+	if _, err := f.board.ReportPullRequest(f.ctx, agent, id, app.PullRequestMerged, "merged by the operator"); err != nil {
+		t.Fatalf("merged during repair: %v", err)
+	}
+	f.requireLane(id, domain.LaneDeployed)
+	if detail := f.detail(id); detail.Ticket.Lease != nil {
+		t.Fatalf("a merged ticket kept its lease: %+v", detail.Ticket.Lease)
+	}
+}
+
 func TestClosedPullRequestSendsTicketBack(t *testing.T) {
 	f := newFixture(t)
 	id := f.inReview("rejected")
