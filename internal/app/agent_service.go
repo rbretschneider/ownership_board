@@ -210,25 +210,66 @@ func (s *AgentService) nextClaimable(ctx context.Context, repos Repos, request c
 			}
 			filter.ExcludeAutonomous = isFull
 		}
+		// Builds: the first startable one in rank order, unless a hot ticket (HotBuildAttempts
+		// or more passes at the code) is startable further down; that one goes first.
+		var first *domain.Ticket
 		for skipped := 0; ; skipped++ {
 			ticket, isFound, err := repos.Tickets().NextClaimable(ctx, stage, filter, s.clock.Now())
-			if err != nil || !isFound {
-				if err != nil {
-					return domain.Ticket{}, false, err
-				}
+			if err != nil {
+				return domain.Ticket{}, false, err
+			}
+			if !isFound {
 				break
 			}
-			if stage != domain.StageBuild || skipped >= maxOverlapSkips {
+			if stage != domain.StageBuild {
+				return ticket, true, nil
+			}
+			if skipped >= maxOverlapSkips {
+				if first != nil {
+					return *first, true, nil
+				}
 				return ticket, true, nil
 			}
 			held, err := heldByOverlap(ctx, repos, ticket)
-			if err != nil || !held {
-				return ticket, err == nil, err
+			if err != nil {
+				return domain.Ticket{}, false, err
+			}
+			if !held {
+				hot, err := isHot(ctx, repos, ticket.ID)
+				if err != nil {
+					return domain.Ticket{}, false, err
+				}
+				if hot {
+					return ticket, true, nil
+				}
+				if first == nil {
+					startable := ticket
+					first = &startable
+				}
 			}
 			filter.ExcludeIDs = append(filter.ExcludeIDs, ticket.ID)
 		}
+		if first != nil {
+			return *first, true, nil
+		}
 	}
 	return domain.Ticket{}, false, nil
+}
+
+// HotBuildAttempts is the build-attempt count (the card's Build badge) at which a ticket
+// jumps the build queue and the Windows build-host queue (2026-11-13, owner: "when tasks
+// are at double digit kickbacks, that needs to get some priority and get its ass to
+// merge"). A ticket that has looped this long has spent the most, and every hour it waits
+// main moves again and costs it another conflict round.
+const HotBuildAttempts = 10
+
+// isHot reports whether a ticket has reached HotBuildAttempts.
+func isHot(ctx context.Context, repos Repos, ticketID int64) (bool, error) {
+	entries, err := repos.Timeline().ForTicket(ctx, ticketID)
+	if err != nil {
+		return false, err
+	}
+	return domain.CountStageAttempts(entries).Build >= HotBuildAttempts, nil
 }
 
 // maxOverlapSkips bounds how many held-back builds one claim looks past.

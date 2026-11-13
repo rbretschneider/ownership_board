@@ -249,7 +249,7 @@ func (s *BuildJobService) Claim(ctx context.Context, who AuthenticatedBuildHost)
 		if active >= h.MaxParallel {
 			return nil
 		}
-		j, e := r.BuildJobs().Candidate(ctx, h)
+		j, e := hotFirstJob(ctx, r, h)
 		if e != nil || j == nil {
 			return e
 		}
@@ -504,4 +504,28 @@ func noVerdict(result []byte) bool {
 		FailureKind string `json:"failure_kind"`
 	}
 	return json.Unmarshal(result, &r) == nil && (r.FailureKind == "infrastructure" || r.FailureKind == "cancelled")
+}
+
+// hotFirstJob picks the job a host claims next: the oldest queued job of a hot ticket
+// (HotBuildAttempts or more passes at the code), otherwise the oldest queued job.
+func hotFirstJob(ctx context.Context, r Repos, h domain.BuildHost) (*domain.BuildJob, error) {
+	jobs, e := r.BuildJobs().QueuedForHost(ctx, h, 40)
+	if e != nil || len(jobs) == 0 {
+		return nil, e
+	}
+	seen := map[int64]bool{}
+	for i := range jobs {
+		if seen[jobs[i].TicketID] {
+			continue
+		}
+		seen[jobs[i].TicketID] = true
+		hot, e := isHot(ctx, r, jobs[i].TicketID)
+		if e != nil {
+			return nil, e
+		}
+		if hot {
+			return &jobs[i], nil
+		}
+	}
+	return &jobs[0], nil
 }
