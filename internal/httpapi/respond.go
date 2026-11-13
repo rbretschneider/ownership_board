@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -62,6 +63,13 @@ func writeError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err
 			writeRetryAfter(w, err)
 		}
 		writeErrorCode(w, status, code, err.Error())
+		return
+	}
+	// The client hung up (tab closed, page left, board restarted under it): nothing
+	// failed on the server, and error logs page the owner (2026-11-12, "board op
+	// failed" alerts nobody could act on). Keep it in the log at info level.
+	if errors.Is(err, context.Canceled) && r.Context().Err() != nil {
+		logger.Info("request canceled by client", "method", r.Method, "path", r.URL.Path)
 		return
 	}
 	logger.Error("request failed", "method", r.Method, "path", r.URL.Path, "error", err)
