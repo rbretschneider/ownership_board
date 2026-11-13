@@ -40,7 +40,11 @@ func (s *BoardService) ReportPullRequest(ctx context.Context, actor domain.Actor
 		if err != nil {
 			return err
 		}
-		if ticket.Stage != domain.StagePR || ticket.PRURL == "" {
+		// A ticket back in build for a repair still owns its pull request, and the owner (or
+		// the operator) may merge that PR meanwhile (2026-11-13: #51 merged by hand while its
+		// worker and a Windows job kept going). A merge ends the work from either stage.
+		inRepair := ticket.Stage == domain.StageBuild && state == PullRequestMerged
+		if (ticket.Stage != domain.StagePR && !inRepair) || ticket.PRURL == "" {
 			return domain.Conflictf("ticket %d is not in review with a pull request", id)
 		}
 		if state == PullRequestRepair && text == "" {
