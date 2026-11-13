@@ -229,7 +229,7 @@ class SchedulerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             loop,board,clock=self.setup_loop(tmp)
             loop.config.update(max_jobs=4,max_parallel=2,cpu_budget=8)
-            board.status['max_parallel']=2
+            loop.status=dict(board.status,max_parallel=2)
             with patch.object(host.os,'cpu_count',return_value=8),patch.object(host,'OS','windows'):
                 self.assertEqual(loop.capacity(),2)
 
