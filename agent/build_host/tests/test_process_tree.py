@@ -85,6 +85,34 @@ class ProcessTreeTests(unittest.TestCase):
         self.assertIn('truncated', log)
 
 
+class ExcerptTests(unittest.TestCase):
+    def test_error_lines_from_the_middle_survive_truncation(self):
+        excerpt = host.Excerpt()
+        noise = b'  compiling unit.cpp\r\n' * 2000
+        excerpt.add(noise)
+        # Split one error line across two chunks, as a pipe read may.
+        excerpt.add(b'D:\\src\\main.cpp(12): error C2065: \'x\': undeclared ')
+        excerpt.add(b'identifier\r\n' + noise)
+        excerpt.add(b'CMake Error at cmake/McPackaging.cmake:40 (message):\n' + noise)
+        log = excerpt.text()
+        self.assertLessEqual(len(log.encode()), 16384)
+        self.assertIn("error C2065: 'x': undeclared identifier", log)
+        self.assertIn('CMake Error at cmake/McPackaging.cmake:40', log)
+        self.assertIn('2 error line(s)', log)
+
+    def test_error_section_is_bounded(self):
+        excerpt = host.Excerpt()
+        excerpt.add(b'x' * 20000 + b'\n' + b'main.cpp(1): error C1000: boom\n' * 5000 + b'y' * 20000)
+        log = excerpt.text()
+        self.assertLessEqual(len(log.encode()), 16384)
+        self.assertIn('5000 error line(s)', log)
+
+    def test_short_output_is_kept_whole(self):
+        excerpt = host.Excerpt()
+        excerpt.add(b'hello\nerror: nope\n')
+        self.assertEqual(excerpt.text(), 'hello\nerror: nope\n')
+
+
 class FakeTreeTests(unittest.TestCase):
     def test_stop_acknowledgment_after_tree_cleanup(self):
         events = []

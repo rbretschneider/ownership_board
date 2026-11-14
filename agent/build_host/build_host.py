@@ -538,23 +538,47 @@ class Cancelled(RuntimeError):
     pass
 
 
+ERROR_LINE = re.compile(rb'CMake Error|fatal error|\berror [A-Z]{1,4}\d{2,5}\b|\berror:|^\s*FAILED:|Fixture FAILED|'
+                        rb'The following tests FAILED|first failing case', re.I | re.M)
+
+
 class Excerpt:
-    """Drain everything; keep a bounded head and tail independent of log retention."""
+    """Drain everything; keep a bounded head, the error lines from the middle,
+    and a tail, independent of log retention. The board stores at most 16 KiB
+    per command. A long build's real error (a compiler or CMake line) sits far
+    from both ends; without it the agents saw only "cmake failed with exit code 1"
+    and retried blind (2026-11-14, ticket 63)."""
+    HEAD, ERRORS, TAIL = 3000, 4500, 6500
+
     def __init__(self):
         self.head, self.tail, self.size = bytearray(), bytearray(), 0
+        self.errors, self.partial, self.error_count = bytearray(), bytearray(), 0
 
     def add(self, raw):
         self.size += len(raw)
-        need = max(0, 7000 - len(self.head))
+        need = max(0, self.HEAD - len(self.head))
         self.head.extend(raw[:need])
         self.tail.extend(raw[need:])
-        if len(self.tail) > 7000:
-            del self.tail[:-7000]
+        if len(self.tail) > self.TAIL:
+            del self.tail[:-self.TAIL]
+        lines = (self.partial + raw).split(b'\n')
+        self.partial = bytearray(lines.pop()[-4096:])
+        for line in lines:
+            if ERROR_LINE.search(line):
+                self.error_count += 1
+                line = line.rstrip(b'\r')[:400] + b'\n'
+                if len(self.errors) + len(line) <= self.ERRORS:
+                    self.errors.extend(line)
 
     def text(self):
-        middle = b'\n[output truncated]\n' if self.size > 14000 else b''
+        if self.size <= self.HEAD + self.TAIL:
+            return self.head.decode('utf-8','ignore') + self.tail.decode('utf-8','ignore')
+        middle = '\n[output truncated]\n'
+        if self.errors:
+            middle = (f'\n[output truncated; {self.error_count} error line(s) from the whole log, first ones kept:]\n'
+                      + self.errors.decode('utf-8','ignore') + '[end of error lines]\n')
         # Ignore boundary fragments, retaining valid UTF-8 with a strict byte ceiling.
-        return self.head.decode('utf-8','ignore') + middle.decode() + self.tail.decode('utf-8','ignore')
+        return self.head.decode('utf-8','ignore') + middle + self.tail.decode('utf-8','ignore')
 
 
 def guardian_main(control_fd, status_fd, command):
