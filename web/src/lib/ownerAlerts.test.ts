@@ -15,8 +15,8 @@ const stages: Stage[] = [{ id: "spec_review", lane: "todo", label: "Spec ready",
 
 describe("titleFor", () => {
   it("shows the waiting count only when something waits", () => {
-    expect(titleFor(0)).toBe("ownership");
-    expect(titleFor(3)).toBe("(3) ownership");
+    expect(titleFor(0)).toBe("ownership board");
+    expect(titleFor(3)).toBe("(3) ownership board");
   });
 });
 

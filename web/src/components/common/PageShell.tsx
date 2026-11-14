@@ -24,7 +24,7 @@ export function PageShell({ page, title, actions, isWide = false, children }: Pa
       <header className="topbar">
         <a href="#/" className="brand" aria-label="ownership board home">
           <BrandMark />
-          <span className="brand__name">ownership</span>
+          <span className="brand__name">ownership board</span>
         </a>
         <span className="topbar__spacer" />
         <AppNav current={page} />

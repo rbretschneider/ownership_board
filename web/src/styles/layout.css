@@ -59,7 +59,9 @@
 }
 
 .brand-mark {
-  color: var(--text-muted);
+  display: block;
+  flex-shrink: 0;
+  border-radius: 4px;
 }
 
 .offline {
