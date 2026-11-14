@@ -28,7 +28,7 @@ export function TopBar(props: TopBarProps) {
     <header className="topbar">
       <a href="#/" className="brand" aria-label="ownership board home">
         <BrandMark />
-        <span className="brand__name">ownership</span>
+        <span className="brand__name">ownership board</span>
       </a>
       <RepoCombobox
         className="topbar__repo"

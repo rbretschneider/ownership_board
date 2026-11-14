@@ -9,7 +9,7 @@ import (
 
 // noFrontendPage answers when the binary was built without the web app, which
 // is the normal state while running the Vite dev server.
-const noFrontendPage = `<!doctype html><meta charset="utf-8"><title>ownership_board</title>
+const noFrontendPage = `<!doctype html><meta charset="utf-8"><title>ownership board</title>
 <body style="font-family:system-ui;background:#0e0f13;color:#e7e9ee;padding:2rem">
 <p>The web app is not embedded in this build. During development run <code>npm run dev</code> in <code>web/</code>
 and open the Vite URL. Release builds embed it with <code>-tags embed_frontend</code>.</p>`
