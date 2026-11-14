@@ -885,3 +885,16 @@ func TestBuildJobsResubmissionRequeuesNoVerdictFailures(t *testing.T) {
 		t.Fatal("older commit re-queued", again)
 	}
 }
+
+// 2026-11-14: deleting #158 failed with "FOREIGN KEY constraint failed" because the ticket
+// had build jobs, the one child table without ON DELETE CASCADE.
+func TestATicketWithBuildJobsCanBeDeleted(t *testing.T) {
+	f, s, m, _ := jobFixture(t)
+	j := submitJob(t, f, s, m)
+	if err := f.board.Delete(f.ctx, owner, m.TicketID); err != nil {
+		t.Fatalf("delete ticket with a build job: %v", err)
+	}
+	if _, err := s.Get(f.ctx, j.ID); domain.KindOf(err) != domain.KindNotFound {
+		t.Fatalf("build job kept after its ticket was deleted: %v", err)
+	}
+}

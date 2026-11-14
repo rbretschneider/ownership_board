@@ -72,6 +72,13 @@ func (r ticketRepo) Update(ctx context.Context, ticket domain.Ticket) error {
 }
 
 func (r ticketRepo) Delete(ctx context.Context, id int64) error {
+	// build_jobs references tickets without ON DELETE CASCADE (every other child table
+	// cascades), so a ticket that ever ran a Windows job could not be deleted (2026-11-14:
+	// #158, "FOREIGN KEY constraint failed"). Its jobs are history of the ticket; remove them
+	// in the same transaction. A running job's host sees it gone on its next report.
+	if _, err := r.q.ExecContext(ctx, `DELETE FROM build_jobs WHERE ticket_id = ?`, id); err != nil {
+		return fmt.Errorf("sqlite: delete build jobs of ticket %d: %w", id, err)
+	}
 	if _, err := r.q.ExecContext(ctx, `DELETE FROM tickets WHERE id = ?`, id); err != nil {
 		return fmt.Errorf("sqlite: delete ticket %d: %w", id, err)
 	}
