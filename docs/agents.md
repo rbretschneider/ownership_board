@@ -328,10 +328,23 @@ Every action is on the ticket's timeline under the manager token's name.
 - The session follows `agent/claude/board-manager.md`. A retry is never a
   fix: it must change approach or park the ticket for you.
 
-The manager acts only through the board. It cannot repair a build host or
-install software. When a build host is the problem, it blocks the affected
-tickets with "Needs the owner: ..." so they stop burning passes, and
+By default the manager acts only through the board. It cannot repair a build
+host or install software. When a build host is the problem, it blocks the
+affected tickets with "Needs the owner: ..." so they stop burning passes, and
 tells you what to fix.
+
+**Repairs (opt in).** Set `MANAGER_LOCAL_RUNBOOK` to a Markdown file that
+describes your deployment: which build hosts and repositories the manager may
+touch, how to reach them, where caches live, and how to run long jobs. The
+loop appends that file to every session, and the session then fixes
+infrastructure causes itself: build-script and CI fixes on the ticket's
+branch, and build-host caches and tools. It still never changes product code
+or tests, never raises limits to make a failure pass, and never merges. The
+runbook only describes the access. Grant it to the model yourself, through
+`CLAUDE_ARGS` (for example
+`--allowedTools=mcp__ownership,Bash,Read,Edit,Write,Grep,Glob`) and the
+credentials the session's environment holds. Repair sessions cost more, so
+keep the daily budget in mind.
 
 ## Dependencies
 
