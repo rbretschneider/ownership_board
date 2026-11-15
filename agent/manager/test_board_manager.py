@@ -31,6 +31,21 @@ class DueFlagsTests(unittest.TestCase):
         other = dict(self.flag('o'), kind='escalated', detail='blocked: waiting on CI')
         self.assertEqual([f['fingerprint'] for f in m.due_flags([held, other], {}, 0)], ['o'])
 
+    def test_a_repair_in_progress_is_checked_hourly_on_the_base_model(self):
+        held = dict(self.flag('r'), kind='escalated', detail='blocked: Board manager repairing: seeding the cache')
+        state = {'r': {'attempts': m.MAX_ATTEMPTS + 2, 'last': 0}}
+        due = m.due_flags([held], state, m.RETRY_AFTER + 1)
+        self.assertEqual(len(due), 1)
+        self.assertEqual(m.session_model(due), m.MODEL)
+        self.assertEqual(m.due_flags([held], state, m.RETRY_AFTER - 1), [])
+
+    def test_the_deployment_runbook_enables_repairs(self):
+        flag = dict(self.flag('a'), attempts=0)
+        self.assertNotIn('## This deployment', m.build_prompt(2, [flag], 5.0, local_runbook=''))
+        prompt = m.build_prompt(2, [flag], 5.0, local_runbook='Build host: ssh builder')
+        self.assertTrue(prompt.rstrip().endswith('Build host: ssh builder'))
+        self.assertIn('Repairs are enabled', prompt)
+
     def test_a_flag_past_its_attempts_is_left_for_the_owner(self):
         state = {'a': {'attempts': m.MAX_ATTEMPTS, 'last': 0}}
         self.assertEqual(m.due_flags([self.flag('a')], state, 10**9), [])

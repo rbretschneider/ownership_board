@@ -41,6 +41,9 @@ RETRY_MODEL = os.environ.get('MANAGER_RETRY_MODEL', 'opus')
 SESSION_TIMEOUT = int(os.environ.get('MANAGER_SESSION_TIMEOUT', '1800'))
 STATE = Path(os.environ.get('MANAGER_STATE', str(Path.home() / '.board_manager' / 'state.json')))
 COMMAND = Path(__file__).resolve().parent.parent / 'claude' / 'board-manager.md'
+# Optional deployment runbook (Markdown). When set, every session gets it and may
+# repair infrastructure causes itself (see "Repairs" in board-manager.md).
+LOCAL_RUNBOOK = os.environ.get('MANAGER_LOCAL_RUNBOOK', '')
 CLAUDE_ARGS = os.environ.get('CLAUDE_ARGS', '').split()
 
 
@@ -77,6 +80,14 @@ def owner_held(flag):
 
 
 OWNER_PREFIX = 'Needs the owner:'
+REPAIR_PREFIX = 'Board manager repairing:'
+
+
+def repairing(flag):
+    """A ticket the manager parked while it repairs the cause. It is checked once per
+    MANAGER_RETRY_AFTER on the base model until the repair lands, with no attempt cap:
+    a long host job can outlast MAX_ATTEMPTS retries."""
+    return flag['kind'] == 'escalated' and flag['detail'].startswith('blocked: ' + REPAIR_PREFIX)
 
 # Count-based flags never clear by themselves: build passes, repeated failures and
 # repair or review rounds only grow. One session per fingerprint; the fingerprint
@@ -99,7 +110,7 @@ def due_flags(flags, state, now):
             continue
         entry = state.get(flag['fingerprint'], {})
         attempts = entry.get('attempts', 0)
-        if attempts >= max_attempts(flag):
+        if attempts >= max_attempts(flag) and not repairing(flag):
             continue
         if attempts and now - entry.get('last', 0) < RETRY_AFTER:
             continue
@@ -115,9 +126,14 @@ def session_summary(result_text):
     return summary.replace('```', '').strip()[:8000]
 
 
-def run_session(repo_id, flags, budget_left):
-    """One model session for one repo's flags. Returns (cost in USD, model, summary)."""
-    model = RETRY_MODEL if any(f['attempts'] > 0 for f in flags) else MODEL
+def session_model(flags):
+    """The base model, or the stronger one when a flag came back after an earlier session."""
+    if any(f['attempts'] > 0 and not repairing(f) for f in flags):
+        return RETRY_MODEL
+    return MODEL
+
+
+def build_prompt(repo_id, flags, budget_left, local_runbook=None):
     lines = '\n'.join(f"- #{f['ticket_id']} [{f['kind']}] {f['title']} (stage {f['stage']}): {f['detail']}. "
                       f"Fingerprint {f['fingerprint']}; earlier attempts on it: {f['attempts']}." for f in flags)
     runbook = COMMAND.read_text()
@@ -126,6 +142,17 @@ def run_session(repo_id, flags, budget_left):
         runbook = runbook.split('---', 2)[2].lstrip()
     prompt = (runbook + f'\n\n## This session\n\nRepo id {repo_id}. Budget left today: ${budget_left:.2f}. '
               f'Flags to handle:\n\n{lines}\n')
+    if local_runbook is None and LOCAL_RUNBOOK:
+        local_runbook = Path(LOCAL_RUNBOOK).read_text()
+    if local_runbook:
+        prompt += '\n## This deployment\n\nRepairs are enabled.\n\n' + local_runbook.strip() + '\n'
+    return prompt
+
+
+def run_session(repo_id, flags, budget_left):
+    """One model session for one repo's flags. Returns (cost in USD, model, summary)."""
+    model = session_model(flags)
+    prompt = build_prompt(repo_id, flags, budget_left)
     log(f'repo {repo_id}: {len(flags)} flag(s) on {model}')
     try:
         result = subprocess.run(['claude', '-p', prompt, '--model', model, '--output-format', 'json', *CLAUDE_ARGS],
