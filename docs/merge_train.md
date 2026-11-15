@@ -78,12 +78,16 @@ it removes most of today's failed full runs.
 ## Independent of the train (can ship first)
 
 - **Run the slow suites once, not twice.** The quick suites run in Debug;
-  GUI, diagnostics and full QA run in Release. That would save about 25 of
-  85 minutes per run. It is a test-policy choice for each repository's
-  verification script.
-- **GPU on the build host.** If GUI tests can use offscreen GPU contexts
-  instead of the shared desktop session, they no longer need to take turns,
-  which shortens the queue wait.
+  GUI, diagnostics and full QA run in Release. That saves about 25 of 85
+  minutes per run. It is a test-policy choice for each repository's
+  verification script. (Approved and proposed for the first board,
+  2026-11-15.)
+- **GPU on the build host.** The Windows build host is getting a small GPU,
+  and the Linux host already has two. If the GUI tests use offscreen GPU
+  contexts instead of the shared desktop session, they no longer take turns,
+  which shortens the queue wait. A GPU also makes a GUI-capable fast lane
+  possible, so a train's full run could split GUI tests across hosts. This
+  only helps where the product's GUI tests run on that platform.
 
 ## Rollout
 
