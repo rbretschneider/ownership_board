@@ -68,7 +68,17 @@ func TestAutonomousPRDoesNotAskOwnerToReview(t *testing.T) {
 	if _, wanted := policy().Evaluate(event); wanted {
 		t.Fatal("autonomous PR interrupted the owner")
 	}
-	event.Type = domain.TimelineBlocked
+	// The board manager handles autonomous blocks and questions; only a block
+	// marked "Needs the owner:" reaches the owner's phone.
+	event.Type, event.Detail = domain.TimelineBlocked, "Waiting on #173: harness hides the failure"
+	if _, wanted := policy().Evaluate(event); wanted {
+		t.Fatal("a block the board manager handles interrupted the owner")
+	}
+	event.Type, event.Detail = domain.TimelineQuestions, ""
+	if _, wanted := policy().Evaluate(event); wanted {
+		t.Fatal("an autonomous question the board manager answers interrupted the owner")
+	}
+	event.Type, event.Detail = domain.TimelineBlocked, "Needs the owner: supply the signing credentials"
 	if _, wanted := policy().Evaluate(event); !wanted {
 		t.Fatal("real autonomous blocker was hidden")
 	}

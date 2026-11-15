@@ -38,6 +38,26 @@ func TestTheManagerKeepsAutonomousTicketsMovingWithoutALease(t *testing.T) {
 	}
 }
 
+func TestTheManagerMakesAStoryWaitWithoutAskingTheOwner(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	fix, err := f.board.Create(f.ctx, owner, domain.TicketDraft{Kind: "bug", Title: "harness fix", RepoID: api.ID, IsAutonomous: true})
+	if err != nil {
+		t.Fatalf("create fix: %v", err)
+	}
+	story, err := f.board.Create(f.ctx, owner, domain.TicketDraft{Kind: "story", Title: "story", RepoID: api.ID, IsAutonomous: true})
+	if err != nil {
+		t.Fatalf("create story: %v", err)
+	}
+	detail, err := f.board.LinkTickets(f.ctx, manager, story.Ticket.ID, "depends_on", fix.Ticket.ID)
+	if err != nil {
+		t.Fatalf("manager links the story to its fix: %v", err)
+	}
+	if detail.Ticket.NeedsOwner(detail.OpenQuestions) || len(detail.WaitingOn) != 1 {
+		t.Fatalf("needs owner=%v waiting on=%v, want the story waiting on the fix without the owner", detail.Ticket.NeedsOwner(detail.OpenQuestions), detail.WaitingOn)
+	}
+}
+
 func TestTheManagerHasNoAuthorityOverOrdinaryTickets(t *testing.T) {
 	f := newFixture(t)
 	api := f.repo("acme/api")

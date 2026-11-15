@@ -124,7 +124,13 @@ func TestAutonomousDeliveryStaysWithAgents(t *testing.T) {
 	if ticket.NeedsOwner(0) || ticket.Owner(0) != domain.OwnerAgent {
 		t.Fatal("autonomous delivery asked for its owner")
 	}
-	ticket.BlockedReason = "Owner must supply credentials"
+	// The board manager handles an autonomous ticket's blocks and questions; only
+	// a block it (or a worker) marks "Needs the owner:" is the owner's.
+	ticket.BlockedReason = "Waiting on #173: harness hides the failure"
+	if ticket.NeedsOwner(2) {
+		t.Fatal("an autonomous block or question the manager handles was put on the owner")
+	}
+	ticket.BlockedReason = "Needs the owner: supply the signing credentials"
 	if !ticket.NeedsOwner(0) {
 		t.Fatal("a real owner blocker was hidden")
 	}
