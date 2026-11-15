@@ -54,8 +54,39 @@ If it cannot, B leaves this train and waits for the next.
   how long to wait for more tickets before starting (default 10 min).
 - Manager flags: a train verifying too long, a ticket kicked from two trains
   in a row, a train splitting more than twice.
-- The worker treats "kicked from train with failure X" like a failed Windows
-  run today.
+- The worker treats "kicked from train with failure X" like a failed
+  verification run today.
+
+## Per repository, never per product
+
+The board knows nothing about any one repository's build. Everything above
+is a per-repository policy, and a repository with no verification host is
+not affected at all.
+
+- **Off by default.** A repository runs each ticket's verification alone
+  until the owner turns trains on in its settings.
+- **The repository defines the work.** Its verification entry point receives
+  `mode=fast|full` and decides what each means: which suites, which
+  configurations, which hosts. A repository that offers only `full` gets
+  trains without a fast check.
+- **Bounds from the owner, tuning by the manager.** The owner sets the limits
+  per repository: trains allowed or not, the maximum size, and the longest
+  wait to form a train. Within those limits the manager picks the working
+  values from that repository's own history:
+  - **Raising the train size:** when the fast check's pass rate is high and
+    full runs are long. A train of 4 pays off when most trains pass.
+  - **Shrinking toward 1 (one ticket at a time):** when trains keep
+    splitting, or when the fast check is missing or weak.
+  - **Pausing trains for a repository:** when two trains in a row split down
+    to a single culprit and that repository's default branch is failing.
+
+  Each change is a recorded decision with its numbers (pass rate, splits,
+  run minutes) in the manager's session summary. It is never a silent
+  setting change. The owner can pin any value, and the manager leaves pinned
+  values alone.
+- **Hosts are matched by capability, not name.** A train's full run goes to
+  any approved host whose labels match the repository's target, as single
+  jobs do today.
 
 ## Expected effect
 
