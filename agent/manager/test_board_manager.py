@@ -14,6 +14,11 @@ class DueFlagsTests(unittest.TestCase):
         due = {f['fingerprint']: f['attempts'] for f in m.due_flags([self.flag('a'), self.flag('b'), self.flag('c')], state, now)}
         self.assertEqual(due, {'b': 1, 'c': 0})
 
+    def test_a_ticket_blocked_for_the_owner_costs_nothing(self):
+        held = dict(self.flag('h'), kind='escalated', detail='blocked: Needs the owner: close it, the fix is on main')
+        other = dict(self.flag('o'), kind='escalated', detail='blocked: waiting on CI')
+        self.assertEqual([f['fingerprint'] for f in m.due_flags([held, other], {}, 0)], ['o'])
+
     def test_a_flag_past_its_attempts_is_left_for_the_owner(self):
         state = {'a': {'attempts': m.MAX_ATTEMPTS, 'last': 0}}
         self.assertEqual(m.due_flags([self.flag('a')], state, 10**9), [])

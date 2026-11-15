@@ -51,9 +51,11 @@ escalated; say so in one line.
   the answer text with `[product]`, so the owner can find and override it.
 - Blocked: if the cause is resolved (merged fix, answered question, a
   transient problem), `unblock_ticket` with a one-line note of what changed. If
-  the cause is outside the ticket, see "outside causes" below. If only a
-  person can resolve it (hardware, money, access), leave it blocked and say
-  exactly what the owner must do.
+  the cause is outside the ticket, see "outside causes" below. A block reason
+  that starts with `Needs the owner:` is the owner's: never unblock it. If only
+  a person can resolve a block (hardware, money, access, closing a ticket),
+  leave it blocked, and if its reason does not start with `Needs the owner:`
+  yet, say so in your summary. The loop then stops spending on it.
 
 **cycling** (the same failure again, or repeated repair or review rounds):
 - Read the latest failures in the timeline and name the **one** failure that
