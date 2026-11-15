@@ -20,6 +20,10 @@ type settingsDTO struct {
 	ReviewBy                  domain.ReviewBy `json:"review_by"`
 	ReviewFreshContext        bool            `json:"review_fresh_context"`
 	ReviewAdversarial         bool            `json:"review_adversarial"`
+	ManagerEnabled            bool            `json:"manager_enabled"`
+	ManagerBuildCap           int             `json:"manager_build_cap"`
+	ManagerStallMinutes       int             `json:"manager_stall_minutes"`
+	ManagerDailyBudgetUSD     int             `json:"manager_daily_budget_usd"`
 }
 
 func (s *server) settingsRoutes(rt *router) {
@@ -49,11 +53,16 @@ func (s *server) editSettings(w http.ResponseWriter, r *http.Request, who caller
 		ReviewBy              *domain.ReviewBy `json:"review_by"`
 		ReviewFreshContext    *bool            `json:"review_fresh_context"`
 		ReviewAdversarial     *bool            `json:"review_adversarial"`
+		ManagerEnabled        *bool            `json:"manager_enabled"`
+		ManagerBuildCap       *int             `json:"manager_build_cap"`
+		ManagerStallMinutes   *int             `json:"manager_stall_minutes"`
+		ManagerDailyBudgetUSD *int             `json:"manager_daily_budget_usd"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
 	}
-	settings, err := s.deps.Board.UpdateSettings(r.Context(), who.actor, domain.SettingsEdit{WindowsParallelBuilds: body.WindowsParallelBuilds, AutonomousInFlightCap: body.AutonomousInFlightCap, CodexWorkers: body.CodexWorkers, ClaudeWorkers: body.ClaudeWorkers, CodexWeeklyLimit: body.CodexWeeklyLimit, ClaudeWeeklyLimit: body.ClaudeWeeklyLimit, WindowsRunnerEnabled: body.WindowsRunnerEnabled, ReviewBy: body.ReviewBy, ReviewFreshContext: body.ReviewFreshContext, ReviewAdversarial: body.ReviewAdversarial})
+	settings, err := s.deps.Board.UpdateSettings(r.Context(), who.actor, domain.SettingsEdit{WindowsParallelBuilds: body.WindowsParallelBuilds, AutonomousInFlightCap: body.AutonomousInFlightCap, CodexWorkers: body.CodexWorkers, ClaudeWorkers: body.ClaudeWorkers, CodexWeeklyLimit: body.CodexWeeklyLimit, ClaudeWeeklyLimit: body.ClaudeWeeklyLimit, WindowsRunnerEnabled: body.WindowsRunnerEnabled, ReviewBy: body.ReviewBy, ReviewFreshContext: body.ReviewFreshContext, ReviewAdversarial: body.ReviewAdversarial,
+		ManagerEnabled: body.ManagerEnabled, ManagerBuildCap: body.ManagerBuildCap, ManagerStallMinutes: body.ManagerStallMinutes, ManagerDailyBudgetUSD: body.ManagerDailyBudgetUSD})
 	if err != nil {
 		return err
 	}
@@ -63,5 +72,6 @@ func (s *server) editSettings(w http.ResponseWriter, r *http.Request, who caller
 
 func toSettings(settings domain.BoardSettings) settingsDTO {
 	return settingsDTO{WindowsParallelBuilds: settings.WindowsParallelBuilds, WindowsParallelBuildLimit: settings.WindowsParallelBuildLimit, AutonomousInFlightCap: settings.AutonomousInFlightCap, CodexWorkers: settings.CodexWorkers, ClaudeWorkers: settings.ClaudeWorkers, ClaudeWorkerLimit: domain.MaxClaudeWorkers, CodexWeeklyLimit: settings.CodexWeeklyLimit, ClaudeWeeklyLimit: settings.ClaudeWeeklyLimit, CodexWorkerLimit: domain.MaxCodexWorkers, WindowsRunnerEnabled: settings.WindowsRunnerEnabled,
-		ReviewBy: settings.ReviewBy, ReviewFreshContext: settings.ReviewFreshContext, ReviewAdversarial: settings.ReviewAdversarial}
+		ReviewBy: settings.ReviewBy, ReviewFreshContext: settings.ReviewFreshContext, ReviewAdversarial: settings.ReviewAdversarial,
+		ManagerEnabled: settings.ManagerEnabled, ManagerBuildCap: settings.ManagerBuildCap, ManagerStallMinutes: settings.ManagerStallMinutes, ManagerDailyBudgetUSD: settings.ManagerDailyBudgetUSD}
 }

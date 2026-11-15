@@ -7,6 +7,7 @@ import { AccountSection } from "./AccountSection";
 import { BuildHostsSection } from "./BuildHostsSection";
 import { AgentWorkSection } from "./AgentWorkSection";
 import { ReviewSection } from "./ReviewSection";
+import { ManagerSection } from "./ManagerSection";
 import { AlertsSection } from "./AlertsSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { RepositoriesSection } from "./RepositoriesSection";
@@ -50,6 +51,7 @@ export function SettingsPage({ route, status, onSignedOut, onChanged }: Settings
       <div className="settings settings__body">
         <AgentWorkSection />
         <ReviewSection />
+        <ManagerSection />
         <BuildHostsSection />
         <RepositoriesSection onChanged={onChanged} />
         <TokensSection />

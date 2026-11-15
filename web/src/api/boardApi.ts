@@ -8,6 +8,8 @@ import type {
   Board,
   BoardSettings,
   CreatedToken,
+  ManagerFlag,
+  ManagerStatus,
   CreateTicket,
   EditTicket,
   LaneId,
@@ -103,7 +105,9 @@ export interface BoardApi {
   connectBitbucket(input: BitbucketConnectionInput): Promise<Connection>;
   disconnect(provider: ConnectionProvider): Promise<void>;
   tokens(): Promise<Token[]>;
-  createToken(name: string, isDelegate: boolean): Promise<CreatedToken>;
+  createToken(name: string, isDelegate: boolean, isManager?: boolean): Promise<CreatedToken>;
+  managerStatus(): Promise<ManagerStatus>;
+  managerFlags(): Promise<{ flags: ManagerFlag[] }>;
   revokeToken(id: number): Promise<void>;
   settings(): Promise<BoardSettings>;
   editSettings(input: Partial<BoardSettings>): Promise<BoardSettings>;
@@ -162,7 +166,9 @@ export function createBoardApi(http: HttpClient): BoardApi {
     connectBitbucket: (input) => http.request("PUT", "/connections/bitbucket", input),
     disconnect: (provider) => http.request("DELETE", `/connections/${provider}`),
     tokens: () => http.request("GET", "/tokens"),
-    createToken: (name, isDelegate) => http.request("POST", "/tokens", { name, is_delegate: isDelegate }),
+    createToken: (name, isDelegate, isManager = false) => http.request("POST", "/tokens", { name, is_delegate: isDelegate, is_manager: isManager }),
+    managerStatus: () => http.request("GET", "/manager/status"),
+    managerFlags: () => http.request("GET", "/manager/flags"),
     revokeToken: (id) => http.request("DELETE", `/tokens/${id}`),
     settings: () => http.request("GET", "/settings"),
     editSettings: (input) => http.request("PATCH", "/settings", input),

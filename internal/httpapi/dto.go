@@ -148,6 +148,7 @@ type tokenDTO struct {
 	CreatedAt  time.Time  `json:"created_at"`
 	LastUsedAt *time.Time `json:"last_used_at"`
 	IsDelegate bool       `json:"is_delegate"`
+	IsManager  bool       `json:"is_manager"`
 }
 
 type createdTokenDTO struct {
@@ -294,7 +295,7 @@ func toBoard(board app.Board) boardDTO {
 }
 
 func toToken(token auth.APIToken) tokenDTO {
-	return tokenDTO{ID: token.ID, Name: token.Name, Prefix: token.Prefix, CreatedAt: token.CreatedAt, LastUsedAt: token.LastUsedAt, IsDelegate: token.IsDelegate}
+	return tokenDTO{ID: token.ID, Name: token.Name, Prefix: token.Prefix, CreatedAt: token.CreatedAt, LastUsedAt: token.LastUsedAt, IsDelegate: token.IsDelegate, IsManager: token.IsManager}
 }
 
 func toWork(work app.Work) workDTO {

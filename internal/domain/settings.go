@@ -18,6 +18,28 @@ const SettingClaudeWorkers = "claude_workers"
 const SettingCodexWeeklyLimit = "codex_weekly_limit"
 const SettingClaudeWeeklyLimit = "claude_weekly_limit"
 
+// Board manager settings. The manager is an agent that keeps autonomous
+// tickets moving cheaply: it answers their escalations, clears blockers and
+// stops cycles, and it stays inside a daily spend budget.
+const (
+	SettingManagerEnabled        = "manager_enabled"
+	SettingManagerBuildCap       = "manager_build_cap"
+	SettingManagerStallMinutes   = "manager_stall_minutes"
+	SettingManagerDailyBudgetUSD = "manager_daily_budget_usd"
+)
+
+// Bounds and defaults of the manager settings.
+const (
+	DefaultManagerBuildCap       = 5
+	MinManagerBuildCap           = 1
+	MaxManagerBuildCap           = 50
+	DefaultManagerStallMinutes   = 120
+	MinManagerStallMinutes       = 15
+	MaxManagerStallMinutes       = 2880
+	DefaultManagerDailyBudgetUSD = 10
+	MaxManagerDailyBudgetUSD     = 500
+)
+
 // Bounds of the in-flight cap. Zero is not allowed: a cap that stops every
 // autonomous ticket would leave the queue waiting with no visible reason.
 const (
@@ -44,6 +66,14 @@ type BoardSettings struct {
 	ReviewBy           ReviewBy
 	ReviewFreshContext bool
 	ReviewAdversarial  bool
+	// ManagerEnabled turns the board manager on. ManagerBuildCap is the build
+	// count above which an autonomous ticket is flagged, ManagerStallMinutes
+	// how long one may sit without movement, and ManagerDailyBudgetUSD what
+	// the manager may spend per UTC day (0 means no model sessions at all).
+	ManagerEnabled        bool
+	ManagerBuildCap       int
+	ManagerStallMinutes   int
+	ManagerDailyBudgetUSD int
 	// LegacyWindowsRunnerEnabled and LegacyWindowsParallelBuilds are the
 	// Windows settings stored before build hosts existed. They apply only
 	// while no Windows build host is approved, so a board whose Windows
@@ -68,12 +98,45 @@ type SettingsEdit struct {
 	ReviewBy              *ReviewBy
 	ReviewFreshContext    *bool
 	ReviewAdversarial     *bool
+	ManagerEnabled        *bool
+	ManagerBuildCap       *int
+	ManagerStallMinutes   *int
+	ManagerDailyBudgetUSD *int
 }
 
 // DefaultBoardSettings are the settings of a new board.
 func DefaultBoardSettings() BoardSettings {
 	return BoardSettings{AutonomousInFlightCap: DefaultAutonomousInFlightCap, CodexWorkers: 3, CodexWeeklyLimit: 100, ClaudeWeeklyLimit: 100,
-		ReviewBy: ReviewByOtherModel, ReviewFreshContext: true, ReviewAdversarial: true}
+		ReviewBy: ReviewByOtherModel, ReviewFreshContext: true, ReviewAdversarial: true,
+		ManagerBuildCap: DefaultManagerBuildCap, ManagerStallMinutes: DefaultManagerStallMinutes,
+		ManagerDailyBudgetUSD: DefaultManagerDailyBudgetUSD}
+}
+
+// managerIntField is one numeric manager setting with its bounds.
+type managerIntField struct {
+	name     string
+	value    *int
+	target   *int
+	min, max int
+}
+
+// managerIntSettings lists the manager's numeric settings with their bounds.
+func managerIntSettings(s *BoardSettings, e SettingsEdit) []managerIntField {
+	return []managerIntField{
+		{SettingManagerBuildCap, e.ManagerBuildCap, &s.ManagerBuildCap, MinManagerBuildCap, MaxManagerBuildCap},
+		{SettingManagerStallMinutes, e.ManagerStallMinutes, &s.ManagerStallMinutes, MinManagerStallMinutes, MaxManagerStallMinutes},
+		{SettingManagerDailyBudgetUSD, e.ManagerDailyBudgetUSD, &s.ManagerDailyBudgetUSD, 0, MaxManagerDailyBudgetUSD},
+	}
+}
+
+// ManagerIntBounds returns the stored-value bounds of each numeric manager
+// setting, so a store keeps the default for an unreadable or out-of-range value.
+func ManagerIntBounds() map[string][2]int {
+	return map[string][2]int{
+		SettingManagerBuildCap:       {MinManagerBuildCap, MaxManagerBuildCap},
+		SettingManagerStallMinutes:   {MinManagerStallMinutes, MaxManagerStallMinutes},
+		SettingManagerDailyBudgetUSD: {0, MaxManagerDailyBudgetUSD},
+	}
 }
 
 // Apply validates edit and returns the settings with it applied.
@@ -125,6 +188,17 @@ func (s BoardSettings) Apply(edit SettingsEdit) (BoardSettings, error) {
 	}
 	if edit.ReviewAdversarial != nil {
 		next.ReviewAdversarial = *edit.ReviewAdversarial
+	}
+	if edit.ManagerEnabled != nil {
+		next.ManagerEnabled = *edit.ManagerEnabled
+	}
+	for _, field := range managerIntSettings(&next, edit) {
+		if field.value != nil {
+			if *field.value < field.min || *field.value > field.max {
+				return BoardSettings{}, Invalidf("%s must be between %d and %d", field.name, field.min, field.max)
+			}
+			*field.target = *field.value
+		}
 	}
 	return next, nil
 }

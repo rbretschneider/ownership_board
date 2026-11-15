@@ -19,11 +19,12 @@ func (s *server) createToken(w http.ResponseWriter, r *http.Request, who caller)
 	var body struct {
 		Name       string `json:"name"`
 		IsDelegate bool   `json:"is_delegate"`
+		IsManager  bool   `json:"is_manager"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
 	}
-	token, secret, err := s.deps.Auth.CreateAPIToken(r.Context(), who.user, body.Name, body.IsDelegate)
+	token, secret, err := s.deps.Auth.CreateAPIToken(r.Context(), who.user, body.Name, body.IsDelegate, body.IsManager)
 	if err != nil {
 		return err
 	}

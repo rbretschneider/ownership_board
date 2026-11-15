@@ -149,8 +149,8 @@ func (s *BoardService) Block(ctx context.Context, actor domain.Actor, id int64, 
 // Unblock lets agents pick a blocked ticket up again, with an optional note
 // for them.
 func (s *BoardService) Unblock(ctx context.Context, actor domain.Actor, id int64, comment string) (TicketDetail, error) {
-	if !actor.IsHuman() {
-		return TicketDetail{}, domain.Forbiddenf("only a person can unblock a ticket")
+	if !actor.IsHuman() && !actor.IsBoardManager() {
+		return TicketDetail{}, domain.Forbiddenf("only a person or the board manager can unblock a ticket")
 	}
 	note, err := domain.LimitText("comment", strings.TrimSpace(comment), domain.MaxCommentLength)
 	if err != nil {

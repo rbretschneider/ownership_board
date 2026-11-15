@@ -18,6 +18,11 @@ type Actor struct {
 	// IsDelegate marks an agent whose token the owner allowed to file
 	// autonomous tickets: specs the owner agreed with it in a chat.
 	IsDelegate bool `json:"delegate,omitempty"`
+	// IsManager marks the board manager: an agent the owner allowed to keep
+	// autonomous tickets moving. It may answer their questions, unblock and
+	// park them, comment on them and file repair tickets, without holding
+	// their lease. It never touches tickets that are not autonomous.
+	IsManager bool `json:"manager,omitempty"`
 }
 
 // SystemActor is used for changes the board makes on its own, such as moving a
@@ -34,8 +39,13 @@ func (a Actor) IsAgent() bool {
 	return a.Kind == ActorAgent
 }
 
+// IsBoardManager reports whether the actor is the board manager agent.
+func (a Actor) IsBoardManager() bool {
+	return a.IsAgent() && a.IsManager
+}
+
 // MayFileAutonomous reports whether the actor may file a ticket that runs to
 // a pull request without stopping for the owner.
 func (a Actor) MayFileAutonomous() bool {
-	return a.IsAgent() && a.IsDelegate
+	return a.IsAgent() && (a.IsDelegate || a.IsManager)
 }

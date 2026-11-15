@@ -27,6 +27,8 @@ type BuildJobRepository interface {
 	Uploads(context.Context) ([]BuildJobUpload, error)
 	Reserve(context.Context, BuildJobUpload) error
 	FinishUpload(context.Context, string) error
+	// RecentForTicket returns the ticket's newest jobs first, at most limit.
+	RecentForTicket(ctx context.Context, ticketID int64, limit int) ([]domain.BuildJob, error)
 }
 type BuildJobBundle struct {
 	ID     string

@@ -14,6 +14,15 @@ func requireLeaseForAgent(ticket domain.Ticket, actor domain.Actor, now time.Tim
 	if !actor.IsAgent() {
 		return nil
 	}
+	// The board manager keeps autonomous tickets moving without taking their
+	// lease, so it never collides with the worker building them. It has no
+	// authority over any other ticket.
+	if actor.IsBoardManager() {
+		if ticket.IsAutonomous {
+			return nil
+		}
+		return domain.Forbiddenf("the board manager acts only on autonomous tickets; ticket %d is not autonomous", ticket.ID)
+	}
 	if !ticket.IsLeased(now) || ticket.Lease.Holder != actor.Name {
 		return domain.Forbiddenf("claim ticket %d first: an agent may only change a ticket it holds the lease on", ticket.ID)
 	}
