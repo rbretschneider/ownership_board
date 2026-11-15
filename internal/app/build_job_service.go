@@ -319,6 +319,12 @@ func (s *BuildJobService) Progress(ctx context.Context, who AuthenticatedBuildHo
 		if e := s.recover(ctx, r, now); e != nil {
 			return e
 		}
+		// A ticket that merged while its job ran needs no verdict: stop the job on its next
+		// report instead of when the host next asks for work. A busy host only asks once a
+		// slot frees (2026-11-15: #166 merged and its job held an idaho slot for an hour).
+		if e := r.BuildJobs().SupersedeCompleted(ctx, now); e != nil {
+			return e
+		}
 		j, e := r.BuildJobs().Get(ctx, id)
 		if e != nil {
 			return e
