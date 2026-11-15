@@ -18,6 +18,9 @@ type TicketSummary struct {
 	Attempts domain.StageAttempts
 	// Usage is the model token usage reported for the ticket so far.
 	Usage domain.TokenUsage
+	// Build is the ticket's newest queued or running build job, if any, so the
+	// board can show how long it has waited or run.
+	Build *domain.BuildJob
 }
 
 // TicketDetail is a ticket with everything needed to work on it.

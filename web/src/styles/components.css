@@ -1274,6 +1274,7 @@
 .badge--build-target { color: var(--build); background: color-mix(in srgb, var(--build) 7%, transparent); }
 .card__activity-target { color: var(--text-faint); font-weight: 500; }
 .card__activity-target::before { content: "·"; margin-right: 4px; }
+.card__build-clock { display: inline-flex; align-items: center; gap: 3px; color: var(--text-faint); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .card__model { display: inline-flex; align-items: center; gap: 4px; min-width: 0; color: var(--text-muted); font-size: 0.6875rem; font-weight: 500; }
 .card__model-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card__model > svg { flex-shrink: 0; }

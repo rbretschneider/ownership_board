@@ -39,6 +39,28 @@ describe("owner-facing story status", () => {
  });
 });
 
+describe("build clock", () => {
+ const now = Date.parse("2026-11-15T12:00:00Z");
+ const building = {stage: "build" as const, lane: "in_progress" as const, work_model: "gpt-6.1-sol · build-server:testing:Windows x64 · awaiting Windows"};
+ function clock(overrides: Partial<TicketSummary>) {
+  const root = document.createElement("div");
+  root.innerHTML = renderToStaticMarkup(<TicketCardContent ticket={{...story, ...building, ...overrides}} stages={[]} repo={undefined} now={now} />);
+  return root.querySelector(".card__build-clock");
+ }
+ it("shows how long the running build has taken", () => {
+  const el = clock({build: {status: "running", queued_at: "2026-11-15T10:00:00Z", started_at: "2026-11-15T10:35:00Z"}});
+  expect(el?.textContent).toBe("1h 25m");
+  expect(el?.getAttribute("title")).toBe("Build running for 1h 25m after waiting 35m");
+ });
+ it("shows how long a queued build has waited", () => {
+  expect(clock({build: {status: "queued", queued_at: "2026-11-15T11:40:00Z", started_at: null}})?.textContent).toBe("20m");
+ });
+ it("shows no clock without an open build job", () => {
+  expect(clock({build: null})).toBeNull();
+  expect(clock({})).toBeNull();
+ });
+});
+
 describe("card top row", () => {
  it("right-aligns the model and one status pill, and keeps the meta row to the repo", () => {
   const card = dom({stage: "build", lane: "in_progress", work_model: "gpt-6.1-sol · build-server:verifying:Windows x64 · awaiting Windows"});

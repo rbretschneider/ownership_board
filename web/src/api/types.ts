@@ -250,6 +250,15 @@ export interface TicketSummary {
   attempts?: StageAttempts;
   /** Model token usage agents reported for this ticket. Absent from older servers. */
   usage?: TokenUsage;
+  /** The ticket's newest queued or running build job; null when none. Absent from older servers. */
+  build?: BuildClock | null;
+}
+
+/** When a ticket's open build job was queued and started. */
+export interface BuildClock {
+  status: "queued" | "running";
+  queued_at: string;
+  started_at: string | null;
 }
 
 /** Token usage summed over a ticket's model calls. */

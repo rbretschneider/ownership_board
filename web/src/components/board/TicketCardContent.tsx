@@ -1,9 +1,11 @@
-import { Bot, CircleAlert, Coins, GitPullRequest, Hand, HeartPulse, Hourglass, MessageCircleQuestion, Server, Zap } from "lucide-react";
+import { Bot, CircleAlert, Coins, GitPullRequest, Hand, HeartPulse, Hourglass, MessageCircleQuestion, Server, Timer, Zap } from "lucide-react";
 import { isCompletedStage } from "../../lib/stages";
 import { platformStatuses } from "../../lib/progress";
 import { PlatformIcon } from "../common/PlatformIcon";
 import type { Repo, Stage, TicketSummary } from "../../api/types";
 import { useLeaseClock } from "../../hooks/useLeaseClock";
+import { useTick } from "../../hooks/useTick";
+import { buildClockText } from "../../lib/buildClock";
 import { cardActivity, hasLiveLease } from "../../lib/activity";
 import { ticketRefs } from "../../lib/relations";
 import { modelFamily, parseWorkModel, shortTarget } from "../../lib/workModel";
@@ -77,6 +79,9 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
     : isBlocked ? `Blocked: ${ticket.blocked_reason}`
     : isWaiting ? "Agents cannot claim this until these tickets are merged"
     : `${ticket.is_autonomous ? "On autopilot · " : ""}${activity.label === "Queued" ? "Waiting for a worker" : activity.label}`;
+  // How long the build job has run (or waited), ticking while it is open.
+  const tick = useTick(now === undefined && activity.buildServer === true && Boolean(ticket.build));
+  const buildClock = !pr && activity.buildServer ? buildClockText(ticket.build, now ?? tick) : undefined;
   const escalated = model?.escalatedAfter !== undefined;
   // A model building the ticket itself (not the Windows build server, not a PR wait) mines.
   const miner = !pr && !activity.buildServer && ticket.stage === "build" && liveLease && activity.working ? modelFamily(model?.name) : undefined;
@@ -109,6 +114,11 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
                   : (pr ? pr.tone === "running" : activity.working || activeBuild) && <span className="pixel-loader" aria-hidden="true">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</span>}
                 <span className="card__activity-label">{label}</span>
                 {!pr && activity.buildServer && activity.target && <span className="card__activity-target">{shortTarget(activity.target)}</span>}
+              </span>
+            )}
+            {buildClock && (
+              <span className="card__build-clock" title={buildClock.title} aria-label={buildClock.title}>
+                <Timer size={11} aria-hidden="true" />{buildClock.text}
               </span>
             )}
             {ticket.stage === "deploying" && liveLease && !activity.blocked && <span className="card__lease-holder">{ticket.lease?.holder}</span>}
