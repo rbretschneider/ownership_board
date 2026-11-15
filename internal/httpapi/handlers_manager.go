@@ -25,6 +25,7 @@ func (s *server) managerRoutes(rt *router) {
 	rt.anyone("GET /api/v1/manager/status", s.managerStatus)
 	rt.anyone("GET /api/v1/manager/flags", s.managerFlags)
 	rt.anyone("POST /api/v1/manager/usage", s.managerUsage)
+	rt.anyone("GET /api/v1/manager/sessions", s.managerSessions)
 }
 
 func toManagerStatus(status app.ManagerStatus) managerStatusDTO {
@@ -61,14 +62,28 @@ func (s *server) managerFlags(w http.ResponseWriter, r *http.Request, who caller
 func (s *server) managerUsage(w http.ResponseWriter, r *http.Request, who caller) error {
 	var body struct {
 		CostUSD float64 `json:"cost_usd"`
+		Model   string  `json:"model"`
+		Summary string  `json:"summary"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
 	}
-	status, err := s.deps.Board.RecordManagerUsage(r.Context(), who.actor, body.CostUSD)
+	status, err := s.deps.Board.RecordManagerUsage(r.Context(), who.actor, app.ManagerSessionInput{CostUSD: body.CostUSD, Model: body.Model, Summary: body.Summary})
 	if err != nil {
 		return err
 	}
 	writeJSON(w, http.StatusOK, toManagerStatus(status))
+	return nil
+}
+
+func (s *server) managerSessions(w http.ResponseWriter, r *http.Request, who caller) error {
+	sessions, err := s.deps.Board.ManagerSessions(r.Context(), who.actor, 20)
+	if err != nil {
+		return err
+	}
+	if sessions == nil {
+		sessions = []domain.ManagerSession{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions})
 	return nil
 }

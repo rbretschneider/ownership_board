@@ -26,3 +26,10 @@ class DueFlagsTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class SummaryTests(unittest.TestCase):
+    def test_the_summary_block_is_what_the_owner_reads(self):
+        text = 'thinking...\n```\nMANAGER SUMMARY\n- #49 cycling: why: x | action: y | expect: z\n- owner: none\n```'
+        self.assertEqual(m.session_summary(text), 'MANAGER SUMMARY\n- #49 cycling: why: x | action: y | expect: z\n- owner: none')
+        self.assertEqual(m.session_summary(''), '')

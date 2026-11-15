@@ -9,6 +9,7 @@ import type {
   BoardSettings,
   CreatedToken,
   ManagerFlag,
+  ManagerSession,
   ManagerStatus,
   CreateTicket,
   EditTicket,
@@ -108,6 +109,7 @@ export interface BoardApi {
   createToken(name: string, isDelegate: boolean, isManager?: boolean): Promise<CreatedToken>;
   managerStatus(): Promise<ManagerStatus>;
   managerFlags(): Promise<{ flags: ManagerFlag[] }>;
+  managerSessions(): Promise<{ sessions: ManagerSession[] }>;
   revokeToken(id: number): Promise<void>;
   settings(): Promise<BoardSettings>;
   editSettings(input: Partial<BoardSettings>): Promise<BoardSettings>;
@@ -169,6 +171,7 @@ export function createBoardApi(http: HttpClient): BoardApi {
     createToken: (name, isDelegate, isManager = false) => http.request("POST", "/tokens", { name, is_delegate: isDelegate, is_manager: isManager }),
     managerStatus: () => http.request("GET", "/manager/status"),
     managerFlags: () => http.request("GET", "/manager/flags"),
+    managerSessions: () => http.request("GET", "/manager/sessions"),
     revokeToken: (id) => http.request("DELETE", `/tokens/${id}`),
     settings: () => http.request("GET", "/settings"),
     editSettings: (input) => http.request("PATCH", "/settings", input),

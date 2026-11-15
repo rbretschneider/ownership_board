@@ -758,3 +758,11 @@ export interface ManagerStatus {
   today: { day: string; sessions: number; cost_usd: number };
   remaining_usd: number;
 }
+
+/** One board manager model session and its own summary of what it did. */
+export interface ManagerSession {
+  at: string;
+  model: string;
+  cost_usd: number;
+  summary: string;
+}

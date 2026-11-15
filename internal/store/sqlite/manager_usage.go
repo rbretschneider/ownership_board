@@ -33,3 +33,35 @@ func (r managerUsageRepo) Day(ctx context.Context, day string) (domain.ManagerUs
 	}
 	return usage, nil
 }
+
+// AddSession implements app.ManagerUsageRepository.
+func (r managerUsageRepo) AddSession(ctx context.Context, session domain.ManagerSession) error {
+	_, err := r.q.ExecContext(ctx, `INSERT INTO manager_sessions (at, model, cost_usd, summary) VALUES (?, ?, ?, ?)`,
+		formatTime(session.At), session.Model, session.CostUSD, session.Summary)
+	if err != nil {
+		return fmt.Errorf("sqlite: record manager session: %w", err)
+	}
+	return nil
+}
+
+// RecentSessions implements app.ManagerUsageRepository: newest first.
+func (r managerUsageRepo) RecentSessions(ctx context.Context, limit int) ([]domain.ManagerSession, error) {
+	rows, err := r.q.QueryContext(ctx, `SELECT at, model, cost_usd, summary FROM manager_sessions ORDER BY at DESC, id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: list manager sessions: %w", err)
+	}
+	defer rows.Close()
+	sessions := []domain.ManagerSession{}
+	for rows.Next() {
+		var session domain.ManagerSession
+		var at string
+		if err := rows.Scan(&at, &session.Model, &session.CostUSD, &session.Summary); err != nil {
+			return nil, err
+		}
+		if session.At, err = parseTime(at); err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, session)
+	}
+	return sessions, rows.Err()
+}

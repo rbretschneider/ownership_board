@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { useApi } from "../../api/ApiContext";
-import type { BoardSettings, ManagerFlag, ManagerStatus } from "../../api/types";
+import type { BoardSettings, ManagerFlag, ManagerSession, ManagerStatus } from "../../api/types";
 import { ErrorState } from "../common/ErrorState";
 import { LoadingState } from "../common/LoadingState";
 import { useToast } from "../toast/ToastContext";
@@ -27,17 +27,19 @@ export function ManagerSection() {
   const [settings, setSettings] = useState<ManagerSettings | null>(null);
   const [status, setStatus] = useState<ManagerStatus | null>(null);
   const [flags, setFlags] = useState<ManagerFlag[]>([]);
+  const [sessions, setSessions] = useState<ManagerSession[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
-    Promise.all([api.settings(), api.managerStatus(), api.managerFlags()]).then(
-      ([s, st, f]) => {
+    Promise.all([api.settings(), api.managerStatus(), api.managerFlags(), api.managerSessions()]).then(
+      ([s, st, f, ses]) => {
         if (!active) return;
         setSettings(pick(s));
         setStatus(st);
         setFlags(f.flags);
+        setSessions(ses.sessions);
       },
       (cause) => { if (active) setError(String(cause)); },
     );
@@ -112,6 +114,17 @@ export function ManagerSection() {
               ))}
             </ul>
           )}
+          <h3 className="settings-section__subtitle">Recent sessions</h3>
+          {sessions.length === 0 && <p className="muted small">No manager sessions yet.</p>}
+          {sessions.map((session) => (
+            <details key={`${session.at}-${session.model}`} className="manager-session">
+              <summary>
+                {`${new Date(session.at).toLocaleString()} · ${session.model || "model"} · $${session.cost_usd.toFixed(2)}`}
+              </summary>
+              {/* Agent text, shown as plain text only. */}
+              <pre className="manager-session__summary">{session.summary || "(no summary)"}</pre>
+            </details>
+          ))}
         </>
       )}
     </section>

@@ -95,8 +95,16 @@ def due_flags(flags, state, now):
     return due
 
 
+def session_summary(result_text):
+    """The session's MANAGER SUMMARY block for the owner, or its tail when it wrote none."""
+    text = (result_text or '').strip()
+    start = text.rfind('MANAGER SUMMARY')
+    summary = text[start:] if start != -1 else text[-2000:]
+    return summary.replace('```', '').strip()[:8000]
+
+
 def run_session(repo_id, flags, budget_left):
-    """One model session for one repo's flags. Returns its cost in USD."""
+    """One model session for one repo's flags. Returns (cost in USD, model, summary)."""
     model = RETRY_MODEL if any(f['attempts'] > 0 for f in flags) else MODEL
     lines = '\n'.join(f"- #{f['ticket_id']} [{f['kind']}] {f['title']} (stage {f['stage']}): {f['detail']}. "
                       f"Fingerprint {f['fingerprint']}; earlier attempts on it: {f['attempts']}." for f in flags)
@@ -113,13 +121,14 @@ def run_session(repo_id, flags, budget_left):
         output = json.loads(result.stdout or '{}')
     except subprocess.TimeoutExpired:
         log(f'repo {repo_id}: session timed out after {SESSION_TIMEOUT}s')
-        return 0.0
+        return 0.0, model, f'Session timed out after {SESSION_TIMEOUT}s.'
     except ValueError:
         log(f'repo {repo_id}: session returned no JSON: {result.stderr[-300:]}')
-        return 0.0
+        return 0.0, model, 'Session failed to start: ' + result.stderr[-300:]
     cost = float(output.get('total_cost_usd') or 0)
-    log(f'repo {repo_id}: done, ${cost:.2f}: {(output.get("result") or "")[-400:]}')
-    return cost
+    summary = session_summary(output.get('result'))
+    log(f'repo {repo_id}: done, ${cost:.2f}: {summary[-400:]}')
+    return cost, model, summary
 
 
 def main():
@@ -151,8 +160,9 @@ def main():
                     entry['attempts'] += 1
                     entry['last'] = now
                 save_state(state)
-                cost = run_session(repo_id, repo_flags, remaining)
-                remaining = api('POST', '/api/v1/manager/usage', {'cost_usd': round(cost, 4)})['remaining_usd']
+                cost, model, summary = run_session(repo_id, repo_flags, remaining)
+                remaining = api('POST', '/api/v1/manager/usage',
+                                {'cost_usd': round(cost, 4), 'model': model, 'summary': summary})['remaining_usd']
             save_state(state)
         except Exception as error:  # the loop must outlive any one bad pass
             log(f'pass failed: {type(error).__name__}: {error}')
