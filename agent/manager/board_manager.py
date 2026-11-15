@@ -78,10 +78,11 @@ def owner_held(flag):
 
 OWNER_PREFIX = 'Needs the owner:'
 
-# Count-based flags never clear by themselves: build passes and repair or review
-# rounds only grow. One session per fingerprint; the fingerprint changes when the
-# count grows past its step, which brings the ticket back if things get worse.
-COUNT_KEYS = (':build:', ':pr_repairs:', ':review_fixes:')
+# Count-based flags never clear by themselves: build passes, repeated failures and
+# repair or review rounds only grow. One session per fingerprint; the fingerprint
+# changes with every new pass or round, so a ticket that keeps burning attempts
+# gets a fresh look each time instead of one look per cap-sized step.
+COUNT_KEYS = (':build:', ':failure:', ':pr_repairs:', ':review_fixes:')
 
 
 def max_attempts(flag):

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -62,6 +63,19 @@ func TestManagerFlagsCycleBuildCapAndStall(t *testing.T) {
 	for i := range flags {
 		if flags[i].Kind != FlagStalled && flags[i].Fingerprint != again[i].Fingerprint {
 			t.Errorf("fingerprint changed without a change in the ticket: %s vs %s", flags[i].Fingerprint, again[i].Fingerprint)
+		}
+	}
+	// One more pass, or one more identical failure, is new news for the manager.
+	worse := []ManagerTicketFacts{facts[0]}
+	worse[0].Attempts.Build++
+	worse[0].RecentJobs = append([]BuildJob{failedJob(sameFailure)}, facts[0].RecentJobs...)
+	before := map[string]bool{}
+	for _, flag := range byTicket[1] {
+		before[flag.Fingerprint] = true
+	}
+	for _, flag := range ManagerFlags(worse, settings, now) {
+		if (flag.Kind == FlagBuildCap || strings.Contains(flag.Fingerprint, ":failure:")) && before[flag.Fingerprint] {
+			t.Errorf("%s kept its fingerprint after another pass", flag.Fingerprint)
 		}
 	}
 }

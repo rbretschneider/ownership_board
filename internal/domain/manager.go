@@ -79,7 +79,7 @@ func ManagerFlags(facts []ManagerTicketFacts, settings BoardSettings, now time.T
 				fmt.Sprintf("%d open question(s) waiting for an answer", fact.OpenQuestions))
 		}
 		if signature, jobs := repeatedFailure(fact.RecentJobs); signature != "" {
-			add(FlagCycling, "failure:"+shortHash(signature),
+			add(FlagCycling, fmt.Sprintf("failure:%s:%d", shortHash(signature), jobs),
 				fmt.Sprintf("the last %d build-host runs failed the same way: %s", jobs, signature))
 		}
 		if fact.Attempts.PRRepairs >= repeatRounds {
@@ -91,8 +91,8 @@ func ManagerFlags(facts []ManagerTicketFacts, settings BoardSettings, now time.T
 				fmt.Sprintf("review sent the work back for fixes %d times", fact.Attempts.ReviewFixes))
 		}
 		if cap := settings.ManagerBuildCap; cap > 0 && fact.Attempts.Build > cap {
-			// One flag per cap-sized step, so the manager looks again at 2x, 3x...
-			add(FlagBuildCap, fmt.Sprintf("build:%d", fact.Attempts.Build/cap),
+			// One flag per pass over the cap: every further pass gets a fresh look.
+			add(FlagBuildCap, fmt.Sprintf("build:%d", fact.Attempts.Build),
 				fmt.Sprintf("%d build passes, over the cap of %d", fact.Attempts.Build, cap))
 		}
 		if stalled(fact, settings, now) {

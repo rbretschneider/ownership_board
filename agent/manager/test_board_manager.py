@@ -21,6 +21,11 @@ class DueFlagsTests(unittest.TestCase):
         grown = dict(self.flag('build_cap:49:build:4'), kind='build_cap')
         self.assertEqual(len(m.due_flags([grown], state, 10**9)), 1)
 
+    def test_a_repeated_failure_gets_one_session_per_new_failure(self):
+        state = {'cycling:64:failure:ab12:3': {'attempts': 1, 'last': 0}}
+        self.assertEqual(m.due_flags([self.flag('cycling:64:failure:ab12:3')], state, 10**9), [])
+        self.assertEqual(len(m.due_flags([self.flag('cycling:64:failure:ab12:4')], state, 10**9)), 1)
+
     def test_a_ticket_blocked_for_the_owner_costs_nothing(self):
         held = dict(self.flag('h'), kind='escalated', detail='blocked: Needs the owner: close it, the fix is on main')
         other = dict(self.flag('o'), kind='escalated', detail='blocked: waiting on CI')
