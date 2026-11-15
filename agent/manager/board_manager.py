@@ -78,6 +78,17 @@ def owner_held(flag):
 
 OWNER_PREFIX = 'Needs the owner:'
 
+# Count-based flags never clear by themselves: build passes and repair or review
+# rounds only grow. One session per fingerprint; the fingerprint changes when the
+# count grows past its step, which brings the ticket back if things get worse.
+COUNT_KEYS = (':build:', ':pr_repairs:', ':review_fixes:')
+
+
+def max_attempts(flag):
+    if any(key in flag['fingerprint'] for key in COUNT_KEYS):
+        return 1
+    return MAX_ATTEMPTS
+
 
 def due_flags(flags, state, now):
     """Flags that need a session now, with the model each needs."""
@@ -87,7 +98,7 @@ def due_flags(flags, state, now):
             continue
         entry = state.get(flag['fingerprint'], {})
         attempts = entry.get('attempts', 0)
-        if attempts >= MAX_ATTEMPTS:
+        if attempts >= max_attempts(flag):
             continue
         if attempts and now - entry.get('last', 0) < RETRY_AFTER:
             continue
