@@ -80,10 +80,19 @@ chasing the wrong cause.
   rest.
 - If it is the wrong cause, treat it as cycling.
 
-**stalled** (nothing moving, no lease, no job): find why from the ticket.
+**stalled** (nothing moving, no lease, no job; or a build job queued or
+running far too long): find why from the ticket.
 - Waiting on something that finished: unblock or comment.
+- A stuck build job is the build host's problem, not the ticket's: treat it as
+  an outside cause (the host is offline, full, or hung).
 - Held by something you cannot change: report it.
 - Never claim the ticket yourself.
+
+**Deployment flags** (no ticket: an offline CI runner, a stalled CI queue, a
+worker stuck in an error loop). They come from the deployment's sensors and
+the deployment runbook says what you may do about each. Fix it if you have
+the access; otherwise say exactly what is broken in `owner:`. Do not tour
+tickets for these.
 
 **Outside causes:**
 - If a fix is already in flight (an open ticket), make the story wait for it:

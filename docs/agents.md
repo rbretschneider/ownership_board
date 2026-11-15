@@ -290,7 +290,7 @@ at the lowest token cost.
 | escalated | the ticket is blocked, or has open questions |
 | cycling | the last build-host runs failed the same way, or the PR went back for repair, or review sent it back for fixes, 3 or more times |
 | build_cap | more build passes than the cap (default 5) |
-| stalled | no lease, no build job, and no change for the stall limit (default 120 min) |
+| stalled | no lease, no build job, and no change for the stall limit (default 120 min), or a build job queued over 2 h or running over 4 h |
 
 **What it may do,** on autonomous tickets only and without taking their
 lease, so it never collides with the worker:
@@ -345,6 +345,14 @@ runbook only describes the access. Grant it to the model yourself, through
 `--allowedTools=mcp__ownership,Bash,Read,Edit,Write,Grep,Glob`) and the
 credentials the session's environment holds. Repair sessions cost more, so
 keep the daily budget in mind.
+
+**Deployment sensors (opt in).** Set `MANAGER_SENSORS` to a command that prints
+`{"flags": [{"kind": ..., "fingerprint": ..., "detail": ...}]}`. The loop runs
+it every pass, with no model cost, and handles those flags like the board's own.
+Use it for things the board cannot see, such as offline CI runners or a
+worker stuck in an error loop. A flag may name a `ticket_id` and `repo_id`.
+Flags without a ticket get a session of their own. A sensor that fails or
+prints bad JSON is logged and skipped.
 
 ## Dependencies
 

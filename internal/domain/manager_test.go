@@ -80,6 +80,26 @@ func TestManagerFlagsCycleBuildCapAndStall(t *testing.T) {
 	}
 }
 
+func TestManagerFlagsAStuckBuildJob(t *testing.T) {
+	now := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
+	started := now.Add(-5 * time.Hour)
+	ticket := Ticket{ID: 7, IsAutonomous: true, Stage: StageBuild, UpdatedAt: now.Add(-10 * time.Minute)}
+	cases := map[string][]BuildJob{
+		"stalled:7:job_queued:abcdef123456":  {{Status: "queued", SHA: "abcdef1234567890", CreatedAt: now.Add(-3 * time.Hour)}},
+		"stalled:7:job_running:abcdef123456": {{Status: "running", SHA: "abcdef1234567890", CreatedAt: started, StartedAt: &started}},
+		"":                                   {{Status: "queued", SHA: "abc", CreatedAt: now.Add(-30 * time.Minute)}},
+	}
+	for want, jobs := range cases {
+		var got string
+		for _, flag := range ManagerFlags([]ManagerTicketFacts{{Ticket: ticket, RecentJobs: jobs}}, DefaultBoardSettings(), now) {
+			got = flag.Fingerprint
+		}
+		if got != want {
+			t.Errorf("jobs %+v: flag %q, want %q", jobs, got, want)
+		}
+	}
+}
+
 func TestBuildFailureSignatureNamesTheFailingTest(t *testing.T) {
 	cases := map[string]string{
 		"x\n--- first failing case: win-debug/q.xml: policy:loader: Timeout\n": "test: policy:loader (Timeout)",
