@@ -70,10 +70,21 @@ def save_state(state):
     tmp.replace(STATE)
 
 
+def owner_held(flag):
+    """A ticket blocked for the owner ("Needs the owner: ...") waits for a person; a
+    session on it can only spend money, and might unblock what the owner parked."""
+    return flag['kind'] == 'escalated' and flag['detail'].startswith('blocked: ' + OWNER_PREFIX)
+
+
+OWNER_PREFIX = 'Needs the owner:'
+
+
 def due_flags(flags, state, now):
     """Flags that need a session now, with the model each needs."""
     due = []
     for flag in flags:
+        if owner_held(flag):
+            continue
         entry = state.get(flag['fingerprint'], {})
         attempts = entry.get('attempts', 0)
         if attempts >= MAX_ATTEMPTS:
@@ -89,7 +100,11 @@ def run_session(repo_id, flags, budget_left):
     model = RETRY_MODEL if any(f['attempts'] > 0 for f in flags) else MODEL
     lines = '\n'.join(f"- #{f['ticket_id']} [{f['kind']}] {f['title']} (stage {f['stage']}): {f['detail']}. "
                       f"Fingerprint {f['fingerprint']}; earlier attempts on it: {f['attempts']}." for f in flags)
-    prompt = (COMMAND.read_text() + f'\n\n## This session\n\nRepo id {repo_id}. Budget left today: ${budget_left:.2f}. '
+    runbook = COMMAND.read_text()
+    if runbook.startswith('---'):
+        # Drop the command front matter: a prompt starting with "---" reads as a CLI option.
+        runbook = runbook.split('---', 2)[2].lstrip()
+    prompt = (runbook + f'\n\n## This session\n\nRepo id {repo_id}. Budget left today: ${budget_left:.2f}. '
               f'Flags to handle:\n\n{lines}\n')
     log(f'repo {repo_id}: {len(flags)} flag(s) on {model}')
     try:
