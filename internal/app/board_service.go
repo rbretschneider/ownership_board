@@ -395,8 +395,8 @@ func (s *BoardService) Ask(ctx context.Context, actor domain.Actor, id int64, in
 // Answer records a person's answers. Once nothing is left open the ticket is
 // claimable again in the stage it was asked from.
 func (s *BoardService) Answer(ctx context.Context, actor domain.Actor, id int64, answers []domain.AnswerDraft) (TicketDetail, error) {
-	if !actor.IsHuman() {
-		return TicketDetail{}, domain.Forbiddenf("only a person can answer questions")
+	if !actor.IsHuman() && !actor.IsBoardManager() {
+		return TicketDetail{}, domain.Forbiddenf("only a person or the board manager can answer questions")
 	}
 	if len(answers) == 0 {
 		return TicketDetail{}, domain.Invalidf("answers are required")

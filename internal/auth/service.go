@@ -156,7 +156,7 @@ func (s *Service) TokenFromSecret(ctx context.Context, secret string) (APIToken,
 // CreateAPIToken issues a token for an agent and returns its secret, which is
 // shown once and never stored. A delegate token may also file autonomous
 // tickets; the flag is set here, by a person, and never changes afterwards.
-func (s *Service) CreateAPIToken(ctx context.Context, creator User, name string, isDelegate bool) (APIToken, string, error) {
+func (s *Service) CreateAPIToken(ctx context.Context, creator User, name string, isDelegate, isManager bool) (APIToken, string, error) {
 	tokenName, err := domain.RequireText("name", name, maxNameLength)
 	if err != nil {
 		return APIToken{}, "", err
@@ -183,7 +183,7 @@ func (s *Service) CreateAPIToken(ctx context.Context, creator User, name string,
 	secret := APITokenPrefix + random
 	token := APIToken{
 		Name: tokenName, Prefix: secret[:apiTokenDisplayLength], Hash: hashSecret(secret),
-		CreatedBy: creator.ID, CreatedAt: s.clock.Now(), IsDelegate: isDelegate,
+		CreatedBy: creator.ID, CreatedAt: s.clock.Now(), IsDelegate: isDelegate, IsManager: isManager,
 	}
 	if err := s.store.CreateAPIToken(ctx, &token); err != nil {
 		return APIToken{}, "", err

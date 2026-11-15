@@ -97,6 +97,7 @@ func (rt *router) identify(r *http.Request) (caller, error) {
 			// Worker sessions execute tickets, never inherit the owner's
 			// autonomous-filing grant or rotate its per-token filing budget.
 			actor.IsDelegate = false
+			actor.IsManager = false
 		}
 		return caller{actor: actor, isBearer: true}, nil
 	}

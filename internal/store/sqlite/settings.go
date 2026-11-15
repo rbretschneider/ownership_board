@@ -80,6 +80,32 @@ func (r settingsRepo) Get(ctx context.Context) (domain.BoardSettings, error) {
 			}
 		}
 	}
+	// Manager settings: an unreadable or out-of-range stored value keeps the default.
+	err = r.q.QueryRowContext(ctx, `SELECT value FROM board_settings WHERE key = ?`, domain.SettingManagerEnabled).Scan(&raw)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return domain.BoardSettings{}, fmt.Errorf("sqlite: read manager settings: %w", err)
+	}
+	if err == nil {
+		if value, parseErr := strconv.ParseBool(raw); parseErr == nil {
+			settings.ManagerEnabled = value
+		}
+	}
+	managerTargets := map[string]*int{
+		domain.SettingManagerBuildCap:       &settings.ManagerBuildCap,
+		domain.SettingManagerStallMinutes:   &settings.ManagerStallMinutes,
+		domain.SettingManagerDailyBudgetUSD: &settings.ManagerDailyBudgetUSD,
+	}
+	for key, bounds := range domain.ManagerIntBounds() {
+		err = r.q.QueryRowContext(ctx, `SELECT value FROM board_settings WHERE key = ?`, key).Scan(&raw)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return domain.BoardSettings{}, fmt.Errorf("sqlite: read manager settings: %w", err)
+		}
+		if err == nil {
+			if n, e := strconv.Atoi(raw); e == nil && n >= bounds[0] && n <= bounds[1] {
+				*managerTargets[key] = n
+			}
+		}
+	}
 	// Pre-build-host Windows values are read but never written here; the
 	// application decides whether they apply.
 	err = r.q.QueryRowContext(ctx, `SELECT value FROM board_settings WHERE key = ?`, domain.SettingWindowsRunnerEnabled).Scan(&raw)
@@ -114,9 +140,13 @@ func (r settingsRepo) Save(ctx context.Context, settings domain.BoardSettings, a
 		}
 	}
 	for key, value := range map[string]string{
-		domain.SettingReviewBy:           string(settings.ReviewBy),
-		domain.SettingReviewFreshContext: strconv.FormatBool(settings.ReviewFreshContext),
-		domain.SettingReviewAdversarial:  strconv.FormatBool(settings.ReviewAdversarial),
+		domain.SettingReviewBy:              string(settings.ReviewBy),
+		domain.SettingReviewFreshContext:    strconv.FormatBool(settings.ReviewFreshContext),
+		domain.SettingReviewAdversarial:     strconv.FormatBool(settings.ReviewAdversarial),
+		domain.SettingManagerEnabled:        strconv.FormatBool(settings.ManagerEnabled),
+		domain.SettingManagerBuildCap:       strconv.Itoa(settings.ManagerBuildCap),
+		domain.SettingManagerStallMinutes:   strconv.Itoa(settings.ManagerStallMinutes),
+		domain.SettingManagerDailyBudgetUSD: strconv.Itoa(settings.ManagerDailyBudgetUSD),
 	} {
 		if _, err := r.q.ExecContext(ctx, `INSERT INTO board_settings (key,value,updated_by,updated_at) VALUES (?,?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_by=excluded.updated_by,updated_at=excluded.updated_at`, key, value, actor.Name, formatTime(now)); err != nil {
 			return fmt.Errorf("sqlite: save review settings: %w", err)

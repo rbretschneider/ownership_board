@@ -25,9 +25,10 @@ func (s *server) boardRoutes(rt *router) {
 	rt.human("POST /api/v1/tickets/{id}/deploy", s.requestDeploy)
 	rt.human("POST /api/v1/tickets/{id}/approve", s.approve)
 	rt.human("POST /api/v1/tickets/{id}/request-changes", s.requestChanges)
-	rt.human("POST /api/v1/tickets/{id}/unblock", s.unblock)
+	// People, and the board manager on autonomous tickets (the service checks).
+	rt.anyone("POST /api/v1/tickets/{id}/unblock", s.unblock)
 	rt.anyone("POST /api/v1/tickets/{id}/questions", s.ask)
-	rt.human("POST /api/v1/tickets/{id}/answers", s.answer)
+	rt.anyone("POST /api/v1/tickets/{id}/answers", s.answer)
 	rt.human("DELETE /api/v1/tickets/{id}", s.deleteTicket)
 }
 

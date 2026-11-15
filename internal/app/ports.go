@@ -19,6 +19,7 @@ type Store interface {
 // here is the persistence pattern; code repositories are Repo.)
 type Repos interface {
 	BuildJobs() BuildJobRepository
+	ManagerUsage() ManagerUsageRepository
 	BuildHostEvents() BuildHostEventRepository
 	BuildHosts() BuildHostRepository
 	BuildHostPairingCodes() BuildHostPairingCodeRepository
@@ -173,4 +174,10 @@ type RepoSource interface {
 	Label() string
 	IsConfigured() bool
 	List(ctx context.Context) ([]domain.RepoListing, error)
+}
+
+// ManagerUsageRepository keeps the board manager's spend per UTC day.
+type ManagerUsageRepository interface {
+	Add(ctx context.Context, day string, sessions int, costUSD float64, now time.Time) error
+	Day(ctx context.Context, day string) (domain.ManagerUsage, error)
 }

@@ -10,6 +10,7 @@ import {ToastProvider} from "../toast/ToastProvider";
 import {SettingsPage} from "./SettingsPage";
 vi.mock("./AgentWorkSection",()=>({AgentWorkSection:()=>null}));
 vi.mock("./ReviewSection",()=>({ReviewSection:()=>null}));
+vi.mock("./ManagerSection",()=>({ManagerSection:()=>null}));
 
 vi.mock("./TokensSection",()=>({TokensSection:()=>null}));
 vi.mock("./AppearanceSection",()=>({AppearanceSection:()=>null}));

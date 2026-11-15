@@ -18,6 +18,7 @@ export function TokensSection() {
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [isDelegate, setDelegate] = useState(false);
+  const [isManager, setManager] = useState(false);
   const [isCreating, setCreating] = useState(false);
   const [created, setCreated] = useState<CreatedToken | null>(null);
   const [revoking, setRevoking] = useState<Token | null>(null);
@@ -42,10 +43,11 @@ export function TokensSection() {
     }
     setCreating(true);
     try {
-      const token = await api.createToken(name.trim(), isDelegate);
+      const token = await api.createToken(name.trim(), isDelegate, isManager);
       setCreated(token);
       setName("");
       setDelegate(false);
+      setManager(false);
       setTokens((current) => [...(current ?? []), token]);
     } catch (cause) {
       toast.error(`Couldn't create the token: ${cause instanceof Error ? cause.message : String(cause)}`);
@@ -77,6 +79,7 @@ export function TokensSection() {
                 <span className="token-row__name">
                   {token.name}
                   {token.is_delegate && <span className="token-row__badge">delegate</span>}
+                  {token.is_manager && <span className="token-row__badge">manager</span>}
                 </span>
                 <span className="muted small">
                   <code>{token.prefix}…</code> · {token.last_used_at === null ? "never used" : `used ${relativeTime(token.last_used_at)}`}
@@ -115,6 +118,24 @@ export function TokensSection() {
         <p className="muted small">
           An autonomous ticket skips every checkpoint and question and goes straight to a pull request. Give this
           grant only to the account where you agree specs. Worker identities always have execution-only access.
+        </p>
+      )}
+      <label className="switch" htmlFor="token-manager">
+        <input
+          id="token-manager"
+          type="checkbox"
+          role="switch"
+          className="switch__input"
+          checked={isManager}
+          onChange={(e) => setManager(e.target.checked)}
+        />
+        <span className="switch__track" aria-hidden="true" />
+        <span className="switch__label">Board manager: keeps autonomous tickets moving</span>
+      </label>
+      {isManager && (
+        <p className="muted small">
+          The board manager answers questions on autonomous tickets, unblocks and parks them, comments directions and
+          files repair tickets, without taking their lease. It cannot touch any other ticket. Give it to one agent only.
         </p>
       )}
       {revoking !== null && (

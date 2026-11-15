@@ -148,7 +148,7 @@ func TestLogoutEndsTheRefreshToken(t *testing.T) {
 func TestAPITokenWorksUntilRevoked(t *testing.T) {
 	h := newHarness(t)
 	owner := h.setup().User
-	token, secret, err := h.auth.CreateAPIToken(h.ctx, owner, "loop", false)
+	token, secret, err := h.auth.CreateAPIToken(h.ctx, owner, "loop", false, false)
 	if err != nil {
 		t.Fatalf("CreateAPIToken: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestOnlyADelegateTokenMayFileAutonomousTickets(t *testing.T) {
 	h := newHarness(t)
 	owner := h.setup().User
 	for name, isDelegate := range map[string]bool{"desktop": true, "runner": false} {
-		_, secret, err := h.auth.CreateAPIToken(h.ctx, owner, name, isDelegate)
+		_, secret, err := h.auth.CreateAPIToken(h.ctx, owner, name, isDelegate, false)
 		if err != nil {
 			t.Fatalf("CreateAPIToken %s: %v", name, err)
 		}
@@ -214,7 +214,7 @@ func TestPasswordHashRoundTrip(t *testing.T) {
 func TestAgentTokenCannotTakeAPersonsName(t *testing.T) {
 	h := newHarness(t)
 	owner := h.setup().User
-	if _, _, err := h.auth.CreateAPIToken(h.ctx, owner, "owner", false); domain.KindOf(err) != domain.KindConflict {
+	if _, _, err := h.auth.CreateAPIToken(h.ctx, owner, "owner", false, false); domain.KindOf(err) != domain.KindConflict {
 		t.Fatalf("token named like a person: %v", err)
 	}
 }
@@ -222,14 +222,14 @@ func TestAgentTokenCannotTakeAPersonsName(t *testing.T) {
 func TestARevokedTokensNameIsNeverReused(t *testing.T) {
 	h := newHarness(t)
 	owner := h.setup().User
-	token, _, err := h.auth.CreateAPIToken(h.ctx, owner, "desktop", true)
+	token, _, err := h.auth.CreateAPIToken(h.ctx, owner, "desktop", true, false)
 	if err != nil {
 		t.Fatalf("CreateAPIToken: %v", err)
 	}
 	if err := h.auth.RevokeAPIToken(h.ctx, token.ID); err != nil {
 		t.Fatalf("Revoke: %v", err)
 	}
-	if _, _, err := h.auth.CreateAPIToken(h.ctx, owner, "desktop", false); domain.KindOf(err) != domain.KindConflict {
+	if _, _, err := h.auth.CreateAPIToken(h.ctx, owner, "desktop", false, false); domain.KindOf(err) != domain.KindConflict {
 		t.Fatalf("a new token took a revoked token's name: %v", err)
 	}
 }

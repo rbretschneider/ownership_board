@@ -275,6 +275,64 @@ An autonomous ticket ends at an open pull request: the loop never merges.
 That is an instruction, not enforcement; branch protection on the default
 branch, where you have it, makes it one.
 
+## Board manager
+
+Autonomous tickets do not stop for you, so something has to notice when one
+stops on its own, or burns tokens going round in circles. The board manager is
+an agent that watches autonomous tickets, and only those. It keeps them moving
+at the lowest token cost.
+
+**What it watches.** The board computes these flags itself, with no model
+(`GET /api/v1/manager/flags`, or the Board manager section in Settings):
+
+| Flag | Meaning |
+|---|---|
+| escalated | the ticket is blocked, or has open questions |
+| cycling | the last build-host runs failed the same way, or the PR went back for repair, or review sent it back for fixes, 3 or more times |
+| build_cap | more build passes than the cap (default 5) |
+| stalled | no lease, no build job, and no change for the stall limit (default 120 min) |
+
+**What it may do,** on autonomous tickets only and without taking their
+lease, so it never collides with the worker:
+- answer their questions, including product questions, which it marks
+  `[product]` so you can override them;
+- unblock or park them;
+- comment a direction for the next pass;
+- file tightly scoped autonomous repair tickets.
+
+It cannot change lanes, specs or designs, merge, or touch an ordinary ticket.
+Every action is on the ticket's timeline under the manager token's name.
+
+**Setting it up:**
+1. In Settings > Agent tokens, create a token with **Board manager** on. Give
+   it to one agent only.
+2. Connect Claude Code's MCP to the board with that token, as in step 2 above.
+3. In Settings > Board manager, turn it on. Set the build cap, the stall limit
+   and the **daily budget** (USD per UTC day; 0 means flags only).
+4. Run the loop:
+   ```sh
+   OWNERSHIP_URL=https://board.example.com OWNERSHIP_TOKEN=ob_pat_... \
+     python3 agent/manager/board_manager.py
+   ```
+
+**How it stays cheap:**
+- Every `MANAGER_INTERVAL` (default 600 s) the loop reads the flags, which
+  costs no tokens.
+- It starts a model session only for flags it has not handled yet, one repo
+  at a time, on `MANAGER_MODEL` (default `sonnet`).
+- A flag that comes back after `MANAGER_RETRY_AFTER` (1 h) gets one session on
+  `MANAGER_RETRY_MODEL` (default `opus`). After `MANAGER_MAX_ATTEMPTS` (3) the
+  loop stops spending on it.
+- Each session's cost is reported to the board. When the daily budget is
+  spent, the loop waits for the next UTC day.
+- The session follows `agent/claude/board-manager.md`. A retry is never a
+  fix: it must change approach or park the ticket for you.
+
+The manager acts only through the board. It cannot repair a build host or
+install software. When a build host is the problem, it blocks the affected
+tickets with "Needs the owner: ..." so they stop burning passes, and
+tells you what to fix.
+
 ## Dependencies
 
 `A depends_on B` means agents cannot claim A, in any stage, until B is in

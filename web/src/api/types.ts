@@ -478,6 +478,10 @@ export interface BoardSettings {
   review_fresh_context: boolean;
   /** The reviewer is told to hunt for defects, not just check the spec. */
   review_adversarial: boolean;
+  manager_enabled: boolean;
+  manager_build_cap: number;
+  manager_stall_minutes: number;
+  manager_daily_budget_usd: number;
 }
 
 /** Who reviews: another model than the author (default), the author's own model, or one account. */
@@ -529,6 +533,7 @@ export interface Token {
   last_used_at: string | null;
   /** May file autonomous tickets (specs agreed in a chat). */
   is_delegate: boolean;
+  is_manager: boolean;
 }
 
 /** A freshly created token, including its one-time secret. */
@@ -731,4 +736,25 @@ export interface RegisteredRunnersSnapshot {
  observed_at:string;
  hosts:{id:number;name:string;os:BuildHostOS;enabled:boolean;max_parallel:number;online:boolean;last_seen_at:string|null;jobs:RegisteredRunnerJob[]}[];
  queued_by_os:Record<BuildHostOS,number>;
+}
+
+/** One reason an autonomous ticket needs the board manager. */
+export interface ManagerFlag {
+  ticket_id: number;
+  repo_id: number;
+  title: string;
+  stage: string;
+  kind: "escalated" | "cycling" | "build_cap" | "stalled";
+  fingerprint: string;
+  detail: string;
+}
+
+/** The board manager's switch, limits and today's spend. */
+export interface ManagerStatus {
+  enabled: boolean;
+  build_cap: number;
+  stall_minutes: number;
+  daily_budget_usd: number;
+  today: { day: string; sessions: number; cost_usd: number };
+  remaining_usd: number;
 }
