@@ -46,6 +46,19 @@ class DueFlagsTests(unittest.TestCase):
         self.assertTrue(prompt.rstrip().endswith('Build host: ssh builder'))
         self.assertIn('Repairs are enabled', prompt)
 
+    def test_deployment_sensors_add_flags_and_never_break_the_pass(self):
+        original = m.SENSORS
+        try:
+            m.SENSORS = ('python3 -c "import json;print(json.dumps({\'flags\':[{\'kind\':\'infrastructure\','
+                         '\'fingerprint\':\'runner:gl\',\'detail\':\'runner gl offline\'},{\'kind\':\'x\'}]}))"')
+            flags = m.sensor_flags()
+            self.assertEqual([(f['fingerprint'], f['repo_id']) for f in flags], [('sensor:runner:gl', 0)])
+            self.assertIn('deployment [infrastructure]', m.flag_line(dict(flags[0], attempts=0)))
+            m.SENSORS = 'echo not json'
+            self.assertEqual(m.sensor_flags(), [])
+        finally:
+            m.SENSORS = original
+
     def test_a_flag_past_its_attempts_is_left_for_the_owner(self):
         state = {'a': {'attempts': m.MAX_ATTEMPTS, 'last': 0}}
         self.assertEqual(m.due_flags([self.flag('a')], state, 10**9), [])

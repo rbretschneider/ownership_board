@@ -44,6 +44,11 @@ COMMAND = Path(__file__).resolve().parent.parent / 'claude' / 'board-manager.md'
 # Optional deployment runbook (Markdown). When set, every session gets it and may
 # repair infrastructure causes itself (see "Repairs" in board-manager.md).
 LOCAL_RUNBOOK = os.environ.get('MANAGER_LOCAL_RUNBOOK', '')
+# Optional deployment sensors: a command printing {"flags": [...]} as JSON, run every
+# pass at no model cost. Each flag needs kind, fingerprint and detail; ticket_id and
+# repo_id are optional (a flag without a ticket is about the deployment itself, such
+# as an offline CI runner) and get their own session.
+SENSORS = os.environ.get('MANAGER_SENSORS', '')
 CLAUDE_ARGS = os.environ.get('CLAUDE_ARGS', '').split()
 
 
@@ -133,14 +138,39 @@ def session_model(flags):
     return MODEL
 
 
+def flag_line(flag):
+    where = (f"#{flag['ticket_id']} [{flag['kind']}] {flag.get('title', '')} (stage {flag.get('stage', '?')})"
+             if flag.get('ticket_id') else f"deployment [{flag['kind']}]")
+    return (f"- {where}: {flag['detail']}. Fingerprint {flag['fingerprint']}; "
+            f"earlier attempts on it: {flag['attempts']}.")
+
+
+def sensor_flags():
+    """The deployment's own flags (MANAGER_SENSORS), or [] when unset or broken: a
+    broken sensor must never stop the board's own flags from being handled."""
+    if not SENSORS:
+        return []
+    try:
+        result = subprocess.run(SENSORS, shell=True, capture_output=True, text=True, timeout=300)
+        flags = json.loads(result.stdout or '{}').get('flags') or []
+    except (subprocess.TimeoutExpired, ValueError, AttributeError) as error:
+        log(f'sensors failed: {type(error).__name__}: {error}')
+        return []
+    good = [f for f in flags if isinstance(f, dict) and f.get('kind') and f.get('fingerprint') and f.get('detail')]
+    for flag in good:
+        flag['repo_id'] = flag.get('repo_id') or 0
+        flag['fingerprint'] = 'sensor:' + str(flag['fingerprint'])
+    return good
+
+
 def build_prompt(repo_id, flags, budget_left, local_runbook=None):
-    lines = '\n'.join(f"- #{f['ticket_id']} [{f['kind']}] {f['title']} (stage {f['stage']}): {f['detail']}. "
-                      f"Fingerprint {f['fingerprint']}; earlier attempts on it: {f['attempts']}." for f in flags)
+    lines = '\n'.join(flag_line(f) for f in flags)
     runbook = COMMAND.read_text()
     if runbook.startswith('---'):
         # Drop the command front matter: a prompt starting with "---" reads as a CLI option.
         runbook = runbook.split('---', 2)[2].lstrip()
-    prompt = (runbook + f'\n\n## This session\n\nRepo id {repo_id}. Budget left today: ${budget_left:.2f}. '
+    scope = f'Repo id {repo_id}.' if repo_id else 'Deployment flags (no ticket; from the deployment sensors).'
+    prompt = (runbook + f'\n\n## This session\n\n{scope} Budget left today: ${budget_left:.2f}. '
               f'Flags to handle:\n\n{lines}\n')
     if local_runbook is None and LOCAL_RUNBOOK:
         local_runbook = Path(LOCAL_RUNBOOK).read_text()
@@ -180,7 +210,7 @@ def main():
             if not status['enabled']:
                 time.sleep(INTERVAL)
                 continue
-            flags = api('GET', '/api/v1/manager/flags')['flags']
+            flags = api('GET', '/api/v1/manager/flags')['flags'] + sensor_flags()
             state, now = load_state(), time.time()
             # Forget flags that cleared, so a new problem on the same ticket starts fresh.
             current = {f['fingerprint'] for f in flags}
@@ -188,7 +218,7 @@ def main():
             due = due_flags(flags, state, now)
             by_repo = {}
             for flag in due:
-                by_repo.setdefault(flag['repo_id'], []).append(flag)
+                by_repo.setdefault(flag.get('repo_id') or 0, []).append(flag)
             remaining = status['remaining_usd']
             for repo_id, repo_flags in sorted(by_repo.items()):
                 if remaining <= 0:
