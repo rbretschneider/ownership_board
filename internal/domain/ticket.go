@@ -179,10 +179,24 @@ func (t *Ticket) IsBlocked() bool {
 	return t.BlockedReason != ""
 }
 
+// OwnerBlockPrefix starts the reason of a block on an autonomous ticket that
+// only a person can resolve (hardware, money, access, closing a ticket).
+const OwnerBlockPrefix = "Needs the owner:"
+
+// IsOwnerBlock reports whether the ticket is blocked for a person.
+func (t *Ticket) IsOwnerBlock() bool {
+	return strings.HasPrefix(strings.TrimSpace(t.BlockedReason), OwnerBlockPrefix)
+}
+
 // NeedsOwner reports whether the ball is with the owner: questions to answer,
-// a block to resolve, or a checkpoint or PR to review.
+// a block to resolve, or a checkpoint or PR to review. An autonomous ticket
+// asks the owner for nothing: its questions and blocks belong to the board
+// manager, except a block the manager or a worker marked "Needs the owner:".
 func (t *Ticket) NeedsOwner(openQuestions int) bool {
-	return openQuestions > 0 || t.IsBlocked() || (!t.IsAutonomous && t.Stage.IsOwnerReview())
+	if t.IsAutonomous {
+		return t.IsOwnerBlock()
+	}
+	return openQuestions > 0 || t.IsBlocked() || t.Stage.IsOwnerReview()
 }
 
 // Owner says who acts next.

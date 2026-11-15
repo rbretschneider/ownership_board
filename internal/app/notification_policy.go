@@ -2,9 +2,19 @@ package app
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/rbretschneider/ownership_board/internal/domain"
 )
+
+// asksTheOwner keeps autonomous tickets off the owner's phone: their questions
+// and blocks are the board manager's, except a block marked "Needs the owner:".
+func asksTheOwner(event Event) bool {
+	if !event.IsAutonomous {
+		return true
+	}
+	return event.Type == domain.TimelineBlocked && strings.HasPrefix(strings.TrimSpace(event.Detail), domain.OwnerBlockPrefix)
+}
 
 // NotificationRule turns an event into a notification when the event matters
 // to the human. Add a rule to notify on something new; the policy is closed
@@ -35,10 +45,10 @@ func NewNotificationPolicy(links Links, rules ...NotificationRule) NotificationP
 func DefaultNotificationRules() []NotificationRule {
 	return []NotificationRule{
 		ownerRule{matches: isAutonomousFiled, what: "filed as autonomous", message: "An agreed ticket was filed to run to a pull request without stopping.", priority: PriorityDefault, tag: "zap"},
-		ownerRule{matches: isType(domain.TimelineQuestions), what: "needs answers", message: "The agent has questions before it can continue.", priority: PriorityHigh, tag: "question"},
+		ownerRule{matches: func(e Event) bool { return asksTheOwner(e) && isType(domain.TimelineQuestions)(e) }, what: "needs answers", message: "The agent has questions before it can continue.", priority: PriorityHigh, tag: "question"},
 		ownerRule{matches: isStageEntry(domain.StageSpecReview), what: "spec to approve", message: "A spec is ready for your approval.", priority: PriorityHigh, tag: "memo"},
 		ownerRule{matches: isStageEntry(domain.StageDesignReview), what: "design to approve", message: "A design is ready for your approval.", priority: PriorityHigh, tag: "triangular_ruler"},
-		ownerRule{matches: isType(domain.TimelineBlocked), what: "blocked", message: "Work stopped and needs your decision.", priority: PriorityHigh, tag: "warning"},
+		ownerRule{matches: func(e Event) bool { return asksTheOwner(e) && isType(domain.TimelineBlocked)(e) }, what: "blocked", message: "Work stopped and needs your decision.", priority: PriorityHigh, tag: "warning"},
 		ownerRule{matches: func(e Event) bool { return !e.IsAutonomous && isStageEntry(domain.StagePR)(e) }, what: "ready for review", message: "A pull request is ready for your review.", priority: PriorityDefault, tag: "eyes"},
 		ownerRule{matches: isStageEntry(domain.StageDeployed), what: "deployed", message: "The ticket reached Deployed.", priority: PriorityLow, tag: "white_check_mark"},
 		ownerRule{matches: func(e Event) bool { return e.FromStage != domain.StageDeploying && isStageEntry(domain.StageDone)(e) }, what: "merged", message: "The pull request was merged.", priority: PriorityLow, tag: "white_check_mark"},

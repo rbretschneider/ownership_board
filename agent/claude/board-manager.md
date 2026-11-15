@@ -54,8 +54,11 @@ escalated; say so in one line.
   the cause is outside the ticket, see "outside causes" below. A block reason
   that starts with `Needs the owner:` is the owner's: never unblock it. If only
   a person can resolve a block (hardware, money, access, closing a ticket),
-  leave it blocked, and if its reason does not start with `Needs the owner:`
-  yet, say so in your summary. The loop then stops spending on it.
+  hand it to the owner: `unblock_ticket`, then `mark_blocked` with a reason that
+  starts with `Needs the owner:` and says exactly what to do.
+- **The owner sees only `Needs the owner:` blocks.** Every other block and
+  every question on an autonomous ticket is yours. Nothing else interrupts
+  the owner, so use that prefix only when a person truly must act.
 
 **cycling** (the same failure again, or repeated repair or review rounds):
 - Read the latest failures in the timeline and name the **one** failure that
@@ -82,12 +85,14 @@ chasing the wrong cause.
 - Never claim the ticket yourself.
 
 **Outside causes:**
-- If a fix is already in flight (an open ticket or PR), `mark_blocked` the
-  story with "Waiting on #N: <cause>". This stops it burning passes until
-  then.
+- If a fix is already in flight (an open ticket), make the story wait for it:
+  `link_tickets` with the story `depends_on` that ticket. A dependency is not
+  a block. It stops the story from being claimed, so it stops burning passes,
+  and the story resumes on its own when the fix merges. Never `mark_blocked`
+  just to wait.
 - Otherwise, file one autonomous repair ticket with
-  `create_autonomous_ticket` (tightly scoped), then block the story on it
-  the same way.
+  `create_autonomous_ticket` (tightly scoped), then link the story to depend
+  on it the same way.
 - Build-host or infrastructure faults (host offline, toolchain, permissions):
   block with "Needs the owner: <exact problem and fix>". You cannot repair
   machines.
