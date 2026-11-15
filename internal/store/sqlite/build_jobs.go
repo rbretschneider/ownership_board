@@ -250,6 +250,24 @@ func (r buildJobRepo) QueuedCountsByOS(ctx context.Context) (map[domain.BuildHos
 	return out, rows.Err()
 }
 
+// Open implements app.BuildJobRepository: every queued or running job.
+func (r buildJobRepo) Open(ctx context.Context) ([]domain.BuildJob, error) {
+	rows, err := r.q.QueryContext(ctx, `SELECT `+jobColumns+` FROM build_jobs WHERE status IN ('queued','running') ORDER BY created_at, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.BuildJob{}
+	for rows.Next() {
+		job, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, job)
+	}
+	return out, rows.Err()
+}
+
 // RecentForTicket implements app.BuildJobRepository: the ticket's newest jobs first.
 func (r buildJobRepo) RecentForTicket(ctx context.Context, ticketID int64, limit int) ([]domain.BuildJob, error) {
 	rows, err := r.q.QueryContext(ctx, `SELECT `+jobColumns+` FROM build_jobs WHERE ticket_id=? ORDER BY created_at DESC, id DESC LIMIT ?`, ticketID, limit)

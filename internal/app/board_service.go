@@ -563,6 +563,14 @@ func loadBoard(ctx context.Context, repos Repos, filter TicketFilter) (Board, er
 	if err != nil {
 		return Board{}, err
 	}
+	openJobs, err := repos.BuildJobs().Open(ctx)
+	if err != nil {
+		return Board{}, err
+	}
+	builds := make(map[int64]*domain.BuildJob)
+	for i := range openJobs {
+		builds[openJobs[i].TicketID] = &openJobs[i] // ordered oldest first: the newest wins
+	}
 	byTicket := make(map[int64][]domain.TimelineEntry)
 	for _, entry := range signals {
 		byTicket[entry.TicketID] = append(byTicket[entry.TicketID], entry)
@@ -572,6 +580,7 @@ func loadBoard(ctx context.Context, repos Repos, filter TicketFilter) (Board, er
 		summaries = append(summaries, TicketSummary{
 			Ticket: ticket, OpenQuestions: openCounts[ticket.ID], WaitingOn: waiting[ticket.ID],
 			Attempts: domain.CountStageAttempts(byTicket[ticket.ID]), Usage: usage[ticket.ID],
+			Build: builds[ticket.ID],
 		})
 	}
 	return Board{Lanes: domain.Lanes(), Stages: domain.Stages(), Repos: codeRepos, Tickets: summaries}, nil

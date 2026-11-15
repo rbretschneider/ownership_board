@@ -59,30 +59,31 @@ type repoDTO struct {
 }
 
 type ticketSummaryDTO struct {
-	ID             int64         `json:"id"`
-	RepoID         *int64        `json:"repo_id"`
-	Kind           domain.Kind   `json:"kind"`
-	Title          string        `json:"title"`
-	Lane           domain.Lane   `json:"lane"`
-	Stage          domain.Stage  `json:"stage"`
-	WorkModel      string        `json:"work_model"`
-	NeedsOwner     bool          `json:"needs_owner"`
-	BlockedReason  string        `json:"blocked_reason"`
-	IsHealthCheck  bool          `json:"is_health_check"`
-	IsAutonomous   bool          `json:"is_autonomous"`
-	SpecRevision   int           `json:"spec_revision"`
-	DesignRevision int           `json:"design_revision"`
-	Owner          domain.Owner  `json:"owner"`
-	PRURL          string        `json:"pr_url"`
-	Branch         string        `json:"branch"`
-	OpenQuestions  int           `json:"open_questions"`
-	WaitingOn      []int64       `json:"waiting_on"`
-	Lease          *domain.Lease `json:"lease"`
-	CreatedAt      time.Time     `json:"created_at"`
-	UpdatedAt      time.Time     `json:"updated_at"`
-	LaneChangedAt  time.Time     `json:"lane_changed_at"`
-	Attempts       attemptsDTO   `json:"attempts"`
-	Usage          usageDTO      `json:"usage"`
+	ID             int64          `json:"id"`
+	RepoID         *int64         `json:"repo_id"`
+	Kind           domain.Kind    `json:"kind"`
+	Title          string         `json:"title"`
+	Lane           domain.Lane    `json:"lane"`
+	Stage          domain.Stage   `json:"stage"`
+	WorkModel      string         `json:"work_model"`
+	NeedsOwner     bool           `json:"needs_owner"`
+	BlockedReason  string         `json:"blocked_reason"`
+	IsHealthCheck  bool           `json:"is_health_check"`
+	IsAutonomous   bool           `json:"is_autonomous"`
+	SpecRevision   int            `json:"spec_revision"`
+	DesignRevision int            `json:"design_revision"`
+	Owner          domain.Owner   `json:"owner"`
+	PRURL          string         `json:"pr_url"`
+	Branch         string         `json:"branch"`
+	OpenQuestions  int            `json:"open_questions"`
+	WaitingOn      []int64        `json:"waiting_on"`
+	Lease          *domain.Lease  `json:"lease"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	LaneChangedAt  time.Time      `json:"lane_changed_at"`
+	Attempts       attemptsDTO    `json:"attempts"`
+	Usage          usageDTO       `json:"usage"`
+	Build          *buildClockDTO `json:"build"`
 }
 
 type ticketDetailDTO struct {
@@ -211,7 +212,7 @@ func toSummary(summary app.TicketSummary) ticketSummaryDTO {
 		SpecRevision: t.SpecRevision, DesignRevision: t.DesignRevision,
 		PRURL: t.PRURL, Branch: t.Branch, OpenQuestions: summary.OpenQuestions, WaitingOn: nonNilIDs(summary.WaitingOn), Lease: activeLease(t),
 		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, LaneChangedAt: t.LaneChangedAt,
-		Attempts: attemptsDTO(summary.Attempts), Usage: toUsage(summary.Usage),
+		Attempts: attemptsDTO(summary.Attempts), Usage: toUsage(summary.Usage), Build: toBuildClock(summary.Build),
 	}
 }
 
@@ -326,4 +327,19 @@ type attemptsDTO struct {
 	ReviewFixes  int `json:"review_fixes"`
 	PR           int `json:"pr"`
 	PRRepairs    int `json:"pr_repairs"`
+}
+
+// buildClockDTO is a ticket's newest queued or running build job: enough for
+// the card to show how long it has waited and run.
+type buildClockDTO struct {
+	Status    string     `json:"status"`
+	QueuedAt  time.Time  `json:"queued_at"`
+	StartedAt *time.Time `json:"started_at"`
+}
+
+func toBuildClock(job *domain.BuildJob) *buildClockDTO {
+	if job == nil {
+		return nil
+	}
+	return &buildClockDTO{Status: job.Status, QueuedAt: job.CreatedAt, StartedAt: job.StartedAt}
 }
