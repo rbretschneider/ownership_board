@@ -898,3 +898,21 @@ func TestATicketWithBuildJobsCanBeDeleted(t *testing.T) {
 		t.Fatalf("build job kept after its ticket was deleted: %v", err)
 	}
 }
+
+// 2026-11-15: #166 merged while its Windows job ran; the host, with every slot
+// busy, never asked for work, so the job held a slot for an hour.
+func TestARunningJobStopsWhenItsTicketMerges(t *testing.T) {
+	f, s, m, h := jobFixture(t)
+	j := submitJob(t, f, s, m)
+	host := app.AuthenticatedBuildHost{ID: h.ID}
+	if got, e := s.Claim(f.ctx, host); e != nil || got == nil {
+		t.Fatal("claim", got, e)
+	}
+	if _, err := f.store.SQL().Exec(`UPDATE tickets SET stage='done', lane='merged' WHERE id=1`); err != nil {
+		t.Fatal(err)
+	}
+	got, e := s.Progress(f.ctx, host, j.ID, domain.BuildJobProgress{Attempt: 1, Phase: "build"})
+	if e != nil || !got.Stop || got.Status != "superseded" {
+		t.Fatal("the job of a merged ticket kept running", got, e)
+	}
+}
