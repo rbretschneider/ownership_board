@@ -180,4 +180,6 @@ type RepoSource interface {
 type ManagerUsageRepository interface {
 	Add(ctx context.Context, day string, sessions int, costUSD float64, now time.Time) error
 	Day(ctx context.Context, day string) (domain.ManagerUsage, error)
+	AddSession(ctx context.Context, session domain.ManagerSession) error
+	RecentSessions(ctx context.Context, limit int) ([]domain.ManagerSession, error)
 }

@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/rbretschneider/ownership_board/internal/app"
 	"github.com/rbretschneider/ownership_board/internal/domain"
@@ -85,21 +86,41 @@ func TestOrdinaryAgentsStillCannotAnswerUnblockOrReadManagerFlags(t *testing.T) 
 	requireErrorKind(t, err, domain.KindForbidden)
 	_, err = f.board.ManagerFlags(f.ctx, agent, app.RepoScope{})
 	requireErrorKind(t, err, domain.KindForbidden)
-	_, err = f.board.RecordManagerUsage(f.ctx, agent, 1)
+	_, err = f.board.RecordManagerUsage(f.ctx, agent, app.ManagerSessionInput{CostUSD: 1})
 	requireErrorKind(t, err, domain.KindForbidden)
 }
 
 func TestTheManagerRecordsItsSpendAgainstTheDailyBudget(t *testing.T) {
 	f := newFixture(t)
-	status, err := f.board.RecordManagerUsage(f.ctx, manager, 1.25)
+	status, err := f.board.RecordManagerUsage(f.ctx, manager, app.ManagerSessionInput{CostUSD: 1.25, Model: "sonnet", Summary: "MANAGER SUMMARY: #49 cycling, direction given"})
 	if err != nil {
 		t.Fatalf("record: %v", err)
 	}
-	status, err = f.board.RecordManagerUsage(f.ctx, manager, 0.75)
+	status, err = f.board.RecordManagerUsage(f.ctx, manager, app.ManagerSessionInput{CostUSD: 0.75, Model: "opus"})
 	if err != nil {
 		t.Fatalf("record: %v", err)
 	}
 	if status.Today.Sessions != 2 || status.Today.CostUSD != 2 || status.RemainingUSD != float64(domain.DefaultManagerDailyBudgetUSD)-2 {
 		t.Fatalf("status = %+v, want 2 sessions, $2 spent, $%d-2 left", status, domain.DefaultManagerDailyBudgetUSD)
 	}
+}
+
+func TestTheOwnerReadsTheManagersSessionsNewestFirst(t *testing.T) {
+	f := newFixture(t)
+	if _, err := f.board.RecordManagerUsage(f.ctx, manager, app.ManagerSessionInput{CostUSD: 0.25, Model: "sonnet", Summary: "first"}); err != nil {
+		t.Fatal(err)
+	}
+	f.clock.Advance(time.Minute)
+	if _, err := f.board.RecordManagerUsage(f.ctx, manager, app.ManagerSessionInput{CostUSD: 0.5, Model: "opus", Summary: "second"}); err != nil {
+		t.Fatal(err)
+	}
+	sessions, err := f.board.ManagerSessions(f.ctx, owner, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 2 || sessions[0].Summary != "second" || sessions[0].Model != "opus" || sessions[1].Summary != "first" {
+		t.Fatalf("sessions = %+v, want second then first", sessions)
+	}
+	_, err = f.board.ManagerSessions(f.ctx, agent, 10)
+	requireErrorKind(t, err, domain.KindForbidden)
 }

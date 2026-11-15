@@ -912,3 +912,14 @@
 .repo-build-targets fieldset, .repo-overlap-ignore fieldset { min-width: 0; border: 1px solid var(--border-strong); border-radius: var(--radius); }
 .repo-build-targets__row { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-bottom: 8px; }
 .repo-build-targets__row label { display: grid; gap: 4px; font-size: .8125rem; }
+
+/* Board manager: flagged tickets and session summaries (agent text, plain). */
+.manager-flags { margin: 0 0 var(--space-3, 12px); padding-left: 1.2em; }
+.manager-session { margin: 0 0 var(--space-2, 8px); }
+.manager-session > summary { cursor: pointer; }
+.manager-session__summary {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.85em;
+  margin: var(--space-2, 8px) 0 0;
+}

@@ -201,3 +201,15 @@ func shortHash(text string) string {
 	}
 	return fmt.Sprintf("%08x", h)
 }
+
+// MaxManagerSummaryLength bounds one session summary kept for the owner.
+const MaxManagerSummaryLength = 8000
+
+// ManagerSession is one board manager model session: when, on which model,
+// what it cost, and its own summary of why it acted and what it did.
+type ManagerSession struct {
+	At      time.Time `json:"at"`
+	Model   string    `json:"model"`
+	CostUSD float64   `json:"cost_usd"`
+	Summary string    `json:"summary"`
+}

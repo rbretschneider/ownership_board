@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 
 	"github.com/rbretschneider/ownership_board/internal/domain"
 )
@@ -81,19 +82,60 @@ func (s *BoardService) ManagerStatus(ctx context.Context, actor domain.Actor) (M
 	return status, err
 }
 
-// RecordManagerUsage adds one manager session's spend to today's total.
-func (s *BoardService) RecordManagerUsage(ctx context.Context, actor domain.Actor, costUSD float64) (ManagerStatus, error) {
+// ManagerSessionInput is what the manager loop reports after one session.
+type ManagerSessionInput struct {
+	CostUSD float64
+	Model   string
+	// Summary is the session's own account of why it acted and what it did,
+	// shown to the owner in Settings > Board manager.
+	Summary string
+}
+
+// RecordManagerUsage adds one manager session's spend to today's total and
+// keeps its summary, so the owner can read the manager's reasoning in the app.
+func (s *BoardService) RecordManagerUsage(ctx context.Context, actor domain.Actor, input ManagerSessionInput) (ManagerStatus, error) {
 	if !actor.IsBoardManager() {
 		return ManagerStatus{}, domain.Forbiddenf("only the board manager token records manager usage")
 	}
-	if costUSD < 0 || costUSD > 1000 {
+	if input.CostUSD < 0 || input.CostUSD > 1000 {
 		return ManagerStatus{}, domain.Invalidf("cost_usd must be between 0 and 1000")
+	}
+	if err := rejectHiddenFromAgent(actor, map[string]string{"summary": input.Summary, "model": input.Model}); err != nil {
+		return ManagerStatus{}, err
+	}
+	summary := strings.TrimSpace(input.Summary)
+	if len(summary) > domain.MaxManagerSummaryLength {
+		summary = summary[:domain.MaxManagerSummaryLength]
+	}
+	model := strings.TrimSpace(input.Model)
+	if len(model) > 80 {
+		model = model[:80]
 	}
 	now := s.clock.Now()
 	if err := s.store.Write(ctx, func(repos Repos) error {
-		return repos.ManagerUsage().Add(ctx, now.UTC().Format("2006-01-02"), 1, costUSD, now)
+		if err := repos.ManagerUsage().Add(ctx, now.UTC().Format("2006-01-02"), 1, input.CostUSD, now); err != nil {
+			return err
+		}
+		return repos.ManagerUsage().AddSession(ctx, domain.ManagerSession{At: now, Model: model, CostUSD: input.CostUSD, Summary: summary})
 	}); err != nil {
 		return ManagerStatus{}, err
 	}
 	return s.ManagerStatus(ctx, actor)
+}
+
+// ManagerSessions lists the manager's most recent sessions, newest first.
+func (s *BoardService) ManagerSessions(ctx context.Context, actor domain.Actor, limit int) ([]domain.ManagerSession, error) {
+	if err := requireManagerOrPerson(actor); err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	var sessions []domain.ManagerSession
+	err := s.store.Read(ctx, func(repos Repos) error {
+		var err error
+		sessions, err = repos.ManagerUsage().RecentSessions(ctx, limit)
+		return err
+	})
+	return sessions, err
 }
