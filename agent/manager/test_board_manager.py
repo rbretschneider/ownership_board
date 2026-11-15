@@ -14,6 +14,13 @@ class DueFlagsTests(unittest.TestCase):
         due = {f['fingerprint']: f['attempts'] for f in m.due_flags([self.flag('a'), self.flag('b'), self.flag('c')], state, now)}
         self.assertEqual(due, {'b': 1, 'c': 0})
 
+    def test_a_count_flag_gets_one_session_until_its_count_grows(self):
+        cap = dict(self.flag('build_cap:49:build:3'), kind='build_cap')
+        state = {'build_cap:49:build:3': {'attempts': 1, 'last': 0}}
+        self.assertEqual(m.due_flags([cap], state, 10**9), [])
+        grown = dict(self.flag('build_cap:49:build:4'), kind='build_cap')
+        self.assertEqual(len(m.due_flags([grown], state, 10**9)), 1)
+
     def test_a_ticket_blocked_for_the_owner_costs_nothing(self):
         held = dict(self.flag('h'), kind='escalated', detail='blocked: Needs the owner: close it, the fix is on main')
         other = dict(self.flag('o'), kind='escalated', detail='blocked: waiting on CI')
