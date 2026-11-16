@@ -36,6 +36,9 @@ type CITicketFacts struct {
 	Branch string
 	// HeadSHA is that branch's current head, or "" when unknown.
 	HeadSHA string
+	// BuildNote is the ticket's newest board build verdict (LatestBuildNote),
+	// shown beside its CI flags so a green CI never hides a failing board build.
+	BuildNote string
 }
 
 // CIRepoFacts is what the board read from one repository's CI.
@@ -211,6 +214,12 @@ func (s ciSensor) flag(kind ManagerFlagKind, ticket *Ticket, key, detail string)
 		Fingerprint: fmt.Sprintf("%s:r%d:%s", kind, repo.ID, key)}
 	if ticket != nil {
 		flag.TicketID, flag.Title, flag.Stage = ticket.ID, ticket.Title, ticket.Stage
+		for _, facts := range s.facts.Tickets {
+			if facts.Ticket.ID == ticket.ID {
+				flag.Detail = WithBuildNote(flag.Detail, facts.BuildNote)
+				break
+			}
+		}
 	}
 	return flag
 }

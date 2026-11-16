@@ -262,6 +262,81 @@ def ci_flags():
     return [f for f in result.get('flags') or [] if isinstance(f, dict) and f.get('kind') and f.get('fingerprint')]
 
 
+def expire_links():
+    """Drops this manager's depends_on links older than the board's limit (6 h), so a
+    forgotten link never parks a ticket for good. Never fails the loop."""
+    try:
+        removed = api('POST', '/api/v1/manager/expire-links', {}).get('removed', 0)
+    except Exception as error:  # noqa: BLE001 - an older board answers 404
+        log(f'link expiry failed: {type(error).__name__}: {error}')
+        return
+    if removed:
+        log(f'expired {removed} depends_on link(s) older than 6 h')
+
+
+# What the owner was told, kept so a session never repeats it within OWNER_MEMORY.
+OWNER_KEY = '_owner_asks'
+OWNER_MEMORY = 24 * 3600
+REPEAT_OVERLAP = 0.5
+NOTHING_NEW = '- Nothing new.'
+
+
+def owner_section(summary):
+    """(start, end, bullets) of the summary's "### Owner" section, or None."""
+    lines = (summary or '').splitlines()
+    for start, line in enumerate(lines):
+        if line.strip().lower() == '### owner':
+            end = start + 1
+            while end < len(lines) and not lines[end].startswith('### '):
+                end += 1
+            return start, end, [l.strip() for l in lines[start + 1:end] if l.strip().startswith('-')]
+    return None
+
+
+def ask_words(text):
+    return {w for w in re.findall(r'[a-z0-9]+', text.lower()) if len(w) >= 4}
+
+
+def is_nothing(bullet):
+    return bullet.lstrip('- ').strip().rstrip('.').lower() in ('nothing', 'nothing new', 'none')
+
+
+def is_repeat(bullet, told):
+    """True when bullet says much the same as something already told (word overlap)."""
+    words = ask_words(bullet)
+    for earlier in told:
+        other = ask_words(earlier)
+        if words and other and len(words & other) / len(words | other) >= REPEAT_OVERLAP:
+            return True
+    return False
+
+
+def recent_asks(state, now):
+    return [a['text'] for a in state.get(OWNER_KEY, []) if now - a.get('at', 0) < OWNER_MEMORY]
+
+
+def dedupe_owner(summary, state, now):
+    """Drops owner bullets that repeat what the owner heard in the last 24 h, records the
+    new ones in state, and returns the summary to keep."""
+    section = owner_section(summary)
+    if section is None:
+        return summary
+    start, end, bullets = section
+    told = recent_asks(state, now)
+    fresh = [b for b in bullets if not is_nothing(b) and not is_repeat(b, told)]
+    kept = [a for a in state.get(OWNER_KEY, []) if now - a.get('at', 0) < OWNER_MEMORY]
+    state[OWNER_KEY] = kept + [{'text': b, 'at': now} for b in fresh]
+    lines = summary.splitlines()
+    return '\n'.join(lines[:start + 1] + (fresh or [NOTHING_NEW]) + lines[end:])
+
+
+def told_section(told):
+    if not told:
+        return ''
+    return ('\n## Already told the owner (last 24 hours)\n\nDo not repeat these in `### Owner`; '
+            'the loop drops repeats.\n\n' + '\n'.join(told) + '\n')
+
+
 def build_host_section(access):
     """The prompt section that says whether this session may act on the build host."""
     if access is None:
@@ -273,7 +348,7 @@ def build_host_section(access):
             'park or move aside (quarantine) instead, and follow "Repairs".\n') % (access['user'], BUILD_HOST_SCRIPT.as_posix())
 
 
-def build_prompt(repo_id, flags, budget_left, local_runbook=None, review=False, build_host=None):
+def build_prompt(repo_id, flags, budget_left, local_runbook=None, review=False, build_host=None, told=()):
     lines = '\n'.join(flag_line(f) for f in flags) or '- none'
     runbook = COMMAND.read_text()
     if runbook.startswith('---'):
@@ -288,6 +363,7 @@ def build_prompt(repo_id, flags, budget_left, local_runbook=None, review=False, 
         prompt = (runbook + f'\n\n## This session\n\n{scope} Budget left today: ${budget_left:.2f}. '
                   f'Flags to handle:\n\n{lines}\n')
     prompt += build_host_section(build_host)
+    prompt += told_section(told)
     if local_runbook is None and LOCAL_RUNBOOK:
         local_runbook = Path(LOCAL_RUNBOOK).read_text()
     if local_runbook:
@@ -300,10 +376,10 @@ def review_due(state, now):
     return REVIEW_INTERVAL > 0 and now - state.get(REVIEW_KEY, {}).get('last', 0) >= REVIEW_INTERVAL
 
 
-def run_session(repo_id, flags, budget_left, review=False):
+def run_session(repo_id, flags, budget_left, review=False, told=()):
     """One model session for one repo's flags, or the board review. Returns (cost in USD, model, summary)."""
     model = MODEL if review else session_model(flags)
-    prompt = build_prompt(repo_id, flags, budget_left, review=review, build_host=build_host_ssh.build_host_access())
+    prompt = build_prompt(repo_id, flags, budget_left, review=review, build_host=build_host_ssh.build_host_access(), told=told)
     log(f'board review on {model}' if review else f'repo {repo_id}: {len(flags)} flag(s) on {model}')
     try:
         result = subprocess.run(['claude', '-p', prompt, '--model', model, '--output-format', 'json', *CLAUDE_ARGS],
@@ -341,6 +417,7 @@ def main():
             if not status['enabled']:
                 time.sleep(INTERVAL)
                 continue
+            expire_links()
             flags = api('GET', '/api/v1/manager/flags')['flags'] + ci_flags() + sensor_flags()
             state, now = load_state(), time.time()
             # Forget flags that cleared, so a new problem on the same ticket starts fresh.
@@ -363,18 +440,21 @@ def main():
                 save_state(state)
                 report_activity('working', 'repair' if any(repairing(f) for f in repo_flags) else 'flag', repo_flags)
                 try:
-                    cost, model, summary = run_session(repo_id, repo_flags, remaining)
+                    cost, model, summary = run_session(repo_id, repo_flags, remaining, told=recent_asks(state, now))
                 finally:
                     report_activity('idle')
+                summary = dedupe_owner(summary, state, time.time())
+                save_state(state)
                 remaining = api('POST', '/api/v1/manager/usage', usage_body(cost, model, summary))['remaining_usd']
             if review_due(state, now) and remaining > 0:
                 state[REVIEW_KEY] = {'last': now}
                 save_state(state)
                 report_activity('working', 'review')
                 try:
-                    cost, model, summary = run_session(0, flags, remaining, review=True)
+                    cost, model, summary = run_session(0, flags, remaining, review=True, told=recent_asks(state, now))
                 finally:
                     report_activity('idle')
+                summary = dedupe_owner(summary, state, time.time())
                 api('POST', '/api/v1/manager/usage', usage_body(cost, model, 'Board review\n' + summary))
             save_state(state)
         except Exception as error:  # the loop must outlive any one bad pass

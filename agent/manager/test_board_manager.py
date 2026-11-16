@@ -210,3 +210,33 @@ class NotesTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class OwnerRepeatTests(unittest.TestCase):
+    SUMMARY = ('MANAGER SUMMARY\nHEADLINE: Waited on the runner.\n\n### #175 Threading\n- **Did:** nothing.\n\n'
+               '### Owner\n- {ask}\n')
+
+    def test_the_owner_hears_a_thing_once_a_day(self):
+        state, now = {}, 1_000_000.0
+        ask = 'Add a second Windows GL runner: jobs wait 2.5 hours for the only one.'
+        first = m.dedupe_owner(self.SUMMARY.format(ask=ask), state, now)
+        self.assertIn(ask, first)
+        reworded = 'One Windows GL runner cannot keep up; add a second GL runner, jobs wait 3 hours.'
+        second = m.dedupe_owner(self.SUMMARY.format(ask=reworded), state, now + 600)
+        self.assertNotIn('second GL runner', second)
+        self.assertIn(m.NOTHING_NEW, second)
+        self.assertIn('### #175 Threading', second)
+        later = m.dedupe_owner(self.SUMMARY.format(ask=reworded), state, now + m.OWNER_MEMORY + 1)
+        self.assertIn('second GL runner', later)
+
+    def test_nothing_is_never_remembered_and_new_asks_reach_the_prompt(self):
+        state, now = {}, 5.0
+        m.dedupe_owner(self.SUMMARY.format(ask='Nothing.'), state, now)
+        self.assertEqual(m.recent_asks(state, now), [])
+        m.dedupe_owner(self.SUMMARY.format(ask='Grant the app Actions write.'), state, now)
+        prompt = m.build_prompt(31, [], 5.0, local_runbook='', told=m.recent_asks(state, now))
+        self.assertIn('Already told the owner', prompt)
+        self.assertIn('Grant the app Actions write.', prompt)
+
+    def test_a_summary_without_an_owner_section_is_kept(self):
+        self.assertEqual(m.dedupe_owner('MANAGER SUMMARY\nHEADLINE: x', {}, 0), 'MANAGER SUMMARY\nHEADLINE: x')

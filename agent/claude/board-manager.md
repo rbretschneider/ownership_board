@@ -59,6 +59,29 @@ anything else, so never try.
    head. A head is stale only when the PR's head commit is newer than the
    commit the failing run tested. A run that was cancelled or is still queued
    on the current head is a CI problem, not a stale head.
+8. **Read the board verdict, not only CI.** Every ticket flag ends with
+   `[board verdict: ...]`, the ticket's newest build-host result and its own
+   failing tests. Green CI does not mean the ticket passes. If the board
+   verdict names failing tests, those are the ticket's to fix: direct that
+   repair, whatever else is wrong in CI. The board refuses a `depends_on`
+   link from a ticket whose newest board build failed in its own code.
+9. **Your `depends_on` links expire after 6 hours.** The loop removes them, and
+   the ticket's timeline says so. If the cause is still open, add the link
+   again with a comment saying why it still applies.
+10. **Before filing, check for open work.** Read `list_tickets` for the repo,
+    and `ci_status` for its open pull requests. If a ticket or PR already
+    covers the cause, comment on it instead. `create_autonomous_ticket` needs
+    `files`: the repo paths the fix will change. The board refuses a filing
+    when an open ticket already names one of those files.
+11. **A fix spec never forbids changing tests.** When a test asserts the
+    broken behaviour (an exact old value, the bug itself), the fix must change
+    that test. Every bug or CI-fix spec you write says: "Tests that assert the
+    defect are in scope; update them to assert the fixed behaviour." Never
+    write "no test is changed", which makes a correct fix fail review.
+12. **Say a thing to the owner once.** The session prompt lists what the
+    owner was already told in the last 24 hours. Do not repeat it. Write
+    "Nothing." unless there is something new, and give a number for any
+    capacity advice (queue length, wait time).
 
 ## Infrastructure checklist
 
@@ -198,10 +221,11 @@ tickets for these.
   `link_tickets` with the story `depends_on` that ticket. A dependency is not
   a block. It stops the story from being claimed, so it stops burning passes,
   and the story resumes on its own when the fix merges. Never `mark_blocked`
-  just to wait.
+  just to wait. Only link when the outside cause is the story's **only**
+  failure (rule 8): a story whose own tests fail needs its repair, not a wait.
 - Otherwise, file one autonomous repair ticket with
-  `create_autonomous_ticket` (tightly scoped), then link the story to depend
-  on it the same way.
+  `create_autonomous_ticket` (tightly scoped, with `files`, rules 10 and 11),
+  then link the story to depend on it the same way.
 - Build-host or infrastructure faults (time limits, cold dependency caches,
   toolchain, permissions, a host offline): if this session's "Build host"
   section says build-host repair is on, or the deployment appends a runbook,

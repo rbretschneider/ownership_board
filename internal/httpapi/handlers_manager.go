@@ -32,6 +32,17 @@ func (s *server) managerRoutes(rt *router) {
 	rt.anyone("GET /api/v1/manager/sessions", s.managerSessions)
 	// The manager loop reports when a session starts and ends; the Team view draws it.
 	rt.anyone("POST /api/v1/manager/activity", s.managerActivity)
+	// The manager loop expires its own stale depends_on links every pass.
+	rt.anyone("POST /api/v1/manager/expire-links", s.managerExpireLinks)
+}
+
+func (s *server) managerExpireLinks(w http.ResponseWriter, r *http.Request, who caller) error {
+	removed, err := s.deps.Board.ExpireManagerLinks(r.Context(), who.actor)
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"removed": removed})
+	return nil
 }
 
 func toManagerStatus(status app.ManagerStatus) managerStatusDTO {

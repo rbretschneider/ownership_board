@@ -127,6 +127,13 @@ func (s *BoardService) CreateAutonomous(ctx context.Context, actor domain.Actor,
 	if err := domain.RejectConcealedMarkdown("spec", draft.Spec); err != nil {
 		return TicketDetail{}, err
 	}
+	if actor.IsBoardManager() {
+		files, err := s.requireNoDuplicateFiling(ctx, draft)
+		if err != nil {
+			return TicketDetail{}, err
+		}
+		draft.Spec = domain.WithDeclaredFiles(draft.Spec, files)
+	}
 	ticket, err := domain.NewAutonomousTicket(draft, actor, s.clock.Now())
 	if err != nil {
 		return TicketDetail{}, err
@@ -134,6 +141,36 @@ func (s *BoardService) CreateAutonomous(ctx context.Context, actor domain.Actor,
 	return s.insertAutonomous(ctx, actor, ticket, draft.DependsOn, func(id int64) domain.Decision {
 		return domain.DecisionFromAgreedSpec(id, ticket.SpecRevision, actor, ticket.CreatedAt)
 	})
+}
+
+// requireNoDuplicateFiling checks the files a board manager's new ticket
+// declares against every open ticket in the same repo, and refuses the filing
+// when one already names any of them: the manager comments there instead.
+func (s *BoardService) requireNoDuplicateFiling(ctx context.Context, draft domain.AutonomousDraft) ([]string, error) {
+	files, err := domain.NormalizeDeclaredFiles(draft.Files)
+	if err != nil {
+		return nil, err
+	}
+	if draft.RepoID == 0 {
+		return files, nil
+	}
+	err = s.store.Read(ctx, func(repos Repos) error {
+		open, err := repos.Tickets().List(ctx, TicketFilter{IsScoped: true, RepoIDs: []int64{draft.RepoID}})
+		if err != nil {
+			return err
+		}
+		for _, ticket := range open {
+			if ticket.Stage.IsCompleted() {
+				continue
+			}
+			if shared := domain.ManagerFilingOverlap(files, ticket); len(shared) > 0 {
+				return domain.Conflictf("ticket %d (%q) already covers %s; comment on it instead of filing a duplicate",
+					ticket.ID, ticket.Title, strings.Join(shared, ", "))
+			}
+		}
+		return nil
+	})
+	return files, err
 }
 
 // insertAutonomous saves a ready autonomous ticket with the binding decision
