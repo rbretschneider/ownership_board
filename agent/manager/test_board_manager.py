@@ -75,6 +75,9 @@ class DueFlagsTests(unittest.TestCase):
         prompt = m.build_prompt(0, [], 5.0, local_runbook='', review=True)
         self.assertIn('The board review', prompt)
         self.assertIn('- none', prompt)
+        # The review lists raw flags, which have no attempt count (2026-11-16 KeyError).
+        raw = self.flag('stalled:7:since:1')
+        self.assertIn('stalled:7:since:1', m.build_prompt(0, [raw], 5.0, local_runbook='', review=True))
 
     def test_a_flag_past_its_attempts_is_left_for_the_owner(self):
         state = {'a': {'attempts': m.MAX_ATTEMPTS, 'last': 0}}
