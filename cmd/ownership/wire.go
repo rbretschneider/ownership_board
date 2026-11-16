@@ -77,6 +77,7 @@ func build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*applic
 		return nil, fmt.Errorf("open bundle storage: %w", err)
 	}
 	jobs := app.NewBuildJobService(db, systemClock, bundles, logger)
+	jobs.StorageLimit = cfg.BuildBundleLimit
 	if err = jobs.RecoverStorage(ctx); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("recover bundle storage: %w", err)

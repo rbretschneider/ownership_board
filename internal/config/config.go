@@ -20,6 +20,10 @@ const (
 	defaultRepoSyncInterval = time.Hour
 	defaultBackupKeep       = 7
 	minAuthSecretLength     = 32
+	// defaultBuildBundleGiB caps stored build bundles. Finished bundles are kept,
+	// so 2 GiB filled on a busy board in five days, and a full cap refuses every
+	// new build job.
+	defaultBuildBundleGiB = 20
 )
 
 // Config is the board's bootstrap configuration.
@@ -35,6 +39,8 @@ type Config struct {
 	Sources          Sources
 	RepoSyncInterval time.Duration
 	BackupKeep       int
+	// BuildBundleLimit is the most bytes stored build bundles may take.
+	BuildBundleLimit int64
 }
 
 // OIDC holds SSO settings. An empty IssuerURL turns SSO off.
@@ -102,6 +108,7 @@ func Load(getenv func(string) string) (Config, error) {
 		Sources:          loadSources(&r),
 		RepoSyncInterval: r.duration("REPO_SYNC_INTERVAL", defaultRepoSyncInterval),
 		BackupKeep:       r.integer("BACKUP_KEEP", defaultBackupKeep, 0, 365),
+		BuildBundleLimit: int64(r.integer("BUILD_BUNDLE_STORAGE_GIB", defaultBuildBundleGiB, 1, 1024)) << 30,
 	}
 	if cfg.OIDC.IssuerURL != "" && cfg.PublicBaseURL == "" {
 		r.fail("PUBLIC_BASE_URL is required when OIDC_ISSUER_URL is set, to build the redirect URI")
