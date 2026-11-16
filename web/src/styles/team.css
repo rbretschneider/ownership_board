@@ -207,6 +207,32 @@ button.team-card:focus-visible,
   min-width: 0;
 }
 
+/* The runner's worker sprite (the Board's miner), drawn at 2x so it reads at a glance. */
+.team-runner__figure {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--t-text-3);
+}
+
+.team-runner__figure .miner {
+  width: 36px;
+  height: 21px;
+}
+
+/* Waiting or idle: the worker stands still, dimmed. */
+.team-runner__figure--waiting .miner,
+.team-runner__figure--idle .miner,
+.team-runner__figure--waiting .miner *,
+.team-runner__figure--idle .miner * {
+  animation-play-state: paused;
+}
+
+.team-runner__figure--waiting,
+.team-runner__figure--idle {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+}
+
 .team-runner__name {
   font-family: var(--t-mono);
   font-size: 14px;
@@ -352,6 +378,17 @@ button.team-card:focus-visible,
   font-weight: 500;
   color: var(--t-title);
   overflow-wrap: anywhere;
+}
+
+/* A busy slot's build matrix, in the busy (orange) tone. */
+.team-slot__matrix {
+  color: var(--t-amber);
+  grid-template-columns: repeat(3, 4px);
+}
+
+.team-slot__matrix i {
+  width: 4px;
+  height: 4px;
 }
 
 .team-slot--idle .team-slot__job {

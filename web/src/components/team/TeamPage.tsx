@@ -211,22 +211,7 @@ export function TeamPage() {
           <section className="team-top" aria-label="Manager">
             <ManagerCard manager={team.manager} onOpen={() => setSelection({ kind: "manager" })} />
           </section>
-          {/* Build hosts sit right under the manager; runners below them pair their tickets up to the slots. */}
-          <section className="team-section" aria-label="Build hosts">
-            <h2 className="team-heading">Build hosts</h2>
-            {team.build_hosts.length === 0
-              ? <p className="team-empty">No approved build hosts.</p>
-              : (
-                <div className="team-hosts">
-                  {team.build_hosts.map((host) => (
-                    <BuildHostCard key={host.id} host={host} now={now} renderSlotTicket={(id) => {
-                      const ticket = ticketsById.get(id);
-                      return ticket !== undefined && !heldIds.has(id) ? ticketCard(ticket) : null;
-                    }} slotOwner={slotOwner} pairedTicket={pairedOnView} pinnedTicket={pairPinned} onPairHover={setPairHover} onPairToggle={togglePair} />
-                  ))}
-                </div>
-              )}
-          </section>
+          {/* A hierarchy: runners claim tickets, tickets claim build slots, so the hosts sit under the runners. */}
           <section className="team-section" aria-label="Runners">
             <h2 className="team-heading">Runners</h2>
             <div className="team-runners">
@@ -247,6 +232,21 @@ export function TeamPage() {
                 );
               })}
             </div>
+          </section>
+          <section className="team-section" aria-label="Build hosts">
+            <h2 className="team-heading">Build hosts</h2>
+            {team.build_hosts.length === 0
+              ? <p className="team-empty">No approved build hosts.</p>
+              : (
+                <div className="team-hosts">
+                  {team.build_hosts.map((host) => (
+                    <BuildHostCard key={host.id} host={host} now={now} renderSlotTicket={(id) => {
+                      const ticket = ticketsById.get(id);
+                      return ticket !== undefined && !heldIds.has(id) ? ticketCard(ticket) : null;
+                    }} slotOwner={slotOwner} pairedTicket={pairedOnView} pinnedTicket={pairPinned} onPairHover={setPairHover} onPairToggle={togglePair} />
+                  ))}
+                </div>
+              )}
           </section>
           {hasCISample && team.ci_runners !== undefined && <CIRunnersCard sample={team.ci_runners} now={now} />}
           {panel !== null && <TeamPanel content={panel} onClose={close} />}
