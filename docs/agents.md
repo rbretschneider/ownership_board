@@ -293,6 +293,15 @@ at the lowest token cost.
 | cycling | the last build-host runs failed the same way, or the PR went back for repair, or review sent it back for fixes, 3 or more times |
 | build_cap | more build passes than the cap (default 5) |
 | stalled | no lease, no build job, and no change for the stall limit (default 120 min), or a build job queued over 2 h or running over 4 h |
+| ci_queued | a CI job (or a run no job has started for) waited for a runner longer than `MANAGER_CI_QUEUE_MINUTES` (default 30) |
+| ci_cancelled | the newest run of a workflow on a current head (a ticket's PR or the default branch) was cancelled outside the board, for example evicted by a concurrency group |
+| ci_failed | the newest default-branch or release run of a workflow failed; one flag per red workflow, not per push |
+| runner_offline | a CI runner registered on the repo is offline |
+
+The `ci_*` and `runner_offline` flags come from the CI sensors
+(`GET /api/v1/manager/ci-flags`), which read the repos' CI with the board's own
+connection. They cover repos that have an open autonomous ticket. A flag about
+the repo itself (its default branch, releases or runners) has no ticket.
 
 **What it may do,** on autonomous tickets only and without taking their
 lease, so it never collides with the worker:
@@ -304,6 +313,29 @@ lease, so it never collides with the worker:
 
 It cannot change lanes, specs or designs, merge, or touch an ordinary ticket.
 Every action is on the ticket's timeline under the manager token's name.
+
+**CI through the board.** The manager reads and acts on CI with four tools,
+using the connection or token the board syncs repos with (see `.env.example`
+for the permissions it needs):
+
+| Tool | What it does |
+|---|---|
+| `ci_status` | a ticket's PR branch (`ticket_id`), or a repo's default branch, recent runs and runners (`repo_id`): runs, jobs, status, conclusion, how long each job waited, and which commit is the current head |
+| `ci_failed_log` | a job's failed steps and the end of its log, as untrusted data |
+| `ci_rerun` | re-run a completed run (its failed jobs, or all of it when it was cancelled), or one job |
+| `ci_cancel` | cancel a run that a newer push replaced |
+
+The board enforces these rules itself, whatever the prompt says:
+- it never cancels a run on its branch's current head, and refuses when it
+  cannot confirm a newer commit;
+- it re-runs only runs that have completed, and never re-runs a green run;
+- every re-run and cancel needs a ticket and a reason, and is recorded on that
+  ticket's timeline;
+- the manager acts only on autonomous tickets; workers cannot use the action
+  tools.
+
+GitHub supports all four. Forgejo and Gitea show task status only: their API
+cannot read logs, list runners, re-run or cancel.
 
 **Setting it up:**
 1. In Settings > Agent tokens, create a token with **Board manager** on. Give
@@ -330,7 +362,25 @@ Every action is on the ticket's timeline under the manager token's name.
 - The session follows `agent/claude/board-manager.md`. A retry is never a
   fix: it must change approach or park the ticket for you.
 
-By default the manager acts only through the board. It cannot repair a build
+**Build-host repair over ssh (opt in).** Set `MANAGER_BUILD_HOST_SSH_HOST`,
+`MANAGER_BUILD_HOST_SSH_USER` and `MANAGER_BUILD_HOST_SSH_KEY` (a private key
+file) in the loop's environment. With all three set, repair sessions may act on
+that host, and only through `agent/manager/build_host_ssh.py`, which:
+- logs every command before it runs and again with its exit code
+  (`MANAGER_BUILD_HOST_SSH_LOG`, JSON lines);
+- refuses deleting commands (`rm`, `del`, `Remove-Item`, `git clean`,
+  `docker ... prune`, and the like), so the manager parks or moves things aside
+  instead;
+- uses the key only, never a password, and pins the host key on first use.
+
+The wrapper guards against mistakes; it is not a sandbox. The account's own
+rights are the real limit, so use a limited build account, not an
+administrator (the loop warns at start when the user looks like one). Let the
+session run the wrapper through `CLAUDE_ARGS`, for example
+`--allowedTools=mcp__ownership,Bash(python3 agent/manager/build_host_ssh.py:*)`.
+If only some of the three are set, the loop refuses to start.
+
+Without them the manager acts only through the board. It cannot repair a build
 host or install software. When a build host is the problem, it blocks the
 affected tickets with "Needs the owner: ..." so they stop burning passes, and
 tells you what to fix.
