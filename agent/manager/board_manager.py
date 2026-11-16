@@ -146,7 +146,7 @@ def flag_line(flag):
     where = (f"#{flag['ticket_id']} [{flag['kind']}] {flag.get('title', '')} (stage {flag.get('stage', '?')})"
              if flag.get('ticket_id') else f"deployment [{flag['kind']}]")
     return (f"- {where}: {flag['detail']}. Fingerprint {flag['fingerprint']}; "
-            f"earlier attempts on it: {flag['attempts']}.")
+            f"earlier attempts on it: {flag.get('attempts', 0)}.")
 
 
 def sensor_flags():
