@@ -25,6 +25,7 @@ same token (see docs/agents.md). Standard library only.
 """
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -133,6 +134,52 @@ def session_summary(result_text):
     start = text.rfind('MANAGER SUMMARY')
     summary = text[start:] if start != -1 else text[-2000:]
     return summary.replace('```', '').strip()[:8000]
+
+
+HEADLINE_LIMIT = 100
+
+
+def session_headline(summary):
+    """The summary's "HEADLINE: ..." line (see the runbook's Finish section), at most
+    HEADLINE_LIMIT characters, or '' when the session wrote none."""
+    for line in (summary or '').splitlines():
+        line = line.strip().lstrip('#*->').strip()
+        if line[:9].upper() == 'HEADLINE:':
+            headline = ' '.join(line[9:].strip(' *_`').split())
+            if headline:
+                return headline if len(headline) <= HEADLINE_LIMIT else headline[:HEADLINE_LIMIT - 1].rstrip() + '…'
+    return ''
+
+
+def usage_body(cost, model, summary):
+    """The POST /manager/usage body: the cost, the model, the summary and its headline."""
+    return {'cost_usd': round(cost, 4), 'model': model, 'summary': summary, 'headline': session_headline(summary)}
+
+
+def activity_targets(flags, host_names):
+    """The tickets and the build host a session acts on, for the Team view's lines.
+    A flag names a host with a 'host' field, or by mentioning a host's name."""
+    ticket_ids = sorted({int(f['ticket_id']) for f in flags if f.get('ticket_id')})
+    host = next((f['host'] for f in flags if f.get('host')), '')
+    if not host:
+        text = ' '.join(str(f.get('detail', '')) + ' ' + str(f.get('fingerprint', '')) for f in flags).lower()
+        host = next((name for name in host_names if re.search(r'(?<![\w-])' + re.escape(name.lower()) + r'(?![\w-])', text)), '')
+    return ticket_ids, host
+
+
+def report_activity(state, kind='flag', flags=()):
+    """Tells the board the manager started (working) or ended (idle) a session.
+    Never fails the loop: the Team view is a convenience, not a gate."""
+    try:
+        body = {'state': state}
+        if state == 'working':
+            hosts = [h['name'] for h in api('GET', '/api/v1/team').get('build_hosts', [])] if kind != 'review' else []
+            ticket_ids, host = activity_targets(flags, hosts) if kind != 'review' else ([], '')
+            body.update(kind=kind, ticket_ids=ticket_ids[:20], host=host,
+                        started_at=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()))
+        api('POST', '/api/v1/manager/activity', body)
+    except Exception as error:  # noqa: BLE001 - an older board answers 404
+        log(f'activity report failed: {type(error).__name__}: {error}')
 
 
 def session_model(flags):
@@ -244,15 +291,21 @@ def main():
                     entry['attempts'] += 1
                     entry['last'] = now
                 save_state(state)
-                cost, model, summary = run_session(repo_id, repo_flags, remaining)
-                remaining = api('POST', '/api/v1/manager/usage',
-                                {'cost_usd': round(cost, 4), 'model': model, 'summary': summary})['remaining_usd']
+                report_activity('working', 'repair' if any(repairing(f) for f in repo_flags) else 'flag', repo_flags)
+                try:
+                    cost, model, summary = run_session(repo_id, repo_flags, remaining)
+                finally:
+                    report_activity('idle')
+                remaining = api('POST', '/api/v1/manager/usage', usage_body(cost, model, summary))['remaining_usd']
             if review_due(state, now) and remaining > 0:
                 state[REVIEW_KEY] = {'last': now}
                 save_state(state)
-                cost, model, summary = run_session(0, flags, remaining, review=True)
-                api('POST', '/api/v1/manager/usage',
-                    {'cost_usd': round(cost, 4), 'model': model, 'summary': 'Board review\n' + summary})
+                report_activity('working', 'review')
+                try:
+                    cost, model, summary = run_session(0, flags, remaining, review=True)
+                finally:
+                    report_activity('idle')
+                api('POST', '/api/v1/manager/usage', usage_body(cost, model, 'Board review\n' + summary))
             save_state(state)
         except Exception as error:  # the loop must outlive any one bad pass
             log(f'pass failed: {type(error).__name__}: {error}')

@@ -10,14 +10,20 @@ function inFlight(id: number, title: string, overrides: Partial<TeamTicket>): Te
   return { ...prTicket, id, title, stage: "build", needs_owner: false, owner: "agent", holder: "", ...overrides };
 }
 
-/** Two runners (one working, one idle), two tickets and a busy Windows host. */
+/**
+ * Two runners (one working, one idle), five tickets in a mixed order (blocked,
+ * waiting on a dependency, on a host slot, in a host queue, a PR with CI
+ * running) and a busy Windows host. The manager is idle.
+ */
 export function teamFixture(): Team {
   return {
     observed_at: new Date(TEAM_NOW).toISOString(),
     manager: {
       enabled: true, build_cap: 5, stall_minutes: 120, daily_budget_usd: 10,
       today: { day: "2026-11-16", sessions: 3, cost_usd: 1.94 }, remaining_usd: 8.06,
-      open_flags: 2, latest_summary: "Directed #12 to fix its brand-scan test.", latest_at: minutesAgo(20),
+      open_flags: 2, latest_summary: "MANAGER SUMMARY\nHEADLINE: Directed #12 to fix its brand-scan test.\n- #12 cycling: why: x | action: y | expect: z",
+      latest_headline: "Directed #12 to fix its brand-scan test.", latest_at: minutesAgo(20),
+      activity: { state: "idle", kind: "", ticket_ids: [], host: "", started_at: null },
       sessions: [
         { at: minutesAgo(20), model: "sonnet", cost_usd: 0.1, summary: "Directed #12 to fix its brand-scan test." },
         { at: minutesAgo(80), model: "sonnet", cost_usd: 0.16, summary: "Held #13 for a scope split." },
@@ -28,8 +34,11 @@ export function teamFixture(): Team {
       { name: "@worker/7/claude_2", state: "idle", model: "opus-test", doing: "No ticket held", ticket_id: null, last_seen: minutesAgo(90), profile_version: "" },
     ],
     tickets: [
+      inFlight(14, "Installer", { blocked_reason: "Needs the owner: signing certificate expired\nDetails follow" }),
+      inFlight(15, "Properties panel", { stage: "ready", lane: "todo", waiting_on: [12] }),
       inFlight(12, "Release pipeline", { holder: "@worker/7/codex_1", build: { status: "running", queued_at: minutesAgo(130), started_at: minutesAgo(96) } }),
       inFlight(13, "Brand scan", { stage: "pr", build: { status: "queued", queued_at: minutesAgo(66), started_at: null } }),
+      inFlight(16, "Threading", { stage: "pr", pr: { url: "https://github.com/acme/app/pull/16", verdict: "running", reason: "", checks_total: 8, checks_done: 7, checks_failed: 0 } }),
     ],
     build_hosts: [{
       id: 1, name: "builder-1", os: "windows", online: true, enabled: true, max_parallel: 2,
@@ -50,7 +59,7 @@ export function teamFixture(): Team {
 
 /** Ticket #12 as GET /tickets/12 returns it, with a short history. */
 export function ticketDetailFixture(): TicketDetail {
-  const ticket = teamFixture().tickets[0]!;
+  const ticket = teamFixture().tickets.find((t) => t.id === 12)!;
   return {
     ...ticket, body: "", spec: "", design: "", approved_spec_revision: 1, approved_design_revision: 1, created_by: "Owner",
     gates: { spec: false, design: false }, questions: [], work_links: [], decisions: [], relations: [],

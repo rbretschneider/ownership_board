@@ -45,14 +45,53 @@ it("draws the org chart: manager, runners, tickets in flight and build hosts", (
   expect(host.querySelector('a[aria-current="page"]')?.textContent).toBe("Team");
   expect(host.textContent).toContain("Board manager");
   expect(host.textContent).toContain("$1.94");
-  expect(host.textContent).toContain("Last review");
   expect(runner("@worker/7/codex_1").textContent).toContain("codex_1");
   expect(runner("@worker/7/codex_1").textContent).toContain("Working");
   expect(runner("@worker/7/claude_2").textContent).toContain("Idle");
-  expect(host.querySelectorAll("[data-ticket]")).toHaveLength(2);
-  expect(host.querySelector('[data-ticket="12"]')?.textContent).toContain("builder-1 slot 1 · testing");
+  expect(host.querySelector('[data-ticket="12"]')?.textContent).toContain("Testing on builder-1 slot 1");
   expect(host.textContent).toContain("1 of 2 slots busy");
   expect(host.textContent).toContain("Queue: #13 waiting 1h 06m");
+});
+
+it("lists every ticket in flight, active first, then waiting, then blocked", () => {
+  const order = [...host.querySelectorAll("[data-ticket]")].map((el) => el.getAttribute("data-ticket"));
+  expect(order).toEqual(["12", "16", "15", "13", "14"]);
+  expect(host.querySelector('[data-ticket="16"]')?.textContent).toContain("PR open, CI 7/8");
+  expect(host.querySelector('[data-ticket="15"]')?.textContent).toContain("Waiting on #12");
+  expect(host.querySelector('[data-ticket="14"]')?.textContent).toContain("Blocked: Needs the owner: signing certificate expired");
+  expect(host.querySelector('[data-ticket="14"]')?.textContent).not.toContain("Details follow");
+});
+
+it("shows the manager's headline, not its raw summary, and no feed bar or profile chips", () => {
+  const card = host.querySelector('[aria-label="Board manager: open history"]')!;
+  expect(card.textContent).toContain("Directed #12 to fix its brand-scan test.");
+  expect(card.textContent).not.toContain("MANAGER SUMMARY");
+  expect(card.textContent).not.toContain("cycling");
+  expect(host.querySelector(".team-feed")).toBeNull();
+  expect(host.textContent).not.toContain("profile not reported");
+  // A hint is not a link, so it must not wear the link style.
+  expect(card.querySelector(".team-hint")?.textContent).toBe("Tap for history log");
+});
+
+it("draws the manager's lines only while it works, to each ticket, its runner and the host", async () => {
+  expect(host.querySelector('[data-testid="manager-lines"]')).toBeNull();
+  const working = teamFixture();
+  working.manager.activity = { state: "working", kind: "flag", ticket_ids: [12], host: "builder-1", started_at: null };
+  api.team.mockResolvedValue(working);
+  await act(async () => {
+    stream.onEvent?.({ type: "ticket_moved", ticket_id: 12 } as unknown as BoardEvent);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  });
+  const targets = [...host.querySelectorAll('[data-testid="manager-lines"] [data-target]')].map((g) => g.getAttribute("data-target"));
+  expect(targets).toEqual(["ticket:12", "runner:@worker/7/codex_1", "host:builder-1"]);
+  expect(host.querySelector('[aria-label="Board manager: open history"]')?.textContent).toContain("Working on #12, builder-1");
+
+  api.team.mockResolvedValue(teamFixture());
+  await act(async () => {
+    stream.onEvent?.({ type: "ticket_moved", ticket_id: 12 } as unknown as BoardEvent);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  });
+  expect(host.querySelector('[data-testid="manager-lines"]')).toBeNull();
 });
 
 it("lists CI runners as busy, idle or offline, and flags a stale sample", async () => {

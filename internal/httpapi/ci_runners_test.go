@@ -51,3 +51,14 @@ func TestCIRunnersMissingOrMalformedIsEmpty(t *testing.T) {
 		}
 	}
 }
+
+func TestTeamTicketsCarryTheirPRStatus(t *testing.T) {
+	tickets := []teamTicketDTO{{ticketSummaryDTO: ticketSummaryDTO{ID: 175}}, {ticketSummaryDTO: ticketSummaryDTO{ID: 55}}}
+	snapshot := readPRStatus(writePRStatus(t, `{"at":1793910000,"prs":[{"ticket":175,"url":"https://github.com/acme/app/pull/9","verdict":"running","reason":"",
+	 "checks":[{"name":"a","status":"COMPLETED","conclusion":"SUCCESS"},{"name":"b","status":"COMPLETED","conclusion":"FAILURE"},{"name":"c","status":"IN_PROGRESS","conclusion":""}]}]}`))
+	attachPRStatus(tickets, snapshot)
+	pr := tickets[0].PR
+	if pr == nil || pr.Verdict != "running" || pr.ChecksTotal != 3 || pr.ChecksDone != 2 || pr.ChecksFailed != 1 || tickets[1].PR != nil {
+		t.Fatalf("%+v %+v", pr, tickets[1].PR)
+	}
+}

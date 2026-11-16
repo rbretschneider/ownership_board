@@ -84,12 +84,51 @@ class DueFlagsTests(unittest.TestCase):
         self.assertEqual(m.due_flags([self.flag('a')], state, 10**9), [])
 
 
-if __name__ == '__main__':
-    unittest.main()
-
 
 class SummaryTests(unittest.TestCase):
     def test_the_summary_block_is_what_the_owner_reads(self):
         text = 'thinking...\n```\nMANAGER SUMMARY\n- #49 cycling: why: x | action: y | expect: z\n- owner: none\n```'
         self.assertEqual(m.session_summary(text), 'MANAGER SUMMARY\n- #49 cycling: why: x | action: y | expect: z\n- owner: none')
         self.assertEqual(m.session_summary(''), '')
+
+
+class HeadlineTests(unittest.TestCase):
+    def test_the_headline_line_is_sent_with_the_summary(self):
+        summary = 'MANAGER SUMMARY\nHEADLINE: Merged #12 and parked #13.\n- owner: none'
+        self.assertEqual(m.session_headline(summary), 'Merged #12 and parked #13.')
+        self.assertEqual(m.usage_body(0.123456, 'sonnet', summary),
+                         {'cost_usd': 0.1235, 'model': 'sonnet', 'summary': summary, 'headline': 'Merged #12 and parked #13.'})
+
+    def test_a_missing_or_long_headline(self):
+        self.assertEqual(m.session_headline('MANAGER SUMMARY\n- owner: none'), '')
+        self.assertEqual(m.session_headline('**HEADLINE:** Answered #64.'), 'Answered #64.')
+        long = m.session_headline('HEADLINE: ' + 'word ' * 40)
+        self.assertEqual(len(long), m.HEADLINE_LIMIT)
+        self.assertTrue(long.endswith('…'))
+
+
+class ActivityTests(unittest.TestCase):
+    def test_targets_are_the_flagged_tickets_and_a_named_host(self):
+        flags = [{'ticket_id': 64, 'detail': 'x', 'fingerprint': 'a'}, {'ticket_id': 55, 'detail': 'y', 'fingerprint': 'b'},
+                 {'ticket_id': 0, 'detail': 'builder-win stopped taking jobs', 'fingerprint': 'sensor:host'}]
+        self.assertEqual(m.activity_targets(flags, ['builder-win', 'builder']), ([55, 64], 'builder-win'))
+        self.assertEqual(m.activity_targets([{'ticket_id': 7, 'detail': 'rebuilding', 'fingerprint': 'c'}], ['builder']), ([7], ''))
+        self.assertEqual(m.activity_targets([{'host': 'h1', 'detail': '', 'fingerprint': 'd'}], []), ([], 'h1'))
+
+    def test_a_failed_report_never_stops_the_loop(self):
+        calls = []
+        original = m.api
+
+        def failing(method, path, body=None):
+            calls.append((method, path, body))
+            raise OSError('board down')
+        m.api = failing
+        try:
+            m.report_activity('idle')
+        finally:
+            m.api = original
+        self.assertEqual(calls, [('POST', '/api/v1/manager/activity', {'state': 'idle'})])
+
+
+if __name__ == '__main__':
+    unittest.main()

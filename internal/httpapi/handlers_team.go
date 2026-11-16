@@ -23,10 +23,32 @@ type teamDTO struct {
 
 type teamManagerDTO struct {
 	managerStatusDTO
-	OpenFlags     int                     `json:"open_flags"`
-	LatestSummary string                  `json:"latest_summary"`
-	LatestAt      *time.Time              `json:"latest_at"`
-	Sessions      []domain.ManagerSession `json:"sessions"`
+	OpenFlags     int    `json:"open_flags"`
+	LatestSummary string `json:"latest_summary"`
+	// LatestHeadline is the latest session's one line for the card.
+	LatestHeadline string                  `json:"latest_headline"`
+	Activity       teamActivityDTO         `json:"activity"`
+	LatestAt       *time.Time              `json:"latest_at"`
+	Sessions       []domain.ManagerSession `json:"sessions"`
+}
+
+// teamActivityDTO is what the manager is acting on right now.
+type teamActivityDTO struct {
+	State     domain.ManagerActivityState `json:"state"`
+	Kind      domain.ManagerActivityKind  `json:"kind"`
+	TicketIDs []int64                     `json:"ticket_ids"`
+	Host      string                      `json:"host"`
+	StartedAt *time.Time                  `json:"started_at"`
+}
+
+// teamPRDTO is the merge sweep's view of a ticket's open pull request.
+type teamPRDTO struct {
+	URL          string `json:"url"`
+	Verdict      string `json:"verdict"`
+	Reason       string `json:"reason"`
+	ChecksTotal  int    `json:"checks_total"`
+	ChecksDone   int    `json:"checks_done"`
+	ChecksFailed int    `json:"checks_failed"`
 }
 
 type teamRunnerDTO struct {
@@ -42,6 +64,8 @@ type teamRunnerDTO struct {
 type teamTicketDTO struct {
 	ticketSummaryDTO
 	Holder string `json:"holder"`
+	// PR is set when the merge sweep reported on the ticket's pull request.
+	PR *teamPRDTO `json:"pr"`
 }
 
 type teamBuildHostDTO struct {
@@ -82,6 +106,7 @@ func (s *server) team(w http.ResponseWriter, r *http.Request, _ caller) error {
 	}
 	out := toTeam(team)
 	out.CIRunners = readCIRunners(s.deps.CIRunnersFile)
+	attachPRStatus(out.Tickets, readPRStatus(s.deps.PRStatusFile))
 	writeJSON(w, http.StatusOK, out)
 	return nil
 }
@@ -112,9 +137,10 @@ func toTeamManager(manager app.TeamManager) teamManagerDTO {
 	if sessions == nil {
 		sessions = []domain.ManagerSession{}
 	}
-	out := teamManagerDTO{managerStatusDTO: toManagerStatus(manager.Status), OpenFlags: manager.OpenFlags, Sessions: sessions}
+	out := teamManagerDTO{managerStatusDTO: toManagerStatus(manager.Status), OpenFlags: manager.OpenFlags, Sessions: sessions, Activity: toTeamActivity(manager.Activity)}
 	if len(sessions) > 0 {
 		out.LatestSummary = sessions[0].Summary
+		out.LatestHeadline = domain.ManagerHeadline(sessions[0].Summary)
 		at := sessions[0].At
 		out.LatestAt = &at
 	}
@@ -159,4 +185,42 @@ func nonZeroTime(at time.Time) *time.Time {
 		return nil
 	}
 	return &at
+}
+
+func toTeamActivity(a domain.ManagerActivity) teamActivityDTO {
+	out := teamActivityDTO{State: a.State, Kind: a.Kind, TicketIDs: a.TicketIDs, Host: a.Host, StartedAt: nonZeroTime(a.StartedAt)}
+	if out.State == "" {
+		out.State = domain.ManagerIdle
+	}
+	if out.TicketIDs == nil {
+		out.TicketIDs = []int64{}
+	}
+	return out
+}
+
+// attachPRStatus adds the merge sweep's latest view of each ticket's pull
+// request, counting its checks.
+func attachPRStatus(tickets []teamTicketDTO, snapshot prStatusSnapshot) {
+	byTicket := make(map[int64]prStatus, len(snapshot.PRs))
+	for _, pr := range snapshot.PRs {
+		byTicket[pr.TicketID] = pr
+	}
+	for i := range tickets {
+		pr, ok := byTicket[tickets[i].ID]
+		if !ok {
+			continue
+		}
+		out := &teamPRDTO{URL: pr.URL, Verdict: pr.Verdict, Reason: pr.Reason, ChecksTotal: len(pr.Checks)}
+		for _, check := range pr.Checks {
+			if check.Status != "COMPLETED" {
+				continue
+			}
+			out.ChecksDone++
+			switch check.Conclusion {
+			case "FAILURE", "TIMED_OUT", "CANCELLED", "STARTUP_FAILURE", "ERROR", "ACTION_REQUIRED":
+				out.ChecksFailed++
+			}
+		}
+		tickets[i].PR = out
+	}
 }

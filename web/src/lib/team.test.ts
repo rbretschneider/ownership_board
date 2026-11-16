@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { teamFixture, ticketDetailFixture, TEAM_NOW } from "../components/team/teamFixture";
 import {
-  activityLines, formatTokens, hostLoad, humanizeDoing, linkPath, runnerEngine, runnerShortName, ticketClock, ticketRole, ticketWhere,
+  activityLines, formatTokens, hostLoad, humanizeDoing, linkPath, managerTargets, runnerEngine, runnerShortName, sortByActivity, ticketActivity,
+  ticketClock, ticketRole,
 } from "./team";
 
 describe("runner labels", () => {
@@ -14,6 +15,12 @@ describe("runner labels", () => {
     expect(runnerEngine({ name: "loop", model: "" })).toBe("Model not reported");
   });
 
+  it("takes the provider from the runner's pool and says when it escalated to the other family", () => {
+    expect(runnerEngine({ name: "@worker/7/codex_1", model: "opus [escalated:2]" })).toBe("Codex · opus · escalated to Claude");
+    expect(runnerEngine({ name: "@worker/7/claude_1", model: "gpt-test" })).toBe("Claude · gpt-test · escalated to Codex");
+    expect(runnerEngine({ name: "@worker/7/codex_2", model: "" })).toBe("Codex");
+  });
+
   it("turns build-server markers and raw signals into one readable line", () => {
     expect(humanizeDoing("build-server:testing:Windows x64 · awaiting Windows")).toBe("Windows x64 build testing");
     expect(humanizeDoing("repairing the release workflow")).toBe("Repairing the release workflow");
@@ -22,17 +29,42 @@ describe("runner labels", () => {
 });
 
 describe("tickets in flight", () => {
-  it("places a ticket on a host slot, in a host queue or with its runner", () => {
+  it("says what each ticket is doing or waiting on", () => {
     const team = teamFixture();
-    const [running, queued] = team.tickets;
-    expect(ticketWhere(running!, team.build_hosts)).toBe("builder-1 slot 1 · testing");
-    expect(ticketWhere(queued!, team.build_hosts)).toBe("builder-1 queue · 1st");
-    expect(ticketWhere({ ...running!, build: null }, [])).toBe("codex_1");
-    expect(ticketWhere({ ...queued!, build: null, waiting_on: [4] }, [])).toBe("waits on #4");
+    const byId = (id: number) => team.tickets.find((t) => t.id === id)!;
+    const of = (id: number) => ticketActivity(byId(id), team.build_hosts, TEAM_NOW);
+    expect(of(12)).toEqual({ group: "active", text: "Testing on builder-1 slot 1", tone: "accent" });
+    expect(of(16)).toMatchObject({ group: "active", text: "PR open, CI 7/8" });
+    expect(of(13)).toMatchObject({ group: "waiting", text: "1st in builder-1 queue" });
+    expect(of(15)).toMatchObject({ group: "waiting", text: "Waiting on #12" });
+    expect(of(14)).toMatchObject({ group: "blocked", text: "Blocked: Needs the owner: signing certificate expired" });
+    const leased = { ...byId(12), lease: { holder: "@worker/7/codex_1", expires_at: new Date(TEAM_NOW + 60_000).toISOString() }, work_model: "gpt-test · repairing the workflow" };
+    expect(ticketActivity(leased, [], TEAM_NOW)).toMatchObject({ group: "active", text: "codex_1: Repairing the workflow" });
+    const green = { ...byId(16), pr: { ...byId(16).pr!, verdict: "green_owner", checks_done: 8 } };
+    expect(ticketActivity(green, [], TEAM_NOW)).toMatchObject({ group: "waiting", text: "PR green, waiting to merge" });
+    expect(ticketActivity({ ...byId(15), waiting_on: [] }, [], TEAM_NOW).text).toBe("Ready for a runner");
+  });
+
+  it("orders tickets active first, then waiting, then blocked", () => {
+    const team = teamFixture();
+    expect(sortByActivity(team.tickets, team.build_hosts, TEAM_NOW).map(({ ticket }) => ticket.id)).toEqual([12, 16, 15, 13, 14]);
+  });
+
+  it("points the working manager at its tickets, their runners and a named host", () => {
+    const team = teamFixture();
+    expect(managerTargets(team)).toEqual([]);
+    team.manager.activity = { state: "working", kind: "flag", ticket_ids: [12, 99, 13], host: "builder-1", started_at: null };
+    expect(managerTargets(team)).toEqual([
+      { kind: "ticket", key: "12" }, { kind: "runner", key: "@worker/7/codex_1" }, { kind: "ticket", key: "13" }, { kind: "host", key: "builder-1" },
+    ]);
+    team.manager.activity = { ...team.manager.activity, host: "unknown-host", ticket_ids: [] };
+    expect(managerTargets(team)).toEqual([]);
   });
 
   it("shows how long the build has run or waited", () => {
-    const [running, queued] = teamFixture().tickets;
+    const team = teamFixture();
+    const running = team.tickets.find((t) => t.id === 12);
+    const queued = team.tickets.find((t) => t.id === 13);
     expect(ticketClock(running!, TEAM_NOW)).toBe("1h 36m on host");
     expect(ticketClock(queued!, TEAM_NOW)).toBe("queued 1h 06m");
     expect(ticketClock({ ...queued!, build: null }, TEAM_NOW)).toBe("—");

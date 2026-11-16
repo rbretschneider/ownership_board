@@ -193,8 +193,15 @@ about 15 tool calls, and never more than you need.
 
 End with this block and nothing after it. The owner reads it in the app.
 
+Its first line after `MANAGER SUMMARY` is always the headline:
+`HEADLINE: <one plain sentence, at most 100 characters>`. Say what you did or
+found, in words the owner reads at a glance on the Team view: "Merged #12 and
+parked #13 for a scope split.", not fingerprints or a list. The full block
+stays in the history log.
+
 ```
 MANAGER SUMMARY
+HEADLINE: <one plain sentence: what you did or found>
 - #<id> <fingerprint>: why: <one line> | action: <what you did> | expect: <the signal that shows it worked>
 - owner: <anything only the owner can do, or "none">
 ```
@@ -203,6 +210,7 @@ The board review uses this block instead:
 
 ```
 MANAGER SUMMARY
+HEADLINE: <one plain sentence: what the review did or found>
 - moving: <tickets with a live next step, one line each: #id next step>
 - acted: <what you merged, cancelled, re-scoped or parked, and why>
 - stalled: <tickets you could not move, and what they wait for>

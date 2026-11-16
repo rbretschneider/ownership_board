@@ -12,9 +12,10 @@ import (
 // BoardService holds the use cases people and agents share: reading the board
 // and changing tickets.
 type BoardService struct {
-	store  Store
-	clock  Clock
-	writer ticketWriter
+	store    Store
+	clock    Clock
+	writer   ticketWriter
+	activity managerActivity
 }
 
 // MoveInput is a request to put a ticket in a lane.

@@ -74,3 +74,50 @@ func TestTeamRosterIsEmptyOnAQuietBoard(t *testing.T) {
 		t.Fatalf("runners %v, in flight %v", runners, inFlight)
 	}
 }
+
+func TestTeamRosterListsEveryTicketInProgressOrReady(t *testing.T) {
+	now := time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
+	tickets := []app.TicketSummary{
+		{Ticket: domain.Ticket{ID: 1, Lane: domain.LaneInProgress, Stage: domain.StagePR}},
+		{Ticket: domain.Ticket{ID: 2, Lane: domain.LaneInProgress, Stage: domain.StageBuild, BlockedReason: "Needs the owner"}},
+		{Ticket: domain.Ticket{ID: 3, Lane: domain.LaneTodo, Stage: domain.StageReady}, WaitingOn: []int64{1}},
+		{Ticket: domain.Ticket{ID: 4, Lane: domain.LaneTodo, Stage: domain.StageRefine}},
+		{Ticket: domain.Ticket{ID: 5, Lane: domain.LaneMerged, Stage: domain.StageDone}},
+	}
+	_, inFlight := app.TeamRoster(tickets, nil, now)
+	var ids []int64
+	for _, ticket := range inFlight {
+		ids = append(ids, ticket.Ticket.ID)
+	}
+	if len(ids) != 3 || ids[0] != 1 || ids[1] != 2 || ids[2] != 3 {
+		t.Fatalf("in flight = %v, want [1 2 3]", ids)
+	}
+}
+
+func TestManagerActivityIsReportedByTheManagerOnlyAndExpires(t *testing.T) {
+	f := newFixture(t)
+	if _, err := f.board.ReportManagerActivity(f.ctx, owner, app.ManagerActivityInput{State: "idle"}); err == nil {
+		t.Fatal("a person reported manager activity")
+	}
+	for _, bad := range []app.ManagerActivityInput{{State: "busy"}, {State: "working", Kind: "nap"},
+		{State: "working", Kind: "flag", TicketIDs: []int64{-1}}, {State: "working", Kind: "flag", Host: "bad host"}} {
+		if _, err := f.board.ReportManagerActivity(f.ctx, manager, bad); err == nil {
+			t.Fatalf("accepted %+v", bad)
+		}
+	}
+	got, err := f.board.ReportManagerActivity(f.ctx, manager, app.ManagerActivityInput{State: "working", Kind: "flag", TicketIDs: []int64{7, 7, 9}, Host: "builder-1"})
+	if err != nil || len(got.TicketIDs) != 2 || got.Host != "builder-1" {
+		t.Fatalf("working = %+v, %v", got, err)
+	}
+	team, err := f.board.Team(f.ctx)
+	if err != nil || team.Manager.Activity.State != domain.ManagerWorking || len(team.Manager.Activity.TicketIDs) != 2 {
+		t.Fatalf("team activity = %+v, %v", team.Manager.Activity, err)
+	}
+	f.clock.Advance(4 * time.Hour)
+	if team, _ = f.board.Team(f.ctx); team.Manager.Activity.State != domain.ManagerIdle {
+		t.Fatalf("stale working report still shown: %+v", team.Manager.Activity)
+	}
+	if _, err := f.board.ReportManagerActivity(f.ctx, manager, app.ManagerActivityInput{State: "idle"}); err != nil {
+		t.Fatal(err)
+	}
+}
