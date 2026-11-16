@@ -122,7 +122,7 @@ func (s *BuildJobService) Submit(ctx context.Context, m domain.BuildJobSubmissio
 			needed = 0
 		}
 		if total > s.StorageLimit || needed > s.StorageLimit-total {
-			return domain.TooLargef("bundle storage exceeds 2 GiB capacity")
+			return domain.TooLargef("bundle storage exceeds its %d MiB capacity (BUILD_BUNDLE_STORAGE_GIB)", s.StorageLimit>>20)
 		}
 		uploadLock, e = s.bundles.TryLockUpload(token)
 		if e != nil {
