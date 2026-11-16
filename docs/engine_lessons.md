@@ -114,6 +114,14 @@ closes a seam.
 | Cause | Workers load their code at start, and restarts waited for an idle moment. |
 | Fix | **Mitigated:** a script restarts each worker as soon as it is idle. **Open:** the worker should reload itself between passes. |
 
+### Infrastructure blamed on a stale PR head
+
+| | |
+|---|---|
+| Symptom | Overnight, the manager steered tickets well but missed every infrastructure blocker: bundle storage refusing uploads, a release dry run failing, a CI job silently cancelled by a concurrency group's single pending slot. Each time it blamed a stale PR head, and once it cancelled CI on a PR's current head with a raw provider token. |
+| Cause | The manager could not see CI or the build infrastructure through the board, so it guessed from the ticket's timeline. Its CI access was a hand-made token with no guards. |
+| Fix | **Permanent:** CI through the board. `ci_status`, `ci_failed_log`, `ci_rerun` and `ci_cancel` use the board's own connection under server-side guards (never cancel a current head, re-run only completed runs, every action on the ticket's history), and CI sensors raise flags for queued, evicted and failed runs and offline runners. The runbook checks infrastructure first. Build-host ssh is opt in, logged, and refuses deletes. |
+
 ## Principles these taught
 
 1. **One source of truth per fact.** A verdict, a waiver or an answer kept in two

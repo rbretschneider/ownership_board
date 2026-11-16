@@ -15,6 +15,17 @@ seconds. If it comes back, the next attempt runs on MANAGER_RETRY_MODEL
 (stronger). After MANAGER_MAX_ATTEMPTS attempts the loop stops spending on it;
 the session's last action parks the ticket for the owner.
 
+Every pass also reads the board's CI sensors (GET /api/v1/manager/ci-flags):
+CI jobs queued longer than MANAGER_CI_QUEUE_MINUTES, runs cancelled on a
+current head outside the board, failed default-branch or release runs, and
+offline runners. They cost provider API calls, not tokens. MANAGER_CI_SENSORS=0
+turns them off.
+
+Build-host repair over ssh is opt in: set MANAGER_BUILD_HOST_SSH_HOST,
+MANAGER_BUILD_HOST_SSH_USER and MANAGER_BUILD_HOST_SSH_KEY (see
+build_host_ssh.py). Without them a session can only read build-job results
+through the board and file infrastructure tickets.
+
 Usage:
   OWNERSHIP_URL=https://board.example.com OWNERSHIP_TOKEN=ob_pat_... \\
     python3 agent/manager/board_manager.py
@@ -31,6 +42,8 @@ import sys
 import time
 import urllib.request
 from pathlib import Path
+
+import build_host_ssh
 
 URL = os.environ.get('OWNERSHIP_URL', '').rstrip('/')
 TOKEN = os.environ.get('OWNERSHIP_TOKEN', '')
@@ -54,6 +67,10 @@ SENSORS = os.environ.get('MANAGER_SENSORS', '')
 # not only the flags, and acts as the team lead ("Board review" in board-manager.md).
 REVIEW_INTERVAL = int(os.environ.get('MANAGER_REVIEW_INTERVAL', '0'))
 REVIEW_KEY = '_review'
+# CI sensors (on unless "0"): the board reads the repos' CI with its own connection.
+CI_SENSORS = os.environ.get('MANAGER_CI_SENSORS', '1') != '0'
+CI_QUEUE_MINUTES = int(os.environ.get('MANAGER_CI_QUEUE_MINUTES', '30'))
+BUILD_HOST_SCRIPT = Path(__file__).resolve().parent / 'build_host_ssh.py'
 CLAUDE_ARGS = os.environ.get('CLAUDE_ARGS', '').split()
 
 
@@ -200,8 +217,13 @@ def session_model(flags):
 
 
 def flag_line(flag):
-    where = (f"#{flag['ticket_id']} [{flag['kind']}] {flag.get('title', '')} (stage {flag.get('stage', '?')})"
-             if flag.get('ticket_id') else f"deployment [{flag['kind']}]")
+    if flag.get('ticket_id'):
+        where = f"#{flag['ticket_id']} [{flag['kind']}] {flag.get('title', '')} (stage {flag.get('stage', '?')})"
+    elif flag.get('repo_id'):
+        # A CI flag about a repository itself: its default branch, releases or runners.
+        where = f"repo {flag['repo_id']} {flag.get('title', '')} [{flag['kind']}]"
+    else:
+        where = f"deployment [{flag['kind']}]"
     return (f"- {where}: {flag['detail']}. Fingerprint {flag['fingerprint']}; "
             f"earlier attempts on it: {flag.get('attempts', 0)}.")
 
@@ -224,7 +246,34 @@ def sensor_flags():
     return good
 
 
-def build_prompt(repo_id, flags, budget_left, local_runbook=None, review=False):
+def ci_flags():
+    """The board's CI sensor flags, or [] when they are off or the call fails: CI
+    trouble must never stop the board's own flags from being handled. What the
+    board could not read (a refused token, a missing permission) is logged."""
+    if not CI_SENSORS:
+        return []
+    try:
+        result = api('GET', f'/api/v1/manager/ci-flags?queue_minutes={CI_QUEUE_MINUTES}')
+    except Exception as error:  # noqa: BLE001 - an older board answers 404
+        log(f'CI sensors failed: {type(error).__name__}: {error}')
+        return []
+    for note in result.get('notes') or []:
+        log(f'CI sensors: {note}')
+    return [f for f in result.get('flags') or [] if isinstance(f, dict) and f.get('kind') and f.get('fingerprint')]
+
+
+def build_host_section(access):
+    """The prompt section that says whether this session may act on the build host."""
+    if access is None:
+        return ('\n## Build host\n\nBuild-host repair is off: you have no access to the build host. Read build-job '
+                'results through the board (get_ticket, ci_status, ci_failed_log) and file an infrastructure ticket, '
+                'or block with "Needs the owner:" naming the exact host fault.\n')
+    return ('\n## Build host\n\nBuild-host repair is on, as the account `%s`. Run every build-host command through '
+            '`python3 %s "<command>"` and nothing else: it logs each command, and it refuses deletes. Never delete; '
+            'park or move aside (quarantine) instead, and follow "Repairs".\n') % (access['user'], BUILD_HOST_SCRIPT.as_posix())
+
+
+def build_prompt(repo_id, flags, budget_left, local_runbook=None, review=False, build_host=None):
     lines = '\n'.join(flag_line(f) for f in flags) or '- none'
     runbook = COMMAND.read_text()
     if runbook.startswith('---'):
@@ -238,6 +287,7 @@ def build_prompt(repo_id, flags, budget_left, local_runbook=None, review=False):
         scope = f'Repo id {repo_id}.' if repo_id else 'Deployment flags (no ticket; from the deployment sensors).'
         prompt = (runbook + f'\n\n## This session\n\n{scope} Budget left today: ${budget_left:.2f}. '
                   f'Flags to handle:\n\n{lines}\n')
+    prompt += build_host_section(build_host)
     if local_runbook is None and LOCAL_RUNBOOK:
         local_runbook = Path(LOCAL_RUNBOOK).read_text()
     if local_runbook:
@@ -253,7 +303,7 @@ def review_due(state, now):
 def run_session(repo_id, flags, budget_left, review=False):
     """One model session for one repo's flags, or the board review. Returns (cost in USD, model, summary)."""
     model = MODEL if review else session_model(flags)
-    prompt = build_prompt(repo_id, flags, budget_left, review=review)
+    prompt = build_prompt(repo_id, flags, budget_left, review=review, build_host=build_host_ssh.build_host_access())
     log(f'board review on {model}' if review else f'repo {repo_id}: {len(flags)} flag(s) on {model}')
     try:
         result = subprocess.run(['claude', '-p', prompt, '--model', model, '--output-format', 'json', *CLAUDE_ARGS],
@@ -277,14 +327,21 @@ def run_session(repo_id, flags, budget_left, review=False):
 def main():
     if not URL or not TOKEN:
         sys.exit('set OWNERSHIP_URL and OWNERSHIP_TOKEN (a Board manager token)')
-    log(f'board manager online: every {INTERVAL}s, {MODEL} then {RETRY_MODEL}, max {MAX_ATTEMPTS} attempts per flag')
+    try:
+        access = build_host_ssh.build_host_access()
+    except build_host_ssh.AccessError as error:
+        sys.exit(f'build-host ssh settings: {error}')
+    log(f'board manager online: every {INTERVAL}s, {MODEL} then {RETRY_MODEL}, max {MAX_ATTEMPTS} attempts per flag; '
+        f'CI sensors {"on" if CI_SENSORS else "off"}; build-host repair {"on" if access else "off"}')
+    if access and build_host_ssh.is_admin(access):
+        log(f'warning: build-host repair logs in as {access["user"]}; prefer a limited build account')
     while True:
         try:
             status = api('GET', '/api/v1/manager/status')
             if not status['enabled']:
                 time.sleep(INTERVAL)
                 continue
-            flags = api('GET', '/api/v1/manager/flags')['flags'] + sensor_flags()
+            flags = api('GET', '/api/v1/manager/flags')['flags'] + ci_flags() + sensor_flags()
             state, now = load_state(), time.time()
             # Forget flags that cleared, so a new problem on the same ticket starts fresh.
             # Keys starting with "_" are the loop's own bookkeeping (the review timer).

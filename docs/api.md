@@ -67,6 +67,7 @@ type User = { id: number; name: string; email: string; is_admin: boolean; sso_li
 | GET    | `/api/v1/events/stream` | | Server-sent events |
 | GET    | `/api/v1/team` | | `Team`, for the Team view |
 | POST   | `/api/v1/manager/usage` | `{cost_usd, model, summary, headline?}` | Manager token only. Records one session. A `headline` is stored as the summary's first `HEADLINE:` line unless the summary already has one. |
+| GET    | `/api/v1/manager/ci-flags?repo=<id>&queue_minutes=<n>` | | Manager token or a person. `{flags, notes}`: the CI sensors over every repo with an open autonomous ticket. Flags have the `manager/flags` shape with kind `ci_queued`, `ci_cancelled`, `ci_failed` or `runner_offline`; `ticket_id` is 0 for a flag about the repo itself. `notes` name what the board could not read (a refused token, runners needing admin read). `queue_minutes` is 5 to 1440, default 30. The board calls the repos' providers here, so poll it no more often than the manager loop does. |
 | POST   | `/api/v1/manager/activity` | `{state, kind?, ticket_ids?, host?, started_at?}` | Manager token only. `working` (with `kind` `flag`, `review` or `repair`) when a session starts, `idle` when it ends. Kept in memory for the Team view. |
 
 `GET /team` returns one snapshot of the autonomous team:

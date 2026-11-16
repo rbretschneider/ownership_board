@@ -84,6 +84,75 @@ class DueFlagsTests(unittest.TestCase):
         self.assertEqual(m.due_flags([self.flag('a')], state, 10**9), [])
 
 
+class CIFlagTests(unittest.TestCase):
+    def call_with(self, answer):
+        calls = []
+        original = m.api
+
+        def fake(method, path, body=None):
+            calls.append(path)
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+        m.api = fake
+        try:
+            return m.ci_flags(), calls
+        finally:
+            m.api = original
+
+    def test_ci_flags_join_the_pass_with_the_queue_limit(self):
+        flag = {'ticket_id': 64, 'repo_id': 2, 'kind': 'ci_cancelled', 'fingerprint': 'ci_cancelled:r2:run:5', 'detail': 'd'}
+        flags, calls = self.call_with({'flags': [flag, {'kind': 'x'}], 'notes': ['acme/api: CI runners not readable']})
+        self.assertEqual(flags, [flag])
+        self.assertEqual(calls, [f'/api/v1/manager/ci-flags?queue_minutes={m.CI_QUEUE_MINUTES}'])
+
+    def test_a_failing_ci_sensor_never_breaks_the_pass(self):
+        flags, _ = self.call_with(OSError('HTTP Error 404'))
+        self.assertEqual(flags, [])
+
+    def test_ci_sensors_can_be_turned_off(self):
+        original = m.CI_SENSORS
+        try:
+            m.CI_SENSORS = False
+            flags, calls = self.call_with({'flags': [{'kind': 'ci_failed', 'fingerprint': 'f', 'detail': 'd'}]})
+        finally:
+            m.CI_SENSORS = original
+        self.assertEqual((flags, calls), ([], []))
+
+    def test_a_repo_level_ci_flag_names_its_repo(self):
+        line = m.flag_line({'repo_id': 2, 'title': 'acme/api', 'kind': 'ci_failed', 'detail': 'main is red', 'fingerprint': 'f'})
+        self.assertIn('repo 2 acme/api [ci_failed]', line)
+
+
+class BuildHostPromptTests(unittest.TestCase):
+    def test_without_ssh_settings_the_session_may_only_read_and_file(self):
+        prompt = m.build_prompt(2, [], 5.0, local_runbook='')
+        self.assertIn('Build-host repair is off', prompt)
+        self.assertNotIn('build_host_ssh.py', prompt)
+
+    def test_with_ssh_settings_the_session_goes_through_the_logged_wrapper(self):
+        prompt = m.build_prompt(2, [], 5.0, local_runbook='', build_host={'host': 'h', 'user': 'builder', 'key': 'k'})
+        self.assertIn('Build-host repair is on, as the account `builder`', prompt)
+        self.assertIn('build_host_ssh.py', prompt)
+        self.assertIn('Never delete', prompt)
+
+
+class RunbookRuleTests(unittest.TestCase):
+    """The runbook rules every session must get. 2026-11-16: a direction deferred
+    acceptance tests for code that still shipped, and the follow-up was never filed."""
+
+    def test_a_split_never_defers_tests_for_code_that_ships(self):
+        prompt = m.build_prompt(2, [], 5.0, local_runbook='')
+        for rule in ('**Splitting rules**', 'Never defer a test for code\n  that ships',
+                     '**File the follow-up in the same session**', '**Only splittable scope moves:**',
+                     'under "Splitting rules"'):
+            self.assertIn(rule, prompt)
+
+    def test_infrastructure_is_checked_before_a_stale_head_is_blamed(self):
+        prompt = m.build_prompt(2, [], 5.0, local_runbook='')
+        self.assertIn('## Infrastructure checklist', prompt)
+        self.assertIn('Never call a PR head stale without `ci_status`', prompt)
+
 
 class SummaryTests(unittest.TestCase):
     def test_the_summary_block_is_what_the_owner_reads(self):

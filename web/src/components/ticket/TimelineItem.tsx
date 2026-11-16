@@ -5,6 +5,7 @@ import {
   CircleCheck,
   CircleDot,
   CirclePlus,
+  CircleSlash,
   DraftingCompass,
   FileText,
   GitMerge,
@@ -47,10 +48,11 @@ const EVENT_ICONS: Record<Exclude<TimelineType, "comment">, typeof Bot> = {
   unblocked: Play,
   design: DraftingCompass,
   dependencies_met: GitMerge,
+  ci: CircleSlash,
 };
 
 /** Event types whose body is shown under the line, as plain text. */
-const DETAIL_TYPES: ReadonlySet<TimelineType> = new Set(["questions", "decision", "approved", "changes_requested", "blocked", "unblocked"]);
+const DETAIL_TYPES: ReadonlySet<TimelineType> = new Set(["questions", "decision", "approved", "changes_requested", "blocked", "unblocked", "ci"]);
 
 const ACTOR_ICONS: Record<ActorKind, typeof Bot> = { agent: Bot, human: User, system: Settings2 };
 
@@ -129,8 +131,24 @@ function describe(entry: TimelineEntry, lanes: Lane[], stages: Stage[]): string 
       return "updated the design";
     case "dependencies_met":
       return dependenciesMetText(entry.data);
+    case "ci":
+      return describeCIAction(entry);
     default:
       return String(entry.type).replace(/_/g, " ");
+  }
+}
+
+/** A CI action taken through the board: data {action, run_id, job_id, workflow}. */
+function describeCIAction(entry: TimelineEntry): string {
+  const workflow = typeof entry.data["workflow"] === "string" && entry.data["workflow"] !== "" ? ` (${entry.data["workflow"]})` : "";
+  const run = `CI run ${String(entry.data["run_id"] ?? "?")}${workflow}`;
+  switch (entry.data["action"]) {
+    case "cancel_run":
+      return `cancelled ${run}`;
+    case "rerun_job":
+      return `re-ran job ${String(entry.data["job_id"] ?? "?")} of ${run}`;
+    default:
+      return `re-ran ${run}`;
   }
 }
 

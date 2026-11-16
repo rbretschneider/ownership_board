@@ -343,7 +343,8 @@ export type TimelineType =
   | "blocked"
   | "unblocked"
   | "design"
-  | "dependencies_met";
+  | "dependencies_met"
+  | "ci";
 
 /** Who performed a timeline event. */
 export type ActorKind = "human" | "agent" | "system";
