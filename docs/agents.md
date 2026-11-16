@@ -354,6 +354,23 @@ worker stuck in an error loop. A flag may name a `ticket_id` and `repo_id`.
 Flags without a ticket get a session of their own. A sensor that fails or
 prints bad JSON is logged and skipped.
 
+**Board review (opt in).** Set `MANAGER_REVIEW_INTERVAL` (seconds; 3600 for
+hourly) to make the manager the team lead, not only a flag handler. On that
+timer it starts one session that reads the whole board. Its objectives, in
+order, are cost, progress and speed, and it never trades quality for them. In
+that session it:
+- makes sure every open autonomous ticket has a live next step;
+- merges PRs whose exact head the board verified and whose checks all passed;
+- cancels duplicate or obsolete runs;
+- re-scopes tickets that cycle on their own size into a core plus a linked
+  follow-up;
+- parks loops.
+
+Merging and cancelling need access the deployment gives it through
+`MANAGER_LOCAL_RUNBOOK`. Without that, it reports those PRs to you. Each
+review's summary (moving, acted, stalled, cost, owner) appears with the other
+manager sessions in Settings > Board manager.
+
 ## Dependencies
 
 `A depends_on B` means agents cannot claim A, in any stage, until B is in
