@@ -60,7 +60,11 @@ func TestTeamShowsRunnersTicketsHostsAndManager(t *testing.T) {
 	seedTeamBuildJob(t, browser, strings.Repeat("2", 64), 2, hostID, false)
 
 	managerToken := browser.expect(http.StatusCreated, "POST", "/api/v1/tokens", `{"name":"manager","is_manager":true}`)["secret"].(string)
-	browser.asAgent(managerToken).expect(http.StatusOK, "POST", "/api/v1/manager/usage", `{"cost_usd":0.25,"model":"sonnet","summary":"Reviewed the board"}`)
+	browser.asAgent(managerToken).expect(http.StatusOK, "POST", "/api/v1/manager/usage", `{"cost_usd":0.25,"model":"sonnet","summary":"Reviewed the board","headline":"Merged nothing; all green"}`)
+	managerClient := browser.asAgent(managerToken)
+	worker.expect(http.StatusForbidden, "POST", "/api/v1/manager/activity", `{"state":"idle"}`)
+	managerClient.expect(http.StatusBadRequest, "POST", "/api/v1/manager/activity", `{"state":"working","kind":"nap"}`)
+	managerClient.expect(http.StatusOK, "POST", "/api/v1/manager/activity", `{"state":"working","kind":"flag","ticket_ids":[2],"host":"Builder"}`)
 
 	team := browser.expect(http.StatusOK, "GET", "/api/v1/team", "")
 
@@ -102,8 +106,12 @@ func TestTeamShowsRunnersTicketsHostsAndManager(t *testing.T) {
 		t.Fatalf("queued job = %v", job)
 	}
 
+	activity := team["manager"].(map[string]any)["activity"].(map[string]any)
+	if activity["state"] != "working" || activity["kind"] != "flag" || activity["host"] != "Builder" || len(activity["ticket_ids"].([]any)) != 1 {
+		t.Fatalf("activity = %v", activity)
+	}
 	manager := team["manager"].(map[string]any)
-	if manager["latest_summary"] != "Reviewed the board" || manager["latest_at"] == nil || len(manager["sessions"].([]any)) != 1 ||
+	if manager["latest_headline"] != "Merged nothing; all green" || !strings.HasPrefix(manager["latest_summary"].(string), "HEADLINE: Merged nothing; all green\nReviewed the board") || manager["latest_at"] == nil || len(manager["sessions"].([]any)) != 1 ||
 		manager["today"].(map[string]any)["cost_usd"] != 0.25 {
 		t.Fatalf("manager = %v", manager)
 	}

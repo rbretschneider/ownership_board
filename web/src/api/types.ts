@@ -797,6 +797,28 @@ export interface TeamRunner {
 /** A ticket in flight with the runner that holds or waits on it ("" for none). */
 export interface TeamTicket extends TicketSummary {
   holder: string;
+  /** The merge sweep's view of the ticket's pull request; null or absent when it has none. */
+  pr?: TeamPR | null;
+}
+
+/** A ticket's open pull request as the merge sweep last saw it. */
+export interface TeamPR {
+  url: string;
+  /** running, no_checks, draft, checking_mergeable, checks_incomplete, green_owner, merged, merge_failed, closed or repair. */
+  verdict: string;
+  reason: string;
+  checks_total: number;
+  checks_done: number;
+  checks_failed: number;
+}
+
+/** What the manager is acting on right now, as its loop reported it. */
+export interface ManagerActivity {
+  state: "working" | "idle";
+  kind: "" | "flag" | "review" | "repair";
+  ticket_ids: number[];
+  host: string;
+  started_at: string | null;
 }
 
 /** A build job running on a host. */
@@ -832,9 +854,21 @@ export interface TeamBuildHost {
 /** The board manager on the Team view: status, flags and recent sessions. */
 export interface TeamManager extends ManagerStatus {
   open_flags: number;
+  /** The latest session's one-line headline. Absent from older servers. */
+  latest_headline?: string;
+  /** Absent from older servers. */
+  activity?: ManagerActivity;
   latest_summary: string;
   latest_at: string | null;
-  sessions: ManagerSession[];
+  sessions: TeamManagerSession[];
+}
+
+/** One manager history entry: the session, its headline, and whether it uses the structured format. */
+export interface TeamManagerSession extends ManagerSession {
+  /** Absent from older servers. */
+  headline?: string;
+  /** The summary has a HEADLINE line and markdown sections. Absent from older servers. */
+  structured?: boolean;
 }
 
 /** GET /team: the manager, runners, tickets in flight and build hosts. */

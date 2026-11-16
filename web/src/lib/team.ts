@@ -1,6 +1,6 @@
-import type { CIRunner, RunnerState, StageId, TeamBuildHost, TeamRunner, TeamTicket, TimelineEntry } from "../api/types";
+import type { CIRunner, RunnerState, StageId, Team, TeamBuildHost, TeamRunner, TeamTicket, TimelineEntry } from "../api/types";
 import { formatElapsed } from "./buildClock";
-import { modelFamily, parseWorkModel } from "./workModel";
+import { modelFamily, parseWorkModel, type ModelFamily } from "./workModel";
 
 /** "@worker/7/codex_1" reads as "codex_1"; other names stay as they are. */
 export function runnerShortName(name: string): string {
@@ -10,11 +10,27 @@ export function runnerShortName(name: string): string {
 
 /** "Claude · opus-x" or "Codex · gpt-y": provider and model on one line. */
 export function runnerEngine(runner: Pick<TeamRunner, "name" | "model">): string {
-  const model = parseWorkModel(runner.model)?.name ?? "";
-  const family = modelFamily(model) ?? modelFamily(runnerShortName(runner.name).replace(/[_-]/g, " "));
+  const parsed = parseWorkModel(runner.model);
+  const model = parsed?.name ?? "";
+  // The runner's own name says which pool it is; the model is what it reported.
+  // A Codex runner that escalated a repair to Claude says so.
+  const pool = runnerFamily(runner.name);
+  const modelSide = modelFamily(model);
+  const family = pool ?? modelSide;
   const provider = family === "claude" ? "Claude" : family === "codex" ? "Codex" : "";
-  const escalated = parseWorkModel(runner.model)?.escalatedAfter !== undefined ? " · escalated" : "";
-  return [provider, model].filter((part) => part !== "").join(" · ") + escalated || "Model not reported";
+  let tail = parsed?.escalatedAfter !== undefined ? " · escalated" : "";
+  if (pool !== undefined && modelSide !== undefined && modelSide !== pool) {
+    tail = ` · escalated to ${modelSide === "claude" ? "Claude" : "Codex"}`;
+  }
+  return [provider, model].filter((part) => part !== "").join(" · ") + tail || "Model not reported";
+}
+
+/** The pool a runner belongs to, from its name: "codex_1" or "claude_2". */
+export function runnerFamily(name: string): ModelFamily | undefined {
+  const short = runnerShortName(name).toLowerCase();
+  if (short.startsWith("codex")) return "codex";
+  if (short.startsWith("claude")) return "claude";
+  return undefined;
 }
 
 const PHASES: Record<string, string> = {
@@ -60,20 +76,102 @@ export function ticketRole(stage: StageId): { label: string; tone: "accent" | "g
   }
 }
 
-/** Where a ticket in flight is: on a host slot, in a host queue, or with its runner. */
-export function ticketWhere(ticket: TeamTicket, hosts: TeamBuildHost[]): string {
+/** Whether a ticket in flight is moving, waiting, or blocked, in that display order. */
+export type ActivityGroup = "active" | "waiting" | "blocked";
+
+/** What a ticket in flight is doing or waiting on, in one line. */
+export interface TicketActivity {
+  group: ActivityGroup;
+  text: string;
+  tone: "accent" | "green" | "amber" | "grey";
+}
+
+
+/**
+ * What a ticket in flight is doing: blocked (with its reason's first line),
+ * on a build-host slot, held by a runner, a PR with CI running, in a build
+ * queue, or waiting on a dependency, the owner or a runner.
+ */
+export function ticketActivity(ticket: TeamTicket, hosts: TeamBuildHost[], now: number): TicketActivity {
+  if (ticket.blocked_reason.trim() !== "") {
+    const reason = ticket.blocked_reason.split("\n").find((line) => line.trim() !== "")?.trim() ?? "";
+    return { group: "blocked", text: `Blocked: ${clip(reason, 90)}`, tone: "amber" };
+  }
   for (const host of hosts) {
     const slot = host.running.findIndex((job) => job.ticket_id === ticket.id);
     if (slot >= 0) {
-      const phase = host.running[slot]?.phase;
-      return `${host.name} slot ${slot + 1}${phase ? ` · ${phase}` : ""}`;
+      const phase = host.running[slot]?.phase || "running";
+      return { group: "active", text: `${capitalize(phase)} on ${host.name} slot ${slot + 1}`, tone: "accent" };
     }
-    const position = host.queued.findIndex((job) => job.ticket_id === ticket.id);
-    if (position >= 0) return `${host.name} queue · ${ordinal(position + 1)}`;
   }
-  if (ticket.build?.status === "queued") return "build queue";
-  if (ticket.holder !== "") return runnerShortName(ticket.holder);
-  return ticket.waiting_on.length > 0 ? `waits on ${ticket.waiting_on.map((id) => `#${id}`).join(", ")}` : "unassigned";
+  const leased = ticket.lease !== null && Date.parse(ticket.lease.expires_at) > now;
+  if (leased && ticket.holder !== "" && !isAwaiting(ticket.work_model)) {
+    const signal = humanizeDoing((ticket.work_model ?? "").split(" · ").slice(1).join(" · "));
+    return { group: "active", text: `${runnerShortName(ticket.holder)}: ${signal || "working"}`, tone: "accent" };
+  }
+  const pr = ticket.pr;
+  if (pr && pr.checks_total > 0 && pr.checks_done < pr.checks_total && pr.verdict !== "merged" && pr.verdict !== "closed") {
+    return { group: "active", text: `PR open, CI ${pr.checks_done}/${pr.checks_total}${pr.checks_failed > 0 ? `, ${pr.checks_failed} failed` : ""}`, tone: "accent" };
+  }
+  for (const host of hosts) {
+    const position = host.queued.findIndex((job) => job.ticket_id === ticket.id);
+    if (position >= 0) {
+      return { group: "waiting", text: `${ordinal(position + 1)} in ${host.name} queue`, tone: "amber" };
+    }
+  }
+  if (ticket.build?.status === "queued") return { group: "waiting", text: "In the build queue", tone: "amber" };
+  if (ticket.waiting_on.length > 0) {
+    return { group: "waiting", text: `Waiting on ${ticket.waiting_on.map((id) => `#${id}`).join(", ")}`, tone: "grey" };
+  }
+  if (pr) {
+    const text = pr.verdict === "green_owner" ? "PR green, waiting to merge"
+      : pr.verdict === "repair" ? `PR needs repair${pr.reason ? ` (${pr.reason.replace(/_/g, " ")})` : ""}`
+      : pr.checks_failed > 0 ? `PR open, ${pr.checks_failed} check${pr.checks_failed === 1 ? "" : "s"} failed`
+      : "PR open";
+    return { group: "waiting", text, tone: pr.verdict === "green_owner" ? "green" : "grey" };
+  }
+  if (ticket.needs_owner) return { group: "waiting", text: ticket.open_questions > 0 ? "Questions for the owner" : "Waiting for the owner", tone: "amber" };
+  if (ticket.holder !== "") return { group: "waiting", text: `${runnerShortName(ticket.holder)}: ${humanizeDoing((ticket.work_model ?? "").split(" · ").slice(1).join(" · ")) || "waiting"}`, tone: "amber" };
+  return { group: "waiting", text: ticket.stage === "ready" ? "Ready for a runner" : "Waiting for a runner", tone: "grey" };
+}
+
+
+function isAwaiting(workModel: string | undefined): boolean {
+  return /\bawaiting\b/i.test(workModel ?? "");
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function clip(text: string, limit: number): string {
+  return text.length > limit ? `${text.slice(0, limit - 1).trimEnd()}…` : text;
+}
+
+/** One line the manager's activity draws: from the manager card to a target card. */
+export interface ManagerTarget {
+  kind: "ticket" | "runner" | "host";
+  /** The target's data attribute selector value: ticket id, runner name or host name. */
+  key: string;
+}
+
+/**
+ * What the working manager points at: each ticket it acts on that is on the
+ * view, the runner holding that ticket, and the build host it names. Nothing
+ * when it is idle or reviewing the whole board with no target.
+ */
+export function managerTargets(team: Pick<Team, "manager" | "tickets" | "runners" | "build_hosts">): ManagerTarget[] {
+  const activity = team.manager.activity;
+  if (!activity || activity.state !== "working") return [];
+  const targets: ManagerTarget[] = [];
+  for (const id of activity.ticket_ids) {
+    if (!team.tickets.some((t) => t.id === id)) continue;
+    targets.push({ kind: "ticket", key: String(id) });
+    const runner = team.runners.find((r) => r.ticket_id === id);
+    if (runner && !targets.some((t) => t.kind === "runner" && t.key === runner.name)) targets.push({ kind: "runner", key: runner.name });
+  }
+  if (activity.host !== "" && team.build_hosts.some((h) => h.name === activity.host)) targets.push({ kind: "host", key: activity.host });
+  return targets;
 }
 
 /** "2h 08m on host", "queued 1h 06m" or "—": how long the ticket's build has run or waited. */
@@ -221,4 +319,54 @@ export function ciRunnerState(runner: CIRunner): { text: string; tone: "accent" 
 /** The labels worth showing: every label but the generic "self-hosted". */
 export function ciRunnerLabels(runner: CIRunner): string {
   return runner.labels.filter((label) => label.toLowerCase() !== "self-hosted").join(", ");
+}
+
+/** The model chip a runner card shows, as the Board card does: the model, ranked when escalated. */
+export function runnerModelChip(runner: Pick<TeamRunner, "model">): { name: string; escalatedAfter?: number } | undefined {
+  return parseWorkModel(runner.model);
+}
+
+/** The runner's pool and, when it escalated to the other family, that too: "Codex runner · escalated to Claude". */
+export function runnerPool(runner: Pick<TeamRunner, "name" | "model">): string {
+  const used = modelFamily(parseWorkModel(runner.model)?.name);
+  const pool = runnerFamily(runner.name) ?? used;
+  const label = (family: ModelFamily | undefined) => (family === "claude" ? "Claude" : family === "codex" ? "Codex" : "");
+  const base = label(pool) || "Agent";
+  return used !== undefined && pool !== undefined && used !== pool ? `${base} runner · escalated to ${label(used)}` : `${base} runner`;
+}
+
+/** One manager history entry, ready to show: a headline and a body to render. */
+export interface HistoryEntry {
+  headline: string;
+  /** Markdown for structured summaries; plain text (one item per line) for older ones. */
+  body: string;
+  isMarkdown: boolean;
+}
+
+/**
+ * Splits a session summary into its headline and body. Structured summaries
+ * (a HEADLINE line, then markdown sections) render as markdown. Older ones
+ * fall back to the first sentence as the headline and the rest as plain text,
+ * with " | " separators turned into line breaks.
+ */
+export function historyEntry(session: { summary: string; headline?: string; structured?: boolean }): HistoryEntry {
+  const lines = session.summary.split("\n");
+  const isLabel = (line: string) => /^(board review|manager summary)$/i.test(line.replace(/[*#`]/g, "").trim());
+  if (session.structured === true) {
+    const at = lines.findIndex((line) => /^[\s#*>-]*headline:/i.test(line));
+    const body = lines.slice(at + 1).filter((line) => !isLabel(line)).join("\n").trim();
+    return { headline: session.headline ?? "", body, isMarkdown: true };
+  }
+  const text = lines.filter((line) => !isLabel(line)).join("\n").trim();
+  const headline = session.headline ?? firstSentenceOf(text);
+  const plain = headline.endsWith("…") ? headline.slice(0, -1) : headline;
+  const rest = plain !== "" && text.startsWith(plain) ? text.slice(plain.length) : text;
+  const body = rest.split(/\s+\|\s+/).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return { headline, body, isMarkdown: false };
+}
+
+function firstSentenceOf(text: string): string {
+  const line = text.split("\n").find((l) => l.trim() !== "")?.trim() ?? "";
+  const end = line.search(/[.!?](\s|$)/);
+  return end >= 0 ? line.slice(0, end + 1) : line;
 }

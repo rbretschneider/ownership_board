@@ -146,7 +146,7 @@ button.team-card:focus-visible,
   padding: 3px 10px;
 }
 
-.team-manager__summary {
+.team-manager__headline {
   font-size: 14px;
   line-height: 1.55;
   color: var(--t-text-2);
@@ -186,31 +186,10 @@ button.team-card:focus-visible,
   color: var(--t-text-3);
 }
 
-.team-link-text {
+/* Hints and metadata stay neutral: only real links get the link color. */
+.team-hint {
   font-size: 12px;
-  color: var(--t-accent-text);
-}
-
-/* The feed from the manager down to the runners. */
-.team-feed {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin: -24px 0;
-}
-
-.team-feed__drop {
-  width: 2px;
-  height: 24px;
-  background-image: linear-gradient(180deg, transparent 0, transparent 50%, var(--t-accent) 50%, var(--t-accent) 100%);
-  background-size: 2px 24px;
-  animation: team-travel 1.4s linear infinite;
-}
-
-.team-feed__rail {
-  width: 76%;
-  height: 1px;
-  background: var(--t-border-hi);
+  color: var(--t-text-3);
 }
 
 .team-runners {
@@ -264,12 +243,6 @@ button.team-card:focus-visible,
   color: var(--t-title);
   background: var(--t-chip);
   border-color: var(--t-chip);
-}
-
-.team-tickets {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 12px;
 }
 
 .team-ticket {
@@ -397,7 +370,7 @@ button.team-card:focus-visible,
 .team-pill--amber { color: var(--t-amber); background: rgba(229, 169, 58, 0.12); }
 .team-pill--grey { color: #9aa3b2; background: rgba(107, 116, 132, 0.15); }
 
-.team-tone--accent { color: var(--t-accent-text); }
+.team-tone--accent { color: var(--t-title); }
 .team-tone--green { color: var(--t-green); }
 .team-tone--amber { color: var(--t-amber); }
 .team-tone--grey { color: var(--t-text-3); }
@@ -439,32 +412,126 @@ button.team-card:focus-visible,
   fill: var(--t-accent);
 }
 
-/* ---------- Detail panel ---------- */
-.team-backdrop {
+/* ---------- Details modal ---------- */
+.team-modal {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(5, 7, 10, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(5, 7, 10, 0.6);
 }
 
-.team-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 51;
+.team-modal__dialog {
   box-sizing: border-box;
-  width: 420px;
+  width: 640px;
   max-width: 100%;
+  max-height: min(86vh, 900px);
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 22px 22px 32px;
+  padding: 22px 22px 28px;
   overflow-y: auto;
   background: var(--t-panel);
-  border-left: 1px solid var(--t-border-hi);
-  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.45);
-  animation: team-slidein 0.2s ease-out;
+  color: var(--t-text);
+  font-family: var(--t-sans);
+  border: 1px solid var(--t-border-hi);
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  animation: team-pop 0.16s ease-out;
+}
+
+/* The manager's history: one entry per session. */
+.team-history {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.team-history__item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--t-divider);
+}
+
+.team-history__head {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: baseline;
+}
+
+.team-history__headline {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--t-title);
+  overflow-wrap: anywhere;
+}
+
+.team-history__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  margin: 4px 0 0 60px;
+  padding: 0 8px;
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--t-text-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.team-history__toggle:hover,
+.team-history__toggle:focus-visible {
+  border-color: var(--t-border-hi);
+  color: var(--t-title);
+  outline: none;
+}
+
+.team-history__toggle svg {
+  transition: transform 0.15s;
+}
+
+.team-history__chevron--open {
+  transform: rotate(180deg);
+}
+
+.team-history__body {
+  margin: 8px 0 0 60px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--t-text-2);
+  overflow-wrap: anywhere;
+}
+
+.team-history__body .markdown h3 {
+  margin: 12px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t-title);
+}
+
+.team-history__body .markdown h3:first-child {
+  margin-top: 0;
+}
+
+.team-history__body .markdown ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.team-history__body .markdown strong {
+  color: var(--t-text);
+}
+
+.team-history__plain {
+  margin: 0;
+  white-space: pre-line;
 }
 
 .team-panel__title {
@@ -562,6 +629,8 @@ button.team-card:focus-visible,
   line-height: 1.45;
   color: var(--t-text);
   overflow-wrap: anywhere;
+  /* Manager summaries are line-per-item blocks. */
+  white-space: pre-line;
 }
 
 .team-log__tag {
@@ -574,25 +643,90 @@ button.team-card:focus-visible,
   50% { box-shadow: 0 0 0 5px rgba(79, 140, 255, 0); }
 }
 
-@keyframes team-travel {
-  from { background-position: 0 0; }
-  to { background-position: 0 24px; }
-}
-
 @keyframes team-draw {
   to { stroke-dashoffset: 0; }
 }
 
-@keyframes team-slidein {
-  from { transform: translateX(24px); opacity: 0; }
+.team-manager--working {
+  border-color: var(--t-accent);
+}
+
+.team-manager__when {
+  font-family: var(--t-mono);
+  font-size: 12px;
+  color: var(--t-text-3);
+}
+
+.team-manager__now {
+  font-size: 12px;
+  color: var(--t-text-2);
+}
+
+/* The working manager's lines flow from its card to what it acts on. */
+.team-wire__path--flow {
+  stroke-dasharray: 6 6;
+  stroke-dashoffset: 0;
+  opacity: 0.85;
+  animation: team-flow 1s linear infinite;
+}
+
+@keyframes team-flow {
+  to { stroke-dashoffset: -12; }
+}
+
+.team-ticket__activity {
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.team-ticket--blocked {
+  border-color: rgba(229, 169, 58, 0.45);
+}
+
+/* A runner and the ticket it works on: one column, the ticket a child card. */
+.team-branch {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.team-branch > .team-ticket {
+  position: relative;
+  margin: 12px 0 0 18px;
+}
+
+/* The branch's connector, from the runner card down into the ticket. */
+.team-branch > .team-ticket::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: -13px;
+  width: 11px;
+  height: 30px;
+  border-left: 1px solid var(--t-border-hi);
+  border-bottom: 1px solid var(--t-border-hi);
+  border-bottom-left-radius: 6px;
+}
+
+.team-slot > .team-ticket {
+  margin-top: 10px;
+}
+
+.team-ticket .stepper {
+  margin-top: 4px;
+}
+
+@keyframes team-pop {
+  from { transform: translateY(8px) scale(0.98); opacity: 0; }
   to { transform: none; opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .team-dot--live,
-  .team-feed__drop,
   .team-wire__path,
-  .team-panel {
+  .team-wire__path--flow,
+  .team-modal__dialog {
     animation: none;
   }
   .team-wire__path {
@@ -606,12 +740,6 @@ button.team-card:focus-visible,
     padding: 16px 14px 28px;
     gap: 20px;
     border-radius: 10px;
-  }
-  .team-feed {
-    margin: -20px 0;
-  }
-  .team-feed__drop {
-    height: 20px;
   }
   .team-manager {
     padding: 14px 16px;
@@ -629,8 +757,28 @@ button.team-card:focus-visible,
   .team-hosts {
     grid-template-columns: minmax(0, 1fr);
   }
-  .team-tickets {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  /* The details modal is a full-screen sheet on a phone. */
+  .team-modal {
+    padding: 0;
+  }
+  .team-modal__dialog {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border: none;
+    border-radius: 0;
+    padding: 18px 16px 28px;
+  }
+  .team-history__toggle,
+  .team-history__body {
+    margin-left: 0;
+  }
+  .team-history__head {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+  .team-history__head .team-chip {
+    grid-column: 2;
+    justify-self: start;
   }
 }
 

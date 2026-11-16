@@ -1,10 +1,14 @@
-import type { CIRunners, TeamBuildHost, TeamManager, TeamRunner, TeamTicket } from "../../api/types";
+import { Bot } from "lucide-react";
+import type { ReactNode } from "react";
+import type { CIRunners, ManagerActivity, TeamBuildHost, TeamManager, TeamRunner, TeamTicket } from "../../api/types";
 import { formatElapsed } from "../../lib/buildClock";
 import { relativeTime } from "../../lib/relativeTime";
 import {
-  CI_SAMPLE_STALE_MS, ciRunnerLabels, ciRunnerState, clockTime, formatTokens, formatUSD, hostLoad, humanizeDoing, runnerEngine, runnerShortName,
-  RUNNER_STATES, ticketClock, ticketRole, ticketWhere,
+  CI_SAMPLE_STALE_MS, ciRunnerLabels, ciRunnerState, clockTime, formatUSD, hostLoad, humanizeDoing, runnerModelChip, runnerPool, runnerShortName,
+  RUNNER_STATES, ticketClock, type TicketActivity,
 } from "../../lib/team";
+import { StageStepper } from "../board/StageStepper";
+import { RankChevrons, UsageBadge } from "../board/UsageBadge";
 
 /** Props for {@link CIRunnersCard}. */
 export interface CIRunnersCardProps {
@@ -49,8 +53,6 @@ export function CIRunnersCard({ sample, now }: CIRunnersCardProps) {
   );
 }
 
-const SUMMARY_LIMIT = 260;
-
 /** Props for {@link ManagerCard}. */
 export interface ManagerCardProps {
   manager: TeamManager;
@@ -60,22 +62,28 @@ export interface ManagerCardProps {
 /** The board manager on top of the chart: latest decision, spend, flags. */
 export function ManagerCard({ manager, onOpen }: ManagerCardProps) {
   const latest = manager.sessions[0];
-  const summary = manager.latest_summary.length > SUMMARY_LIMIT ? `${manager.latest_summary.slice(0, SUMMARY_LIMIT - 1)}…` : manager.latest_summary;
+  // Older servers send no headline: the summary's first line stands in.
+  const headline = manager.latest_headline ?? manager.latest_summary.split("\n").find((line) => line.trim() !== "")?.trim() ?? "";
+  const activity = manager.activity;
+  const isWorking = activity?.state === "working";
   return (
-    <button type="button" className="team-card team-manager" onClick={onOpen} aria-label="Board manager: open history">
+    <button type="button" className={`team-card team-manager${isWorking ? " team-manager--working" : ""}`} data-manager="" onClick={onOpen} aria-label="Board manager: open history">
       <span className="team-manager__head">
         <span className="team-row">
-          <span className={`team-dot${manager.enabled ? " team-dot--live" : " team-dot--grey"}`} aria-hidden="true" />
+          <span className={`team-dot${isWorking ? " team-dot--live" : manager.enabled ? "" : " team-dot--grey"}`} aria-hidden="true" />
           <span className="team-manager__name">Board manager</span>
           <span className="team-faint">{[latest?.model, manager.enabled ? "on" : "off"].filter(Boolean).join(" · ")}</span>
         </span>
         <span className="team-objectives">Cost › Progress › Speed</span>
       </span>
-      <span className="team-manager__summary">
+      <span className="team-manager__headline">
         {manager.latest_at === null
           ? "No manager sessions recorded yet."
-          : <>Last review {clockTime(manager.latest_at)}. {summary}</>}
+          : <><span className="team-manager__when">{clockTime(manager.latest_at)}</span> {headline}</>}
       </span>
+      {isWorking && activity && (
+        <span className="team-manager__now" role="status">{managerNow(activity)}</span>
+      )}
       <span className="team-stats">
         <span className="team-stat">
           <span className="team-stat__label">Spend today</span>
@@ -90,9 +98,17 @@ export function ManagerCard({ manager, onOpen }: ManagerCardProps) {
           <span className="team-stat__value team-tone--green">{manager.today.sessions}</span>
         </span>
       </span>
-      <span className="team-link-text">Tap for history log</span>
+      <span className="team-hint">Tap for history log</span>
     </button>
   );
+}
+
+/** "Working on #64 and #55 · builder-1" or "Reviewing the board", for the card while a session runs. */
+function managerNow(activity: ManagerActivity): string {
+  const verb = activity.kind === "review" ? "Reviewing the board" : activity.kind === "repair" ? "Repairing" : "Working on";
+  const targets = [...activity.ticket_ids.map((id) => `#${id}`), ...(activity.host ? [activity.host] : [])];
+  if (activity.kind === "review") return targets.length > 0 ? `${verb}: ${targets.join(", ")}` : verb;
+  return targets.length > 0 ? `${verb} ${targets.join(", ")}` : `${verb} a deployment flag`;
 }
 
 /** Props for {@link RunnerCard}. */
@@ -109,6 +125,7 @@ export function RunnerCard({ runner, isActive, onEnter, onLeave, onOpen }: Runne
   const state = RUNNER_STATES[runner.state];
   const name = runnerShortName(runner.name);
   const ticket = runner.ticket_id === null ? "none" : `#${runner.ticket_id}`;
+  const chip = runnerModelChip(runner);
   return (
     <button
       type="button"
@@ -128,57 +145,75 @@ export function RunnerCard({ runner, isActive, onEnter, onLeave, onOpen }: Runne
         </span>
         <span className={`team-pill team-pill--${state.tone}`}>{state.label}</span>
       </span>
-      <span className="team-faint">{runnerEngine(runner)}</span>
+      <span className="team-faint">{runnerPool(runner)}</span>
       <span className="team-runner__doing">{humanizeDoing(runner.doing)}</span>
-      <span className="team-chips">
-        <span className="team-chip team-chip--ticket">{ticket}</span>
-        <span className="team-chip">{runner.profile_version === "" ? "profile not reported" : runner.profile_version}</span>
-      </span>
+      {(chip !== undefined || runner.profile_version !== "") && (
+        <span className="team-chips">
+          {chip !== undefined && (
+            <span className={`card__model${chip.escalatedAfter !== undefined ? " card__model--escalated" : ""}`}
+              title={chip.escalatedAfter !== undefined ? `Escalated to ${chip.name} at high reasoning after ${chip.escalatedAfter} rejected code passes` : "Reported model"}>
+              {chip.escalatedAfter !== undefined ? <RankChevrons /> : <Bot size={12} aria-hidden="true" />}
+              <span className="card__model-name">{chip.name}</span>
+            </span>
+          )}
+          {runner.profile_version !== "" && <span className="team-chip">{runner.profile_version}</span>}
+        </span>
+      )}
     </button>
   );
 }
 
-/** Props for {@link TicketCard}. */
+/** Props for {@link TeamTicketCard}. */
 export interface TeamTicketCardProps {
   ticket: TeamTicket;
-  hosts: TeamBuildHost[];
+  activity: TicketActivity;
   isLinked: boolean;
   now: number;
 }
 
-/** A ticket in flight: role, where it is, its build clock and tokens. */
-export function TeamTicketCard({ ticket, hosts, isLinked, now }: TeamTicketCardProps) {
-  const role = ticketRole(ticket.stage);
+/**
+ * A ticket being worked, nested under the runner or build-host slot that has
+ * it: what it is doing, then the Board card's own token badge and stage
+ * stepper with attempt counts, the signals that show a problem at a glance.
+ */
+export function TeamTicketCard({ ticket, activity, isLinked, now }: TeamTicketCardProps) {
+  const clock = ticketClock(ticket, now);
   return (
-    <article className={`team-card team-ticket${isLinked ? " team-card--linked" : ""}`} data-ticket={ticket.id}>
-      <div className="team-row team-row--between">
+    <article className={`team-card team-ticket team-ticket--${activity.group}${isLinked ? " team-card--linked" : ""}`} data-ticket={ticket.id}>
+      <div className="team-row team-row--between team-row--top">
         <a className="team-ticket__id" href={`#/t/${ticket.id}`}>#{ticket.id}</a>
-        <span className={`team-pill team-pill--small team-pill--${role.tone}`}>{role.label}</span>
+        <UsageBadge usage={ticket.usage} />
       </div>
       <div className="team-ticket__title">{ticket.title}</div>
-      <div className="team-faint">{ticketWhere(ticket, hosts)}</div>
-      <div className="team-ticket__foot">
-        <span>{ticketClock(ticket, now)}</span>
-        <span className="team-faint">{formatTokens(ticket.usage?.weighted_tokens)}</span>
+      <div className={`team-ticket__activity team-tone--${activity.tone}`}>
+        {activity.text}{clock !== "—" ? <span className="team-faint"> · {clock}</span> : null}
       </div>
+      <StageStepper ticket={ticket} />
     </article>
   );
+}
+
+/** A runner and the ticket it holds, as one branch of the org chart. */
+export function TeamBranch({ children }: { children: ReactNode }) {
+  return <div className="team-branch">{children}</div>;
 }
 
 /** Props for {@link BuildHostCard}. */
 export interface BuildHostCardProps {
   host: TeamBuildHost;
   now: number;
+  /** Renders the ticket card for a slot whose ticket no runner holds; null otherwise. */
+  renderSlotTicket?: (ticketId: number) => ReactNode;
 }
 
 const OS_LABELS: Record<TeamBuildHost["os"], string> = { windows: "Windows", linux: "Linux", macos: "macOS" };
 
 /** A build host: one box per slot with the job, phase and elapsed time, then its queue. */
-export function BuildHostCard({ host, now }: BuildHostCardProps) {
+export function BuildHostCard({ host, now, renderSlotTicket }: BuildHostCardProps) {
   const load = hostLoad(host);
   const slots = Math.max(host.max_parallel, host.running.length);
   return (
-    <article className="team-card team-host">
+    <article className="team-card team-host" data-host={host.name}>
       <div className="team-row team-row--between">
         <h3 className="team-host__name">{host.name} <span className="team-faint">· {OS_LABELS[host.os]} build host</span></h3>
         <span className={`team-pill team-pill--${load.tone}`}>{load.text}</span>
@@ -194,6 +229,7 @@ export function BuildHostCard({ host, now }: BuildHostCardProps) {
                 <div className="team-slot__job">{job ? `#${job.ticket_id} · ${job.phase || job.status}` : "free"}</div>
                 <div className="team-slot__bar" aria-hidden="true"><div className="team-slot__fill" /></div>
                 <div className="team-slot__clock">{job && Number.isFinite(started) ? formatElapsed(now - started) : "—"}</div>
+                {job && renderSlotTicket?.(job.ticket_id)}
               </div>
             );
           })}

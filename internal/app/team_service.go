@@ -60,6 +60,8 @@ type TeamManager struct {
 	Status    ManagerStatus
 	OpenFlags int
 	Sessions  []domain.ManagerSession
+	// Activity is what the manager is acting on right now, as its loop reported it.
+	Activity domain.ManagerActivity
 }
 
 // Team is the Team view: the manager, its runners, the tickets in flight and
@@ -101,7 +103,7 @@ func (s *BoardService) Team(ctx context.Context) (Team, error) {
 		}
 		team.Manager = TeamManager{
 			Status:    ManagerStatus{Settings: settings, Today: today, RemainingUSD: float64(settings.ManagerDailyBudgetUSD) - today.CostUSD},
-			OpenFlags: len(flags), Sessions: sessions,
+			OpenFlags: len(flags), Sessions: sessions, Activity: s.managerActivityNow(now),
 		}
 		signals, err := repos.Timeline().StageSignals(ctx)
 		if err != nil {
@@ -122,6 +124,9 @@ func (s *BoardService) Team(ctx context.Context) (Team, error) {
 //   - A build ticket released while awaiting Windows keeps the agent that last
 //     reported its work model as a waiting runner.
 //   - Any other agent that reported a work model within teamRunnerWindow is idle.
+//
+// Tickets in flight are the ones being worked: open tickets a runner holds or
+// waits on, or a build job serves. The board shows every other ticket.
 func TeamRoster(tickets []TicketSummary, signals []domain.TimelineEntry, now time.Time) ([]TeamRunner, []TeamTicket) {
 	type seen struct {
 		model string

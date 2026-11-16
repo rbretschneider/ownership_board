@@ -65,11 +65,20 @@ type User = { id: number; name: string; email: string; is_admin: boolean; sso_li
 | POST   | `/api/v1/tickets/{id}/questions` | `AskQuestions` | `TicketDetail` (the ticket keeps its lane and stage) |
 | GET    | `/api/v1/events/stream` | | Server-sent events |
 | GET    | `/api/v1/team` | | `Team`, for the Team view |
+| POST   | `/api/v1/manager/usage` | `{cost_usd, model, summary, headline?}` | Manager token only. Records one session. A `headline` is stored as the summary's first `HEADLINE:` line unless the summary already has one. |
+| POST   | `/api/v1/manager/activity` | `{state, kind?, ticket_ids?, host?, started_at?}` | Manager token only. `working` (with `kind` `flag`, `review` or `repair`) when a session starts, `idle` when it ends. Kept in memory for the Team view. |
 
 `GET /team` returns one snapshot of the autonomous team:
 
 - `manager`: the manager status fields of `GET /manager/status`, plus
-  `open_flags`, `latest_summary`, `latest_at` and the 20 newest `sessions`.
+  `open_flags`, `latest_summary`, `latest_headline`, `latest_at`, the 20
+  newest `sessions` (each with its `headline`, and `structured` when the
+  summary has a `HEADLINE:` line and markdown sections), and `activity`. `latest_headline` is the summary's
+  `HEADLINE:` line, or its first sentence for sessions without one, at most
+  100 characters. `activity` is what the manager is doing right now: `state`
+  (`working` or `idle`), `kind` (`flag`, `review` or `repair`),
+  `ticket_ids`, `host` and `started_at`. A `working` report that is 3 hours
+  old reads as `idle`.
 - `runners`: one per agent seen recently, derived from live leases and
   work-model reports. Each has `name` (the lease holder), `state` (`working`,
   `waiting` or `idle`), `model`, `doing` (the work-model signal),
@@ -77,8 +86,11 @@ type User = { id: number; name: string; email: string; is_admin: boolean; sso_li
   it). A worker that released a build ticket while it awaits Windows stays
   `waiting` on that ticket. An agent with no lease that reported a model in
   the last 6 hours is `idle`.
-- `tickets`: open tickets with a live lease, a waiting runner or an open
-  build job. Each is a `TicketSummary` plus `holder` (`""` when none).
+- `tickets`: the tickets being worked: open tickets with a live lease, a
+  waiting runner or an open build job (the board lists the rest). Each is a
+  `TicketSummary` plus `holder` (`""` when none) and `pr`. `pr` is the merge
+  sweep's latest view of the ticket's pull request, or null: `url`,
+  `verdict`, `reason`, `checks_total`, `checks_done` and `checks_failed`.
 - `build_hosts`: approved hosts with `os`, `online`, `enabled`,
   `max_parallel`, their `running` jobs (ticket, phase, `started_at`) and their
   eligible `queued` jobs (ticket, `queued_at`). `queued_by_os` counts every

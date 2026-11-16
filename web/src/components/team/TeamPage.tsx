@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useApi } from "../../api/ApiContext";
-import type { Team, TeamRunner, TicketDetail } from "../../api/types";
+import type { Team, TeamRunner, TeamTicket, TicketDetail } from "../../api/types";
 import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 import { useEventStream } from "../../hooks/useEventStream";
 import { useTeam } from "../../hooks/useTeam";
 import { REFETCH_DEBOUNCE_MS } from "../../lib/constants";
 import { relativeTime } from "../../lib/relativeTime";
 import {
-  activityLines, formatTokens, formatUSD, humanizeDoing, linkPath, runnerEngine, runnerShortName, RUNNER_STATES, type LinkLine,
+  activityLines, formatTokens, formatUSD, historyEntry, humanizeDoing, linkPath, managerTargets, runnerEngine, runnerShortName, RUNNER_STATES,
+  ticketActivity, type LinkLine, type ManagerTarget,
 } from "../../lib/team";
 import { ErrorState } from "../common/ErrorState";
 import { LoadingState } from "../common/LoadingState";
 import { PageShell } from "../common/PageShell";
-import { BuildHostCard, CIRunnersCard, ManagerCard, RunnerCard, TeamTicketCard } from "./TeamCards";
+import { BuildHostCard, CIRunnersCard, ManagerCard, RunnerCard, TeamBranch, TeamTicketCard } from "./TeamCards";
 import { TeamPanel, type PanelContent } from "./TeamPanel";
 
 const CLOCK_TICK_MS = 30_000;
@@ -20,9 +21,12 @@ const CLOCK_TICK_MS = 30_000;
 type Selection = { kind: "manager" } | { kind: "runner"; name: string };
 
 /**
- * The Team view (#/team): the board as an org chart. The manager on top, its
- * runners, the tickets in flight and the build hosts. Hovering, focusing or
- * tapping a runner draws a line to the ticket it holds; tapping opens details.
+ * The Team view (#/team): the board as an org chart. The manager on top, then
+ * one branch per runner with the ticket it is working nested under it, then
+ * the build hosts (a ticket only a host slot has nests in that slot) and CI
+ * runners. Hovering or focusing a runner highlights its branch; tapping opens
+ * details. While the manager is in a session, animated lines run from its
+ * card to what it acts on: tickets, the runners holding them, a build host.
  */
 export function TeamPage() {
   const api = useApi();
@@ -34,39 +38,44 @@ export function TeamPage() {
   const [hovered, setHovered] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [detail, setDetail] = useState<{ ticketId: number; value: TicketDetail | null; failed: boolean } | null>(null);
-  const [line, setLine] = useState<(LinkLine & { key: string }) | null>(null);
+  const [managerLines, setManagerLines] = useState<(LinkLine & { key: string })[]>([]);
+  const targets = useMemo(() => (team === null ? [] : managerTargets(team)), [team]);
+  const targetKey = targets.map((t) => `${t.kind}:${t.key}`).join("|");
 
   const selectedRunner = selection?.kind === "runner" ? team?.runners.find((r) => r.name === selection.name) ?? null : null;
-  // The open panel keeps its runner's line; otherwise the hovered runner's.
-  const linkedName = selectedRunner?.name ?? hovered;
-  const linkedRunner = team?.runners.find((r) => r.name === linkedName) ?? null;
-  const linkedTicket = linkedRunner?.ticket_id ?? null;
+  const highlighted = selectedRunner?.name ?? hovered;
+  const highlightedTicket = team?.runners.find((r) => r.name === highlighted)?.ticket_id ?? null;
 
-  const measure = useCallback(() => {
+  const ticketsById = useMemo(() => new Map((team?.tickets ?? []).map((t) => [t.id, t])), [team]);
+  // A ticket nests under the runner that holds it; one no runner holds nests in its host slot.
+  const heldIds = useMemo(() => new Set((team?.runners ?? []).map((r) => r.ticket_id).filter((id): id is number => id !== null)), [team]);
+
+  const measureManager = useCallback(() => {
     const container = containerRef.current;
-    if (container === null || linkedRunner === null || linkedTicket === null) {
-      setLine(null);
-      return;
-    }
-    const from = container.querySelector(`[data-runner="${cssEscape(linkedRunner.name)}"]`);
-    const to = container.querySelector(`[data-ticket="${linkedTicket}"]`);
-    if (from === null || to === null) {
-      setLine(null);
+    const from = container?.querySelector("[data-manager]") ?? null;
+    if (container === null || from === null || targets.length === 0) {
+      setManagerLines([]);
       return;
     }
     const box = container.getBoundingClientRect();
     const scale = container.offsetWidth > 0 ? box.width / container.offsetWidth : 1;
-    setLine({ key: `${linkedRunner.name}:${linkedTicket}`, ...linkPath(box, from.getBoundingClientRect(), to.getBoundingClientRect(), scale) });
-  }, [linkedRunner, linkedTicket]);
+    const lines: (LinkLine & { key: string })[] = [];
+    for (const target of targets) {
+      const to = container.querySelector(targetSelector(target));
+      if (to !== null) lines.push({ key: `${target.kind}:${target.key}`, ...linkPath(box, from.getBoundingClientRect(), to.getBoundingClientRect(), scale) });
+    }
+    setManagerLines(lines);
+    // targetKey stands for targets by value, so a refetch with the same targets keeps the lines.
+  }, [targetKey]);
 
   useLayoutEffect(() => {
-    measure();
-  }, [measure, team]);
+    measureManager();
+  }, [measureManager, team]);
 
   useEffect(() => {
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [measure]);
+    window.addEventListener("resize", measureManager);
+    return () => window.removeEventListener("resize", measureManager);
+  }, [measureManager]);
 
   // The runner panel's activity comes from its ticket's timeline.
   const detailTicket = selectedRunner?.ticket_id ?? null;
@@ -98,6 +107,11 @@ export function TeamPage() {
     return selectedRunner === null ? null : runnerPanel(selectedRunner, detail?.ticketId === selectedRunner.ticket_id ? detail : null, now);
   }, [team, selection, selectedRunner, detail, now]);
 
+  const ticketCard = (ticket: TeamTicket) => (
+    <TeamTicketCard key={ticket.id} ticket={ticket} activity={ticketActivity(ticket, team?.build_hosts ?? [], now)}
+      isLinked={ticket.id === highlightedTicket} now={now} />
+  );
+
   return (
     <PageShell page="team" title="Team" isWide>
       {team === null && isLoading && <LoadingState label="Loading team" />}
@@ -112,51 +126,49 @@ export function TeamPage() {
       )}
       {team !== null && (
         <div className="team" ref={containerRef}>
-          {line !== null && (
-            <svg className="team-wire" aria-hidden="true" key={line.key}>
-              <path className="team-wire__path" d={line.d} />
-              <circle className="team-wire__end" cx={line.x2} cy={line.y2} r="4" />
+          {managerLines.length > 0 && (
+            <svg className="team-wire team-wire--manager" aria-hidden="true" data-testid="manager-lines" key={targetKey}>
+              {managerLines.map((l) => (
+                <g key={l.key} data-target={l.key}>
+                  <path className="team-wire__path team-wire__path--flow" d={l.d} />
+                  <circle className="team-wire__end" cx={l.x2} cy={l.y2} r="4" />
+                </g>
+              ))}
             </svg>
           )}
-          <p className="team-intro">Hover or tap a runner to see its ticket; tap for details.</p>
+          <p className="team-intro">Each runner with the ticket it is working. Tap a card for details.</p>
           <section className="team-top" aria-label="Manager">
             <ManagerCard manager={team.manager} onOpen={() => setSelection({ kind: "manager" })} />
           </section>
-          <div className="team-feed" aria-hidden="true">
-            <div className="team-feed__drop" />
-            <div className="team-feed__rail" />
-          </div>
           <section className="team-runners" aria-label="Runners">
             {team.runners.length === 0 && <p className="team-empty">No runners seen in the last few hours.</p>}
-            {team.runners.map((runner) => (
-              <RunnerCard
-                key={runner.name}
-                runner={runner}
-                isActive={runner.name === linkedName}
-                onEnter={() => setHovered(runner.name)}
-                onLeave={() => setHovered((current) => (current === runner.name ? null : current))}
-                onOpen={() => setSelection({ kind: "runner", name: runner.name })}
-              />
-            ))}
-          </section>
-          <section className="team-section" aria-label="Tickets in flight">
-            <h2 className="team-heading">Tickets in flight</h2>
-            {team.tickets.length === 0
-              ? <p className="team-empty">Nothing in flight.</p>
-              : (
-                <div className="team-tickets">
-                  {team.tickets.map((ticket) => (
-                    <TeamTicketCard key={ticket.id} ticket={ticket} hosts={team.build_hosts} isLinked={ticket.id === linkedTicket} now={now} />
-                  ))}
-                </div>
-              )}
+            {team.runners.map((runner) => {
+              const ticket = runner.ticket_id === null ? undefined : ticketsById.get(runner.ticket_id);
+              return (
+                <TeamBranch key={runner.name}>
+                  <RunnerCard
+                    runner={runner}
+                    isActive={runner.name === highlighted}
+                    onEnter={() => setHovered(runner.name)}
+                    onLeave={() => setHovered((current) => (current === runner.name ? null : current))}
+                    onOpen={() => setSelection({ kind: "runner", name: runner.name })}
+                  />
+                  {ticket !== undefined && ticketCard(ticket)}
+                </TeamBranch>
+              );
+            })}
           </section>
           <section className="team-section" aria-label="Build hosts and CI runners">
             <h2 className="team-heading">Build hosts and CI runners</h2>
             {team.build_hosts.length === 0 && !hasCISample && <p className="team-empty">No approved build hosts.</p>}
             {(team.build_hosts.length > 0 || hasCISample) && (
               <div className="team-hosts">
-                {team.build_hosts.map((host) => <BuildHostCard key={host.id} host={host} now={now} />)}
+                {team.build_hosts.map((host) => (
+                  <BuildHostCard key={host.id} host={host} now={now} renderSlotTicket={(id) => {
+                    const ticket = ticketsById.get(id);
+                    return ticket !== undefined && !heldIds.has(id) ? ticketCard(ticket) : null;
+                  }} />
+                ))}
                 {hasCISample && team.ci_runners !== undefined && <CIRunnersCard sample={team.ci_runners} now={now} />}
               </div>
             )}
@@ -181,7 +193,8 @@ function managerPanel(team: Team): PanelContent {
       { label: "Open flags", value: String(m.open_flags) },
     ],
     logTitle: "History log",
-    log: m.sessions.map((s) => ({ at: s.at, text: s.summary || "No summary recorded", tag: [formatUSD(s.cost_usd), s.model].filter(Boolean).join(" · "), tone: "accent" as const })),
+    log: [],
+    history: m.sessions.map((s) => ({ at: s.at, chip: [formatUSD(s.cost_usd), s.model].filter(Boolean).join(" · "), ...historyEntry(s) })),
     logNote: m.sessions.length === 0 ? "No manager sessions recorded yet." : undefined,
   };
 }
@@ -193,8 +206,8 @@ function runnerPanel(runner: TeamRunner, detail: { value: TicketDetail | null; f
     { label: "State", value: RUNNER_STATES[runner.state].label },
     { label: "Ticket", value: runner.ticket_id === null ? "none" : `#${runner.ticket_id}` },
     { label: "Last report", value: runner.last_seen === null ? "—" : relativeTime(runner.last_seen, new Date(now)) },
-    { label: "Profile", value: runner.profile_version || "not reported" },
   ];
+  if (runner.profile_version !== "") facts.push({ label: "Profile", value: runner.profile_version });
   if (ticket !== null) facts.push({ label: "Ticket tokens", value: formatTokens(ticket.usage?.weighted_tokens) });
   let logNote: string | undefined;
   if (runner.ticket_id === null) logNote = "No ticket held, so no recent activity to show.";
@@ -219,6 +232,11 @@ function useNow(intervalMs: number): number {
     return () => window.clearInterval(timer);
   }, [intervalMs]);
   return now;
+}
+
+function targetSelector(target: ManagerTarget): string {
+  const attribute = target.kind === "ticket" ? "data-ticket" : target.kind === "runner" ? "data-runner" : "data-host";
+  return `[${attribute}="${cssEscape(target.key)}"]`;
 }
 
 /** CSS.escape where the browser has it; runner names are plain otherwise. */

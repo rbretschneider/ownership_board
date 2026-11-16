@@ -95,6 +95,9 @@ type ManagerSessionInput struct {
 	// Summary is the session's own account of why it acted and what it did,
 	// shown to the owner in Settings > Board manager.
 	Summary string
+	// Headline is the session's one plain sentence for the Team view. It is
+	// stored as the summary's first "HEADLINE:" line unless the summary has one.
+	Headline string
 }
 
 // RecordManagerUsage adds one manager session's spend to today's total and
@@ -106,10 +109,10 @@ func (s *BoardService) RecordManagerUsage(ctx context.Context, actor domain.Acto
 	if input.CostUSD < 0 || input.CostUSD > 1000 {
 		return ManagerStatus{}, domain.Invalidf("cost_usd must be between 0 and 1000")
 	}
-	if err := rejectHiddenFromAgent(actor, map[string]string{"summary": input.Summary, "model": input.Model}); err != nil {
+	if err := rejectHiddenFromAgent(actor, map[string]string{"summary": input.Summary, "model": input.Model, "headline": input.Headline}); err != nil {
 		return ManagerStatus{}, err
 	}
-	summary := strings.TrimSpace(input.Summary)
+	summary := strings.TrimSpace(domain.WithManagerHeadline(input.Summary, input.Headline))
 	if len(summary) > domain.MaxManagerSummaryLength {
 		summary = summary[:domain.MaxManagerSummaryLength]
 	}

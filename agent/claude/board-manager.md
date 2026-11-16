@@ -191,21 +191,59 @@ about 15 tool calls, and never more than you need.
 
 ## Finish
 
-End with this block and nothing after it. The owner reads it in the app.
+End with the summary block below and nothing after it. The owner reads it in
+the app, on a phone, as rendered markdown. Keep it strict: the app and a
+script parse it.
+
+- The first line after `MANAGER SUMMARY` is always the headline:
+  `HEADLINE: <one plain sentence, at most 100 characters>`. Say what you did
+  or found, in words the owner reads at a glance: "Merged #12 and parked #13
+  for a scope split.", not a list.
+- Write for the product owner. Leave out fingerprints, job ids, commit hashes,
+  file paths and host housekeeping (cache sizes, restarts, log lines). If they
+  matter for the record, print them as plain lines **before** `MANAGER
+  SUMMARY`; the loop keeps them in the container log, and the app never shows
+  them.
+- One sentence per bullet, in plain words.
+
+For flags, one section per ticket you handled, then the owner section:
 
 ```
 MANAGER SUMMARY
-- #<id> <fingerprint>: why: <one line> | action: <what you did> | expect: <the signal that shows it worked>
-- owner: <anything only the owner can do, or "none">
+HEADLINE: <one plain sentence, at most 100 chars>
+
+### #64 White-label brand scan
+- **Found:** <one sentence, plain words, no fingerprints or job ids>
+- **Did:** <one sentence>
+- **Next:** <the signal that shows it worked, one sentence>
+
+### Owner
+- <only what a person must do, one line each; "Nothing." if none>
 ```
 
-The board review uses this block instead:
+A deployment flag with no ticket gets a section titled with what it is about,
+for example `### Windows build host`.
+
+The board review uses these sections instead, one bullet per ticket
+(`- #64 White-label brand scan: <one sentence>`), and `- None.` for an empty
+section:
 
 ```
 MANAGER SUMMARY
-- moving: <tickets with a live next step, one line each: #id next step>
-- acted: <what you merged, cancelled, re-scoped or parked, and why>
-- stalled: <tickets you could not move, and what they wait for>
-- cost: <the waste you stopped, or "none">
-- owner: <anything only the owner can do, or "none">
+HEADLINE: <one plain sentence, at most 100 chars>
+
+### Moving
+- #<id> <title>: <its live next step>
+
+### Acted
+- #<id> <title>: <what you merged, cancelled, re-scoped or parked, and why>
+
+### Stalled
+- #<id> <title>: <what it waits for>
+
+### Waste stopped
+- <the waste you stopped, or "None.">
+
+### Owner
+- <only what a person must do, one line each; "Nothing." if none>
 ```

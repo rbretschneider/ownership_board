@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/rbretschneider/ownership_board/internal/app"
 	"github.com/rbretschneider/ownership_board/internal/domain"
@@ -26,6 +27,8 @@ func (s *server) managerRoutes(rt *router) {
 	rt.anyone("GET /api/v1/manager/flags", s.managerFlags)
 	rt.anyone("POST /api/v1/manager/usage", s.managerUsage)
 	rt.anyone("GET /api/v1/manager/sessions", s.managerSessions)
+	// The manager loop reports when a session starts and ends; the Team view draws it.
+	rt.anyone("POST /api/v1/manager/activity", s.managerActivity)
 }
 
 func toManagerStatus(status app.ManagerStatus) managerStatusDTO {
@@ -61,14 +64,15 @@ func (s *server) managerFlags(w http.ResponseWriter, r *http.Request, who caller
 
 func (s *server) managerUsage(w http.ResponseWriter, r *http.Request, who caller) error {
 	var body struct {
-		CostUSD float64 `json:"cost_usd"`
-		Model   string  `json:"model"`
-		Summary string  `json:"summary"`
+		CostUSD  float64 `json:"cost_usd"`
+		Model    string  `json:"model"`
+		Summary  string  `json:"summary"`
+		Headline string  `json:"headline"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
 	}
-	status, err := s.deps.Board.RecordManagerUsage(r.Context(), who.actor, app.ManagerSessionInput{CostUSD: body.CostUSD, Model: body.Model, Summary: body.Summary})
+	status, err := s.deps.Board.RecordManagerUsage(r.Context(), who.actor, app.ManagerSessionInput{CostUSD: body.CostUSD, Model: body.Model, Summary: body.Summary, Headline: body.Headline})
 	if err != nil {
 		return err
 	}
@@ -85,5 +89,26 @@ func (s *server) managerSessions(w http.ResponseWriter, r *http.Request, who cal
 		sessions = []domain.ManagerSession{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions})
+	return nil
+}
+
+func (s *server) managerActivity(w http.ResponseWriter, r *http.Request, who caller) error {
+	var body struct {
+		State     string     `json:"state"`
+		Kind      string     `json:"kind"`
+		TicketIDs []int64    `json:"ticket_ids"`
+		Host      string     `json:"host"`
+		StartedAt *time.Time `json:"started_at"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		return err
+	}
+	activity, err := s.deps.Board.ReportManagerActivity(r.Context(), who.actor, app.ManagerActivityInput{
+		State: body.State, Kind: body.Kind, TicketIDs: body.TicketIDs, Host: body.Host, StartedAt: body.StartedAt,
+	})
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, toTeamActivity(activity))
 	return nil
 }
