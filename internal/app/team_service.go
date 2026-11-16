@@ -125,8 +125,8 @@ func (s *BoardService) Team(ctx context.Context) (Team, error) {
 //     reported its work model as a waiting runner.
 //   - Any other agent that reported a work model within teamRunnerWindow is idle.
 //
-// Tickets in flight are every open ticket In Progress or Ready, plus any
-// other open ticket a runner holds or a build job serves.
+// Tickets in flight are the ones being worked: open tickets a runner holds or
+// waits on, or a build job serves. The board shows every other ticket.
 func TeamRoster(tickets []TicketSummary, signals []domain.TimelineEntry, now time.Time) ([]TeamRunner, []TeamTicket) {
 	type seen struct {
 		model string
@@ -165,7 +165,7 @@ func TeamRoster(tickets []TicketSummary, signals []domain.TimelineEntry, now tim
 				runners[holder] = TeamRunner{Name: holder, State: RunnerWaiting, Model: model, Signal: signal, TicketID: t.ID, LastSeen: lastSeen[holder].at}
 			}
 		}
-		if holder != "" || summary.Build != nil || t.Lane == domain.LaneInProgress || t.Stage == domain.StageReady {
+		if holder != "" || summary.Build != nil {
 			inFlight = append(inFlight, TeamTicket{TicketSummary: summary, Holder: holder})
 		}
 	}

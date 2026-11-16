@@ -86,7 +86,6 @@ export interface TicketActivity {
   tone: "accent" | "green" | "amber" | "grey";
 }
 
-const GROUP_ORDER: Record<ActivityGroup, number> = { active: 0, waiting: 1, blocked: 2 };
 
 /**
  * What a ticket in flight is doing: blocked (with its reason's first line),
@@ -136,13 +135,6 @@ export function ticketActivity(ticket: TeamTicket, hosts: TeamBuildHost[], now: 
   return { group: "waiting", text: ticket.stage === "ready" ? "Ready for a runner" : "Waiting for a runner", tone: "grey" };
 }
 
-/** Tickets in flight ordered by activity: active, then waiting, then blocked; otherwise as the board ranks them. */
-export function sortByActivity(tickets: TeamTicket[], hosts: TeamBuildHost[], now: number): { ticket: TeamTicket; activity: TicketActivity }[] {
-  return tickets
-    .map((ticket, index) => ({ ticket, activity: ticketActivity(ticket, hosts, now), index }))
-    .sort((a, b) => GROUP_ORDER[a.activity.group] - GROUP_ORDER[b.activity.group] || a.index - b.index)
-    .map(({ ticket, activity }) => ({ ticket, activity }));
-}
 
 function isAwaiting(workModel: string | undefined): boolean {
   return /\bawaiting\b/i.test(workModel ?? "");
@@ -327,4 +319,54 @@ export function ciRunnerState(runner: CIRunner): { text: string; tone: "accent" 
 /** The labels worth showing: every label but the generic "self-hosted". */
 export function ciRunnerLabels(runner: CIRunner): string {
   return runner.labels.filter((label) => label.toLowerCase() !== "self-hosted").join(", ");
+}
+
+/** The model chip a runner card shows, as the Board card does: the model, ranked when escalated. */
+export function runnerModelChip(runner: Pick<TeamRunner, "model">): { name: string; escalatedAfter?: number } | undefined {
+  return parseWorkModel(runner.model);
+}
+
+/** The runner's pool and, when it escalated to the other family, that too: "Codex runner · escalated to Claude". */
+export function runnerPool(runner: Pick<TeamRunner, "name" | "model">): string {
+  const used = modelFamily(parseWorkModel(runner.model)?.name);
+  const pool = runnerFamily(runner.name) ?? used;
+  const label = (family: ModelFamily | undefined) => (family === "claude" ? "Claude" : family === "codex" ? "Codex" : "");
+  const base = label(pool) || "Agent";
+  return used !== undefined && pool !== undefined && used !== pool ? `${base} runner · escalated to ${label(used)}` : `${base} runner`;
+}
+
+/** One manager history entry, ready to show: a headline and a body to render. */
+export interface HistoryEntry {
+  headline: string;
+  /** Markdown for structured summaries; plain text (one item per line) for older ones. */
+  body: string;
+  isMarkdown: boolean;
+}
+
+/**
+ * Splits a session summary into its headline and body. Structured summaries
+ * (a HEADLINE line, then markdown sections) render as markdown. Older ones
+ * fall back to the first sentence as the headline and the rest as plain text,
+ * with " | " separators turned into line breaks.
+ */
+export function historyEntry(session: { summary: string; headline?: string; structured?: boolean }): HistoryEntry {
+  const lines = session.summary.split("\n");
+  const isLabel = (line: string) => /^(board review|manager summary)$/i.test(line.replace(/[*#`]/g, "").trim());
+  if (session.structured === true) {
+    const at = lines.findIndex((line) => /^[\s#*>-]*headline:/i.test(line));
+    const body = lines.slice(at + 1).filter((line) => !isLabel(line)).join("\n").trim();
+    return { headline: session.headline ?? "", body, isMarkdown: true };
+  }
+  const text = lines.filter((line) => !isLabel(line)).join("\n").trim();
+  const headline = session.headline ?? firstSentenceOf(text);
+  const plain = headline.endsWith("…") ? headline.slice(0, -1) : headline;
+  const rest = plain !== "" && text.startsWith(plain) ? text.slice(plain.length) : text;
+  const body = rest.split(/\s+\|\s+/).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return { headline, body, isMarkdown: false };
+}
+
+function firstSentenceOf(text: string): string {
+  const line = text.split("\n").find((l) => l.trim() !== "")?.trim() ?? "";
+  const end = line.search(/[.!?](\s|$)/);
+  return end >= 0 ? line.slice(0, end + 1) : line;
 }

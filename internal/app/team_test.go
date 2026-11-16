@@ -75,22 +75,18 @@ func TestTeamRosterIsEmptyOnAQuietBoard(t *testing.T) {
 	}
 }
 
-func TestTeamRosterListsEveryTicketInProgressOrReady(t *testing.T) {
+func TestTeamRosterShowsOnlyTicketsBeingWorked(t *testing.T) {
+	// The board shows every ticket; the Team view shows what is being worked.
 	now := time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
 	tickets := []app.TicketSummary{
 		{Ticket: domain.Ticket{ID: 1, Lane: domain.LaneInProgress, Stage: domain.StagePR}},
 		{Ticket: domain.Ticket{ID: 2, Lane: domain.LaneInProgress, Stage: domain.StageBuild, BlockedReason: "Needs the owner"}},
 		{Ticket: domain.Ticket{ID: 3, Lane: domain.LaneTodo, Stage: domain.StageReady}, WaitingOn: []int64{1}},
-		{Ticket: domain.Ticket{ID: 4, Lane: domain.LaneTodo, Stage: domain.StageRefine}},
-		{Ticket: domain.Ticket{ID: 5, Lane: domain.LaneMerged, Stage: domain.StageDone}},
+		{Ticket: domain.Ticket{ID: 4, Lane: domain.LaneInProgress, Stage: domain.StageBuild}, Build: &domain.BuildJob{Status: "running"}},
 	}
 	_, inFlight := app.TeamRoster(tickets, nil, now)
-	var ids []int64
-	for _, ticket := range inFlight {
-		ids = append(ids, ticket.Ticket.ID)
-	}
-	if len(ids) != 3 || ids[0] != 1 || ids[1] != 2 || ids[2] != 3 {
-		t.Fatalf("in flight = %v, want [1 2 3]", ids)
+	if len(inFlight) != 1 || inFlight[0].Ticket.ID != 4 {
+		t.Fatalf("in flight = %+v, want only #4", inFlight)
 	}
 }
 

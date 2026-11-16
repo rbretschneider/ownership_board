@@ -72,7 +72,8 @@ type User = { id: number; name: string; email: string; is_admin: boolean; sso_li
 
 - `manager`: the manager status fields of `GET /manager/status`, plus
   `open_flags`, `latest_summary`, `latest_headline`, `latest_at`, the 20
-  newest `sessions`, and `activity`. `latest_headline` is the summary's
+  newest `sessions` (each with its `headline`, and `structured` when the
+  summary has a `HEADLINE:` line and markdown sections), and `activity`. `latest_headline` is the summary's
   `HEADLINE:` line, or its first sentence for sessions without one, at most
   100 characters. `activity` is what the manager is doing right now: `state`
   (`working` or `idle`), `kind` (`flag`, `review` or `repair`),
@@ -85,8 +86,8 @@ type User = { id: number; name: string; email: string; is_admin: boolean; sso_li
   it). A worker that released a build ticket while it awaits Windows stays
   `waiting` on that ticket. An agent with no lease that reported a model in
   the last 6 hours is `idle`.
-- `tickets`: every open ticket In Progress or Ready, plus any other open
-  ticket with a live lease, a waiting runner or an open build job. Each is a
+- `tickets`: the tickets being worked: open tickets with a live lease, a
+  waiting runner or an open build job (the board lists the rest). Each is a
   `TicketSummary` plus `holder` (`""` when none) and `pr`. `pr` is the merge
   sweep's latest view of the ticket's pull request, or null: `url`,
   `verdict`, `reason`, `checks_total`, `checks_done` and `checks_failed`.

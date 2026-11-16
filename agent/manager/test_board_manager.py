@@ -130,5 +130,14 @@ class ActivityTests(unittest.TestCase):
         self.assertEqual(calls, [('POST', '/api/v1/manager/activity', {'state': 'idle'})])
 
 
+
+class NotesTests(unittest.TestCase):
+    def test_housekeeping_before_the_block_is_logged_not_shown(self):
+        text = 'job 9f3a cache 12 GB\n```\nMANAGER SUMMARY\nHEADLINE: Fixed it.\n### Owner\n- Nothing.\n```'
+        self.assertEqual(m.session_notes(text), 'job 9f3a cache 12 GB')
+        self.assertNotIn('9f3a', m.session_summary(text))
+        self.assertEqual(m.session_notes('MANAGER SUMMARY\nHEADLINE: x'), '')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -245,12 +245,6 @@ button.team-card:focus-visible,
   border-color: var(--t-chip);
 }
 
-.team-tickets {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 12px;
-}
-
 .team-ticket {
   display: flex;
   flex-direction: column;
@@ -418,32 +412,126 @@ button.team-card:focus-visible,
   fill: var(--t-accent);
 }
 
-/* ---------- Detail panel ---------- */
-.team-backdrop {
+/* ---------- Details modal ---------- */
+.team-modal {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(5, 7, 10, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(5, 7, 10, 0.6);
 }
 
-.team-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 51;
+.team-modal__dialog {
   box-sizing: border-box;
-  width: 420px;
+  width: 640px;
   max-width: 100%;
+  max-height: min(86vh, 900px);
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 22px 22px 32px;
+  padding: 22px 22px 28px;
   overflow-y: auto;
   background: var(--t-panel);
-  border-left: 1px solid var(--t-border-hi);
-  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.45);
-  animation: team-slidein 0.2s ease-out;
+  color: var(--t-text);
+  font-family: var(--t-sans);
+  border: 1px solid var(--t-border-hi);
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  animation: team-pop 0.16s ease-out;
+}
+
+/* The manager's history: one entry per session. */
+.team-history {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.team-history__item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--t-divider);
+}
+
+.team-history__head {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: baseline;
+}
+
+.team-history__headline {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--t-title);
+  overflow-wrap: anywhere;
+}
+
+.team-history__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  margin: 4px 0 0 60px;
+  padding: 0 8px;
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--t-text-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.team-history__toggle:hover,
+.team-history__toggle:focus-visible {
+  border-color: var(--t-border-hi);
+  color: var(--t-title);
+  outline: none;
+}
+
+.team-history__toggle svg {
+  transition: transform 0.15s;
+}
+
+.team-history__chevron--open {
+  transform: rotate(180deg);
+}
+
+.team-history__body {
+  margin: 8px 0 0 60px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--t-text-2);
+  overflow-wrap: anywhere;
+}
+
+.team-history__body .markdown h3 {
+  margin: 12px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t-title);
+}
+
+.team-history__body .markdown h3:first-child {
+  margin-top: 0;
+}
+
+.team-history__body .markdown ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.team-history__body .markdown strong {
+  color: var(--t-text);
+}
+
+.team-history__plain {
+  margin: 0;
+  white-space: pre-line;
 }
 
 .team-panel__title {
@@ -559,11 +647,6 @@ button.team-card:focus-visible,
   to { stroke-dashoffset: 0; }
 }
 
-@keyframes team-slidein {
-  from { transform: translateX(24px); opacity: 0; }
-  to { transform: none; opacity: 1; }
-}
-
 .team-manager--working {
   border-color: var(--t-accent);
 }
@@ -601,11 +684,49 @@ button.team-card:focus-visible,
   border-color: rgba(229, 169, 58, 0.45);
 }
 
+/* A runner and the ticket it works on: one column, the ticket a child card. */
+.team-branch {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.team-branch > .team-ticket {
+  position: relative;
+  margin: 12px 0 0 18px;
+}
+
+/* The branch's connector, from the runner card down into the ticket. */
+.team-branch > .team-ticket::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: -13px;
+  width: 11px;
+  height: 30px;
+  border-left: 1px solid var(--t-border-hi);
+  border-bottom: 1px solid var(--t-border-hi);
+  border-bottom-left-radius: 6px;
+}
+
+.team-slot > .team-ticket {
+  margin-top: 10px;
+}
+
+.team-ticket .stepper {
+  margin-top: 4px;
+}
+
+@keyframes team-pop {
+  from { transform: translateY(8px) scale(0.98); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .team-dot--live,
   .team-wire__path,
   .team-wire__path--flow,
-  .team-panel {
+  .team-modal__dialog {
     animation: none;
   }
   .team-wire__path {
@@ -636,8 +757,28 @@ button.team-card:focus-visible,
   .team-hosts {
     grid-template-columns: minmax(0, 1fr);
   }
-  .team-tickets {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  /* The details modal is a full-screen sheet on a phone. */
+  .team-modal {
+    padding: 0;
+  }
+  .team-modal__dialog {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border: none;
+    border-radius: 0;
+    padding: 18px 16px 28px;
+  }
+  .team-history__toggle,
+  .team-history__body {
+    margin-left: 0;
+  }
+  .team-history__head {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+  .team-history__head .team-chip {
+    grid-column: 2;
+    justify-self: start;
   }
 }
 

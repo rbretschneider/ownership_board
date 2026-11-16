@@ -1,10 +1,14 @@
+import { Bot } from "lucide-react";
+import type { ReactNode } from "react";
 import type { CIRunners, ManagerActivity, TeamBuildHost, TeamManager, TeamRunner, TeamTicket } from "../../api/types";
 import { formatElapsed } from "../../lib/buildClock";
 import { relativeTime } from "../../lib/relativeTime";
 import {
-  CI_SAMPLE_STALE_MS, ciRunnerLabels, ciRunnerState, clockTime, formatTokens, formatUSD, hostLoad, humanizeDoing, runnerEngine, runnerShortName,
-  RUNNER_STATES, ticketClock, ticketRole, type TicketActivity,
+  CI_SAMPLE_STALE_MS, ciRunnerLabels, ciRunnerState, clockTime, formatUSD, hostLoad, humanizeDoing, runnerModelChip, runnerPool, runnerShortName,
+  RUNNER_STATES, ticketClock, type TicketActivity,
 } from "../../lib/team";
+import { StageStepper } from "../board/StageStepper";
+import { RankChevrons, UsageBadge } from "../board/UsageBadge";
 
 /** Props for {@link CIRunnersCard}. */
 export interface CIRunnersCardProps {
@@ -121,6 +125,7 @@ export function RunnerCard({ runner, isActive, onEnter, onLeave, onOpen }: Runne
   const state = RUNNER_STATES[runner.state];
   const name = runnerShortName(runner.name);
   const ticket = runner.ticket_id === null ? "none" : `#${runner.ticket_id}`;
+  const chip = runnerModelChip(runner);
   return (
     <button
       type="button"
@@ -140,17 +145,25 @@ export function RunnerCard({ runner, isActive, onEnter, onLeave, onOpen }: Runne
         </span>
         <span className={`team-pill team-pill--${state.tone}`}>{state.label}</span>
       </span>
-      <span className="team-faint">{runnerEngine(runner)}</span>
+      <span className="team-faint">{runnerPool(runner)}</span>
       <span className="team-runner__doing">{humanizeDoing(runner.doing)}</span>
-      <span className="team-chips">
-        <span className="team-chip team-chip--ticket">{ticket}</span>
-        {runner.profile_version !== "" && <span className="team-chip">{runner.profile_version}</span>}
-      </span>
+      {(chip !== undefined || runner.profile_version !== "") && (
+        <span className="team-chips">
+          {chip !== undefined && (
+            <span className={`card__model${chip.escalatedAfter !== undefined ? " card__model--escalated" : ""}`}
+              title={chip.escalatedAfter !== undefined ? `Escalated to ${chip.name} at high reasoning after ${chip.escalatedAfter} rejected code passes` : "Reported model"}>
+              {chip.escalatedAfter !== undefined ? <RankChevrons /> : <Bot size={12} aria-hidden="true" />}
+              <span className="card__model-name">{chip.name}</span>
+            </span>
+          )}
+          {runner.profile_version !== "" && <span className="team-chip">{runner.profile_version}</span>}
+        </span>
+      )}
     </button>
   );
 }
 
-/** Props for {@link TicketCard}. */
+/** Props for {@link TeamTicketCard}. */
 export interface TeamTicketCardProps {
   ticket: TeamTicket;
   activity: TicketActivity;
@@ -158,35 +171,45 @@ export interface TeamTicketCardProps {
   now: number;
 }
 
-/** A ticket in flight: role, what it is doing or waiting on, its build clock and tokens. */
+/**
+ * A ticket being worked, nested under the runner or build-host slot that has
+ * it: what it is doing, then the Board card's own token badge and stage
+ * stepper with attempt counts, the signals that show a problem at a glance.
+ */
 export function TeamTicketCard({ ticket, activity, isLinked, now }: TeamTicketCardProps) {
-  const role = ticketRole(ticket.stage);
+  const clock = ticketClock(ticket, now);
   return (
     <article className={`team-card team-ticket team-ticket--${activity.group}${isLinked ? " team-card--linked" : ""}`} data-ticket={ticket.id}>
-      <div className="team-row team-row--between">
+      <div className="team-row team-row--between team-row--top">
         <a className="team-ticket__id" href={`#/t/${ticket.id}`}>#{ticket.id}</a>
-        <span className={`team-pill team-pill--small team-pill--${role.tone}`}>{role.label}</span>
+        <UsageBadge usage={ticket.usage} />
       </div>
       <div className="team-ticket__title">{ticket.title}</div>
-      <div className={`team-ticket__activity team-tone--${activity.tone}`}>{activity.text}</div>
-      <div className="team-ticket__foot">
-        <span>{ticketClock(ticket, now)}</span>
-        <span className="team-faint">{formatTokens(ticket.usage?.weighted_tokens)}</span>
+      <div className={`team-ticket__activity team-tone--${activity.tone}`}>
+        {activity.text}{clock !== "—" ? <span className="team-faint"> · {clock}</span> : null}
       </div>
+      <StageStepper ticket={ticket} />
     </article>
   );
+}
+
+/** A runner and the ticket it holds, as one branch of the org chart. */
+export function TeamBranch({ children }: { children: ReactNode }) {
+  return <div className="team-branch">{children}</div>;
 }
 
 /** Props for {@link BuildHostCard}. */
 export interface BuildHostCardProps {
   host: TeamBuildHost;
   now: number;
+  /** Renders the ticket card for a slot whose ticket no runner holds; null otherwise. */
+  renderSlotTicket?: (ticketId: number) => ReactNode;
 }
 
 const OS_LABELS: Record<TeamBuildHost["os"], string> = { windows: "Windows", linux: "Linux", macos: "macOS" };
 
 /** A build host: one box per slot with the job, phase and elapsed time, then its queue. */
-export function BuildHostCard({ host, now }: BuildHostCardProps) {
+export function BuildHostCard({ host, now, renderSlotTicket }: BuildHostCardProps) {
   const load = hostLoad(host);
   const slots = Math.max(host.max_parallel, host.running.length);
   return (
@@ -206,6 +229,7 @@ export function BuildHostCard({ host, now }: BuildHostCardProps) {
                 <div className="team-slot__job">{job ? `#${job.ticket_id} · ${job.phase || job.status}` : "free"}</div>
                 <div className="team-slot__bar" aria-hidden="true"><div className="team-slot__fill" /></div>
                 <div className="team-slot__clock">{job && Number.isFinite(started) ? formatElapsed(now - started) : "—"}</div>
+                {job && renderSlotTicket?.(job.ticket_id)}
               </div>
             );
           })}

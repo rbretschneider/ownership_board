@@ -29,7 +29,15 @@ type teamManagerDTO struct {
 	LatestHeadline string                  `json:"latest_headline"`
 	Activity       teamActivityDTO         `json:"activity"`
 	LatestAt       *time.Time              `json:"latest_at"`
-	Sessions       []domain.ManagerSession `json:"sessions"`
+	Sessions       []teamManagerSessionDTO `json:"sessions"`
+}
+
+// teamManagerSessionDTO is one history entry: the session plus its headline
+// and whether its summary has a HEADLINE line (the structured format).
+type teamManagerSessionDTO struct {
+	domain.ManagerSession
+	Headline     string `json:"headline"`
+	IsStructured bool   `json:"structured"`
 }
 
 // teamActivityDTO is what the manager is acting on right now.
@@ -134,10 +142,12 @@ func toTeam(team app.Team) teamDTO {
 
 func toTeamManager(manager app.TeamManager) teamManagerDTO {
 	sessions := manager.Sessions
-	if sessions == nil {
-		sessions = []domain.ManagerSession{}
+	entries := make([]teamManagerSessionDTO, 0, len(sessions))
+	for _, session := range sessions {
+		entries = append(entries, teamManagerSessionDTO{ManagerSession: session,
+			Headline: domain.ManagerHeadline(session.Summary), IsStructured: domain.HasManagerHeadline(session.Summary)})
 	}
-	out := teamManagerDTO{managerStatusDTO: toManagerStatus(manager.Status), OpenFlags: manager.OpenFlags, Sessions: sessions, Activity: toTeamActivity(manager.Activity)}
+	out := teamManagerDTO{managerStatusDTO: toManagerStatus(manager.Status), OpenFlags: manager.OpenFlags, Sessions: entries, Activity: toTeamActivity(manager.Activity)}
 	if len(sessions) > 0 {
 		out.LatestSummary = sessions[0].Summary
 		out.LatestHeadline = domain.ManagerHeadline(sessions[0].Summary)

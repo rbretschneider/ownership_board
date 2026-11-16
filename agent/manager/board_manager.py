@@ -136,6 +136,16 @@ def session_summary(result_text):
     return summary.replace('```', '').strip()[:8000]
 
 
+def session_notes(result_text):
+    """What the session wrote before its MANAGER SUMMARY block: job ids, paths and
+    housekeeping the runbook keeps out of the owner's summary. Only logged."""
+    text = (result_text or '').strip()
+    start = text.rfind('MANAGER SUMMARY')
+    if start <= 0:
+        return ''
+    return ' '.join(text[:start].replace('```', ' ').split())[-1500:]
+
+
 HEADLINE_LIMIT = 100
 
 
@@ -256,6 +266,9 @@ def run_session(repo_id, flags, budget_left, review=False):
         log(f'repo {repo_id}: session returned no JSON: {result.stderr[-300:]}')
         return 0.0, model, 'Session failed to start: ' + result.stderr[-300:]
     cost = float(output.get('total_cost_usd') or 0)
+    notes = session_notes(output.get('result'))
+    if notes:
+        log(f'repo {repo_id}: session notes: {notes}')
     summary = session_summary(output.get('result'))
     log(f'repo {repo_id}: done, ${cost:.2f}: {summary[-400:]}')
     return cost, model, summary

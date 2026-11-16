@@ -32,7 +32,7 @@ func ManagerHeadline(summary string) string {
 // summary already carries a HEADLINE line.
 func WithManagerHeadline(summary, headline string) string {
 	headline = strings.Join(strings.Fields(headline), " ")
-	if headline == "" || hasHeadlineLine(summary) {
+	if headline == "" || HasManagerHeadline(summary) {
 		return summary
 	}
 	line := headlinePrefix + " " + truncateRunes(headline, MaxManagerHeadlineLength)
@@ -42,7 +42,9 @@ func WithManagerHeadline(summary, headline string) string {
 	return line + "\n" + summary
 }
 
-func hasHeadlineLine(summary string) bool {
+// HasManagerHeadline reports whether the summary carries a HEADLINE line: the
+// structured format the runbook asks for since 2026-11-16.
+func HasManagerHeadline(summary string) bool {
 	for _, line := range strings.Split(summary, "\n") {
 		if _, ok := cutPrefixFold(strings.TrimLeft(strings.TrimSpace(line), "#*-> "), headlinePrefix); ok {
 			return true

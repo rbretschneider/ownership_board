@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { teamFixture, ticketDetailFixture, TEAM_NOW } from "../components/team/teamFixture";
 import {
-  activityLines, formatTokens, hostLoad, humanizeDoing, linkPath, managerTargets, runnerEngine, runnerShortName, sortByActivity, ticketActivity,
-  ticketClock, ticketRole,
+  activityLines, formatTokens, historyEntry, hostLoad, humanizeDoing, linkPath, managerTargets, runnerEngine, runnerPool, runnerShortName,
+  ticketActivity, ticketClock, ticketRole,
 } from "./team";
 
 describe("runner labels", () => {
@@ -45,9 +45,18 @@ describe("tickets in flight", () => {
     expect(ticketActivity({ ...byId(15), waiting_on: [] }, [], TEAM_NOW).text).toBe("Ready for a runner");
   });
 
-  it("orders tickets active first, then waiting, then blocked", () => {
-    const team = teamFixture();
-    expect(sortByActivity(team.tickets, team.build_hosts, TEAM_NOW).map(({ ticket }) => ticket.id)).toEqual([12, 16, 15, 13, 14]);
+  it("names a runner's pool, and an escalation to the other family", () => {
+    expect(runnerPool({ name: "@worker/7/codex_1", model: "opus [escalated:2]" })).toBe("Codex runner · escalated to Claude");
+    expect(runnerPool({ name: "@worker/7/claude_1", model: "opus" })).toBe("Claude runner");
+    expect(runnerPool({ name: "loop", model: "" })).toBe("Agent runner");
+  });
+
+  it("splits a structured history entry into headline and markdown, and falls back for older ones", () => {
+    const structured = historyEntry({ summary: "Board review\nMANAGER SUMMARY\nHEADLINE: Merged #12.\n\n### Acted\n- #12 merged.", headline: "Merged #12.", structured: true });
+    expect(structured).toEqual({ headline: "Merged #12.", body: "### Acted\n- #12 merged.", isMarkdown: true });
+    const legacy = historyEntry({ summary: "MANAGER SUMMARY\nRepeated #64 directions. why: x | action: y | expect: z", headline: "Repeated #64 directions." });
+    expect(legacy).toEqual({ headline: "Repeated #64 directions.", body: "why: x\naction: y\nexpect: z", isMarkdown: false });
+    expect(historyEntry({ summary: "Checked the host. All fine." }).headline).toBe("Checked the host.");
   });
 
   it("points the working manager at its tickets, their runners and a named host", () => {
@@ -80,7 +89,8 @@ describe("tickets in flight", () => {
 
   it("summarizes host load", () => {
     const host = teamFixture().build_hosts[0]!;
-    expect(hostLoad(host).text).toBe("1 of 2 slots busy");
+    expect(hostLoad(host).text).toBe("2 of 2 slots busy");
+    expect(hostLoad({ ...host, running: host.running.slice(0, 1) }).text).toBe("1 of 2 slots busy");
     expect(hostLoad({ ...host, running: [] }).text).toBe("2 slots free");
     expect(hostLoad({ ...host, online: false }).text).toBe("offline");
   });

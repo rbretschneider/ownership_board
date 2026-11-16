@@ -1,4 +1,4 @@
-import { Bot, CircleAlert, Coins, GitPullRequest, Hand, HeartPulse, Hourglass, MessageCircleQuestion, Server, Timer, Zap } from "lucide-react";
+import { Bot, CircleAlert, GitPullRequest, Hand, HeartPulse, Hourglass, MessageCircleQuestion, Server, Timer, Zap } from "lucide-react";
 import { isCompletedStage } from "../../lib/stages";
 import { platformStatuses } from "../../lib/progress";
 import { PlatformIcon } from "../common/PlatformIcon";
@@ -14,7 +14,6 @@ import { useRunners } from "../../hooks/useRunners";
 import { slotStep, slotTone, ticketRun } from "../../lib/runners";
 import { usePRStatus } from "../../hooks/usePRStatus";
 import { prPill, ticketPR } from "../../lib/prStatus";
-import { usageBadge } from "../../lib/usage";
 
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
@@ -23,15 +22,7 @@ import { KindTag } from "../common/KindTag";
 import { StageChip } from "../common/StageChip";
 import { RepoChip } from "../repos/RepoChip";
 import { StageStepper } from "./StageStepper";
-
-/** Three stacked chevrons, like rank stripes: the story earned a stronger model. */
-function RankChevrons() {
-  return (
-    <svg className="rank-chevrons" width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">
-      <path d="M1.5 4.5 5.5 1.5 9.5 4.5M1.5 7.5 5.5 4.5 9.5 7.5M1.5 10.5 5.5 7.5 9.5 10.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+import { RankChevrons, UsageBadge } from "./UsageBadge";
 
 /**
  * The visual body of a card, shared by the card and its drag ghost.
@@ -87,7 +78,6 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
   const miner = !pr && !activity.buildServer && ticket.stage === "build" && liveLease && activity.working ? modelFamily(model?.name) : undefined;
   // Per-platform results as icons: board Windows verification and the PR's CI checks.
   const platforms = platformStatuses(ticket, prStatus?.checks);
-  const usage = usageBadge(ticket.usage);
   return (
     <>
       <div className="card__top">
@@ -159,12 +149,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
             {platforms.map((p) => <PlatformIcon key={p.platform} status={p} />)}
           </span>
         )}
-        {usage && (
-          <span className={`badge badge--usage${usage.heavy ? " badge--usage-heavy" : ""}`} title={usage.title} aria-label={usage.title}>
-            <Coins size={13} aria-hidden="true" />
-            {usage.label}
-          </span>
-        )}
+        <UsageBadge usage={ticket.usage} />
         {ticket.open_questions > 0 && (
           <span className="badge badge--human">
             <MessageCircleQuestion size={13} aria-hidden="true" />

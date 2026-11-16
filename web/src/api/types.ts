@@ -860,7 +860,15 @@ export interface TeamManager extends ManagerStatus {
   activity?: ManagerActivity;
   latest_summary: string;
   latest_at: string | null;
-  sessions: ManagerSession[];
+  sessions: TeamManagerSession[];
+}
+
+/** One manager history entry: the session, its headline, and whether it uses the structured format. */
+export interface TeamManagerSession extends ManagerSession {
+  /** Absent from older servers. */
+  headline?: string;
+  /** The summary has a HEADLINE line and markdown sections. Absent from older servers. */
+  structured?: boolean;
 }
 
 /** GET /team: the manager, runners, tickets in flight and build hosts. */

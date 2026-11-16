@@ -163,3 +163,17 @@ The text is fixed board text. Nothing an agent wrote reaches a lock screen.
 The board sends the same push for the same ticket and reason at most once in
 10 minutes. Each push deep-links to the card and offers no action beyond
 opening it. A person's own actions never notify them.
+
+## Interface conventions
+
+- **The link color is for links.** Text gets the link color only when it is
+  a real link or a control styled as one. Hints ("Tap for history log"),
+  metadata (cost, model, timestamps) and status text use the neutral text
+  colors or a neutral chip. Link-colored text that does nothing reads as
+  broken. Status pills and badges keep their tinted backgrounds.
+- **Details open in a modal.** It is centered over a dimmed backdrop and
+  closes on ×, a click on the backdrop, or Escape. Focus stays inside while
+  it is open. On a phone it is a full-screen sheet.
+- **One component per signal.** A ticket's stage stepper, token badge and
+  model chip look the same wherever they appear, so the Team view reuses the
+  Board card's components rather than drawing its own.
