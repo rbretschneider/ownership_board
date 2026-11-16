@@ -23,6 +23,7 @@ type fakeCI struct {
 	runs       map[int64]domain.CIRun
 	heads      map[string]string
 	runnersErr error
+	headErr    error
 	runners    []domain.CIRunner
 	cancelled  []int64
 	reran      []int64
@@ -75,7 +76,7 @@ func (c *fakeCI) JobLogTail(context.Context, string, int64, int) (string, error)
 }
 
 func (c *fakeCI) BranchHead(_ context.Context, _, branch string) (string, error) {
-	return c.heads[branch], nil
+	return c.heads[branch], c.headErr
 }
 
 func (c *fakeCI) PullHead(context.Context, string, int) (string, string, error) {
@@ -263,6 +264,21 @@ func TestCISensorsFlagACancelledHeadButNotOneTheBoardCancelled(t *testing.T) {
 	b.ci.heads["feat/x"] = ciHead
 	if result, _ := b.service.Flags(b.ctx, manager, app.RepoScope{}, 0); len(result.Flags) != 0 {
 		t.Fatalf("flags = %+v, want none for a run the board cancelled", result.Flags)
+	}
+}
+
+func TestAQueuedJobStaysOnItsTicketWhenTheHeadIsUnreadable(t *testing.T) {
+	b := newCIBoard(t)
+	run := ciRunAt(8, "feat/x", ciHead, domain.CIQueued, "")
+	run.Jobs = []domain.CIJob{{ID: 80, RunID: 8, Name: "windows", Status: domain.CIQueued, CreatedAt: b.clock.Now().Add(-2 * time.Hour)}}
+	b.ci.runs[run.ID] = run
+	b.ci.headErr = errors.New("the token was rejected (HTTP 403)")
+	result, err := b.service.Flags(b.ctx, manager, app.RepoScope{}, 0)
+	if err != nil {
+		t.Fatalf("flags: %v", err)
+	}
+	if len(result.Flags) != 1 || result.Flags[0].Kind != domain.FlagCIQueued || result.Flags[0].TicketID != b.ticket {
+		t.Fatalf("flags = %+v, want the queued job flagged on the ticket that owns the branch", result.Flags)
 	}
 }
 

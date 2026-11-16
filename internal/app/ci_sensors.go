@@ -138,7 +138,9 @@ func ticketHeads(ctx context.Context, provider CIReader, repo domain.Repo, ticke
 		branch, sha, err := ticketHead(ctx, provider, repo, ticket)
 		if err != nil {
 			notes = append(notes, fmt.Sprintf("%s: head of #%d not readable: %v", repo.FullName, ticket.ID, err))
-			continue
+			// Without a head the ticket still owns its recorded branch, so a
+			// queued job there is still flagged on the ticket.
+			branch, sha = ticket.Branch, ""
 		}
 		if branch != "" {
 			facts = append(facts, domain.CITicketFacts{Ticket: ticket, Branch: branch, HeadSHA: sha})
