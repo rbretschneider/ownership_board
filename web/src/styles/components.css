@@ -1779,3 +1779,40 @@ a.runners__next:hover { color: var(--text); }
 .card__link:has(+ .card__actions:not(:empty)) .stepper { border-radius: 0; }
 .card__top-right--deploying { max-width: 100%; flex-wrap: wrap; justify-content: flex-end; }
 .card__lease-holder { min-width: 0; max-width: 10rem; color: var(--text-muted); font-size: 0.6875rem; overflow-wrap: anywhere; white-space: normal; }
+
+/* An epic's stories as one segmented bar along the card's bottom edge, in
+   place of the stepper. Deployed is filled, merged half, in progress accent. */
+.epic-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 22px;
+  margin: 2px calc(-1 * var(--card-pad-x)) calc(-1 * var(--card-pad-y));
+  padding: 0 var(--card-pad-x);
+  border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
+  background: var(--surface-3);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  line-height: 1;
+}
+.epic-bar__parts {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.epic-bar__part {
+  flex: 1 1 0;
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text-muted) 25%, transparent);
+}
+.epic-bar__part--deployed { background: var(--done); }
+.epic-bar__part--merged { background: color-mix(in srgb, var(--done) 50%, var(--surface-3)); }
+.epic-bar__part--active { background: var(--accent); }
+.epic-bar__label { flex: none; color: var(--text-muted); white-space: nowrap; }
+.epic-section__bar .epic-bar { margin: 0 0 8px; border-radius: var(--radius-sm); }

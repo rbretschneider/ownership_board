@@ -32,7 +32,7 @@ func BoardTools(services Services) []Tool {
 		addWorkLink{services}, recordDecision{services}, linkTickets{services}, findTicketsForWork{services},
 		listTickets{services}, reportPRState{services}, reportDeploy{services}, setWorkModel{services},
 		managerFlags{services}, answerQuestions{services}, unblockTicket{services},
-		getVerdicts{services}, reportCleanMerge{services},
+		getVerdicts{services}, reportCleanMerge{services}, splitTicket{services},
 	}
 }
 
@@ -431,7 +431,7 @@ func (createAutonomousTicket) Definition() Definition {
 			"kind":       map[string]any{"type": "string", "enum": []string{string(domain.KindStory), string(domain.KindBug)}},
 			"title":      prop("string", "Short title."),
 			"body":       prop("string", "The request in a few sentences, as the owner put it."),
-			"spec":       prop("string", "The agreed spec in markdown: problem, scope, out of scope, numbered acceptance criteria, approach and risk, and a line `Build tier: small | normal | large`."),
+			"spec":       prop("string", "The agreed spec in markdown: problem, scope, out of scope, numbered acceptance criteria, approach and risk, and a line `Build tier: small | normal`. Work bigger than one half-day story is filed whole and then broken down with split_ticket."),
 			"repo_id":    prop("integer", "The agreed repo (see list_repos)."),
 			"depends_on": dependsOnProp(),
 		}, "kind", "title", "spec", "repo_id"),

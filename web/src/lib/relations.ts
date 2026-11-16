@@ -21,6 +21,8 @@ const LABELS: readonly { kind: RelationKind; direction: Relation["direction"]; l
   { kind: "relates_to", direction: "incoming", label: "Relates to" },
   { kind: "depends_on", direction: "outgoing", label: "Depends on" },
   { kind: "depends_on", direction: "incoming", label: "Needed by" },
+  { kind: "split_from", direction: "outgoing", label: "Split from" },
+  { kind: "split_from", direction: "incoming", label: "Split into" },
 ];
 
 /** Most tickets the link picker lists at once. */

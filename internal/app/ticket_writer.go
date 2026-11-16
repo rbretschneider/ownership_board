@@ -77,6 +77,13 @@ func (w ticketWriter) apply(ctx context.Context, repos Repos, ticket *domain.Tic
 		}
 		events = append(events, filed...)
 	}
+	if before != domain.StageDeployed && ticket.Stage == domain.StageDeployed {
+		closed, err := w.closeFinishedEpic(ctx, repos, *ticket)
+		if err != nil {
+			return TicketDetail{}, nil, err
+		}
+		events = append(events, closed...)
+	}
 	detail, err := loadDetail(ctx, repos, *ticket)
 	return detail, events, err
 }
@@ -115,8 +122,16 @@ func loadDetail(ctx context.Context, repos Repos, ticket domain.Ticket) (TicketD
 	if err != nil {
 		return TicketDetail{}, err
 	}
+	splitFrom, err := repos.Relations().SplitParentOf(ctx, ticket.ID)
+	if err != nil {
+		return TicketDetail{}, err
+	}
+	splitInto, err := repos.Relations().SplitChildrenOf(ctx, ticket.ID)
+	if err != nil {
+		return TicketDetail{}, err
+	}
 	detail := TicketDetail{
-		TicketSummary: TicketSummary{Ticket: ticket, OpenQuestions: countOpen(questions), WaitingOn: waitingOn, Attempts: domain.CountStageAttempts(timeline), Usage: usage, Verdicts: verdicts[ticket.ID]},
+		TicketSummary: TicketSummary{Ticket: ticket, OpenQuestions: countOpen(questions), WaitingOn: waitingOn, Attempts: domain.CountStageAttempts(timeline), Usage: usage, Verdicts: verdicts[ticket.ID], SplitFrom: splitFrom, SplitInto: splitInto},
 		Questions:     questions, Timeline: timeline,
 	}
 	if detail.Repo, err = repoOf(ctx, repos, ticket.RepoID); err != nil {

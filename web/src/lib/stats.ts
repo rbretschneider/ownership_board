@@ -31,6 +31,7 @@ const STAGE_NAMES: Record<StageId, string> = {
   refine: "Refine",
   spec_review: "Spec review",
   ready: "Ready",
+  epic: "Epic",
   design: "Design",
   design_review: "Design review",
   build: "Build",

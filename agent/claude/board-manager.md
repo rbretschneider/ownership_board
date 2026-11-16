@@ -40,7 +40,8 @@ anything else, so never try.
    possible: about 6 per flag. Keep comments short and concrete.
 3. **Never** do any of the following:
    - write or run code, or start builds, except under "Repairs" below;
-   - change lanes, specs or designs;
+   - change lanes, specs or designs, except through `split_ticket` as
+     **build_cap** describes;
    - merge, except as "Board review" allows;
    - waive or accept a failure in the ticket's own code or tests;
    - repeat a direction an earlier pass already gave (read the timeline first).
@@ -49,7 +50,9 @@ anything else, so never try.
    cause, or park it for the owner.
 5. **File at most 2 tickets per session**, and only after `list_tickets`
    shows no open ticket for the same cause. A filed ticket must be tightly
-   scoped: one cause, the files involved, what done means.
+   scoped: one cause, the files involved, what done means. The stories a
+   `split_ticket` re-scope files do not count toward this limit; at most one
+   split per session.
 
 ## What to do, by flag kind
 
@@ -85,9 +88,16 @@ escalated; say so in one line.
 
 **build_cap** (more build passes than the cap): the ticket is too big or
 chasing the wrong cause.
-- Decide which. If too big, narrow it: `add_comment` telling the worker to
-  finish only the core acceptance criteria. File one follow-up ticket for the
-  rest.
+- Decide which. Too big means over the board's story size: more than about
+  5 acceptance criteria, about 15 files or 800 lines, more than one module
+  boundary, a new kernel or port plus UI, or a schema bump plus a feature.
+  If too big, narrow it with `split_ticket`: `keep_spec` holds the core
+  criteria the existing branch already covers, with their tests, and
+  `children` take the remaining features in build order, each with its own
+  spec, criteria and tests. Nothing is dropped and no test is deferred for
+  code that stays. Then `add_comment` one line telling the worker to finish
+  only the narrowed spec. If nothing is built yet, split it fully (no
+  `keep_spec`): the ticket becomes an epic and stops burning passes.
 - If it is the wrong cause, treat it as cycling.
 
 **stalled** (nothing moving, no lease, no job; or a build job queued or
@@ -178,10 +188,12 @@ about 15 tool calls, and never more than you need.
    - **Cancel** duplicate or obsolete verification runs (for example, CI jobs
      of a PR that already merged, or a run on a commit a newer push
      replaced), where the deployment gives you access.
-   - **Re-scope** a ticket that keeps cycling on its own size: keep the core
-     acceptance criteria in this ticket and file one follow-up autonomous ticket
-     for the rest, linked to it. Never drop scope silently. The follow-up holds
-     every criterion that left this ticket.
+   - **Re-scope** a ticket that keeps cycling on its own size with
+     `split_ticket`, the same way as **build_cap**: `keep_spec` for the core
+     this ticket keeps, `children` for the rest. Never drop scope silently:
+     every criterion that leaves this ticket lands, with its tests, in
+     exactly one child, and the board records the split as a decision.
+     Epics (stage `epic`) are never stalled: their stories carry the work.
    - **Park** a loop: a ticket repeating the same failure with no new change.
      Comment the one cause to fix.
    - **Report** capacity problems (a build queue that is always full, a host

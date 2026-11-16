@@ -248,8 +248,46 @@ func instructionsFor(input BriefInput) string {
 		if input.Detail.Ticket.IsAutonomous && input.Action != domain.ActionDeploy {
 			fmt.Fprintf(&b, "## Autonomous ticket\n\n%s\n\n", autonomousRules)
 		}
+		if rule := storySizeRule(input); rule != "" {
+			fmt.Fprintf(&b, "## Story size\n\n%s\n\n", rule)
+		}
 	}
 	return b.String()
+}
+
+// storySizeLimits say when a request is too big for one story. They are the
+// same words in every brief and in the agent prompts, so every agent judges
+// size the same way.
+const storySizeLimits = `Every story is one tightly scoped task that Sonnet can finish in about half a day. A request is too big for one story when any of these holds: more than about 5 acceptance criteria; more than about 15 files or about 800 changed lines; more than one module boundary; a new kernel, engine or port plus its UI; a schema or format bump plus a feature built on it. When unsure, it is too big.`
+
+// storySplitRule tells the agent how to break up a ticket that is too big.
+const storySplitRule = `- Too big: do not spec, design or build it as one story. Call split_ticket with child stories in build order. Each child has its own spec (problem, scope, numbered acceptance criteria with the tests that prove them, and the files it touches) and a small file set; split_ticket links them so each waits for the ones before it. Then stop work on this ticket: it becomes an epic that closes itself when every child is deployed.
+- Every acceptance criterion moves, with its tests, into exactly one child. A split never drops a criterion and never defers a test for code that stays.`
+
+// storyNarrowRule lets an autonomous ticket that is already part built keep
+// its core instead of throwing the work away.
+const storyNarrowRule = `- This ticket may already be part built. Then keep the core: call split_ticket with keep_spec (this ticket's narrowed spec: the criteria the existing work covers, with their tests) and move whole remaining features into children, which wait for this ticket. Carry on with the narrowed spec only. Never move a test out while the code it tests stays here.`
+
+// storySizeRule is the "Story size" section for refining, designing and
+// building, or "" for other actions and for scheduled reviews, which bound
+// their own size.
+func storySizeRule(input BriefInput) string {
+	ticket := input.Detail.Ticket
+	if ticket.IsHealthCheck {
+		return ""
+	}
+	switch input.Action {
+	case domain.ActionRefine:
+		return storySizeLimits + "\n\n" + storySplitRule + "\n- Set repo_id first: a split needs the repo its stories inherit."
+	case domain.ActionDesign, domain.ActionImplement:
+		rule := storySizeLimits + " Judge the size again now that you have read the code.\n\n" + storySplitRule
+		if ticket.IsAutonomous {
+			rule += "\n" + storyNarrowRule
+		}
+		return rule
+	default:
+		return ""
+	}
 }
 
 func (r *briefRenderer) facts(input BriefInput) {

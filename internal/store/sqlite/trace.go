@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/rbretschneider/ownership_board/internal/domain"
@@ -267,6 +268,51 @@ func (r relationRepo) WaitingOn(ctx context.Context, ticketID int64) ([]int64, e
 
 func (r relationRepo) DependencyEdges(ctx context.Context) (map[int64][]int64, error) {
 	return r.edges(ctx, `SELECT from_id, to_id FROM relations WHERE kind = 'depends_on' ORDER BY from_id, to_id`)
+}
+
+// splitChildrenQuery lists every split_from link with the child's title and
+// stage, oldest child first.
+const splitChildrenQuery = `SELECT r.to_id, c.id, c.title, c.stage FROM relations r JOIN tickets c ON c.id = r.from_id
+	WHERE r.kind = 'split_from'`
+
+func (r relationRepo) SplitChildren(ctx context.Context) (map[int64][]domain.SplitChild, error) {
+	return r.splitChildren(ctx, splitChildrenQuery+` ORDER BY r.to_id, c.id`)
+}
+
+func (r relationRepo) SplitChildrenOf(ctx context.Context, parentID int64) ([]domain.SplitChild, error) {
+	children, err := r.splitChildren(ctx, splitChildrenQuery+` AND r.to_id = ? ORDER BY c.id`, parentID)
+	return children[parentID], err
+}
+
+func (r relationRepo) SplitParentOf(ctx context.Context, childID int64) (int64, error) {
+	var parentID int64
+	err := r.q.QueryRowContext(ctx, `SELECT to_id FROM relations WHERE kind = 'split_from' AND from_id = ?`, childID).Scan(&parentID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: split parent of ticket %d: %w", childID, err)
+	}
+	return parentID, nil
+}
+
+func (r relationRepo) splitChildren(ctx context.Context, query string, args ...any) (map[int64][]domain.SplitChild, error) {
+	rows, err := r.q.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: split children: %w", err)
+	}
+	defer rows.Close()
+	children := map[int64][]domain.SplitChild{}
+	for rows.Next() {
+		var child domain.SplitChild
+		var stage string
+		if err := rows.Scan(&child.ParentID, &child.ID, &child.Title, &stage); err != nil {
+			return nil, err
+		}
+		child.Stage = domain.Stage(stage)
+		children[child.ParentID] = append(children[child.ParentID], child)
+	}
+	return children, rows.Err()
 }
 
 // edges reads (from_id, to_id) rows into a map from each from_id to its

@@ -86,6 +86,26 @@ type ticketSummaryDTO struct {
 	Build          *buildClockDTO `json:"build"`
 	// Verdicts is the newest verdict per build target for the ticket's commits.
 	Verdicts []domain.Verdict `json:"verdicts"`
+	// SplitFrom is the epic this story was split out of; null when none.
+	SplitFrom *int64 `json:"split_from"`
+	// SplitInto lists the stories this ticket was split into, oldest first.
+	SplitInto []splitChildDTO `json:"split_into"`
+}
+
+// splitChildDTO is one story of a split, enough to show the epic's progress.
+type splitChildDTO struct {
+	ID    int64        `json:"id"`
+	Title string       `json:"title"`
+	Stage domain.Stage `json:"stage"`
+	Lane  domain.Lane  `json:"lane"`
+}
+
+func toSplitChildren(children []domain.SplitChild) []splitChildDTO {
+	out := make([]splitChildDTO, 0, len(children))
+	for _, child := range children {
+		out = append(out, splitChildDTO{ID: child.ID, Title: child.Title, Stage: child.Stage, Lane: child.Stage.Lane()})
+	}
+	return out
 }
 
 type ticketDetailDTO struct {
@@ -215,8 +235,17 @@ func toSummary(summary app.TicketSummary) ticketSummaryDTO {
 		PRURL: t.PRURL, Branch: t.Branch, OpenQuestions: summary.OpenQuestions, WaitingOn: nonNilIDs(summary.WaitingOn), Lease: activeLease(t),
 		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, LaneChangedAt: t.LaneChangedAt,
 		Attempts: attemptsDTO(summary.Attempts), Usage: toUsage(summary.Usage), Build: toBuildClock(summary.Build),
-		Verdicts: nonNilVerdicts(summary.Verdicts),
+		Verdicts:  nonNilVerdicts(summary.Verdicts),
+		SplitFrom: optionalID(summary.SplitFrom), SplitInto: toSplitChildren(summary.SplitInto),
 	}
+}
+
+// optionalID is nil for 0, so "none" reads as JSON null.
+func optionalID(id int64) *int64 {
+	if id == 0 {
+		return nil
+	}
+	return &id
 }
 
 // usageDTO is a ticket's reported model token usage. Weighted counts cache

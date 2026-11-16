@@ -584,12 +584,23 @@ func loadBoard(ctx context.Context, repos Repos, filter TicketFilter) (Board, er
 	for _, entry := range signals {
 		byTicket[entry.TicketID] = append(byTicket[entry.TicketID], entry)
 	}
+	splits, err := repos.Relations().SplitChildren(ctx)
+	if err != nil {
+		return Board{}, err
+	}
+	splitFrom := make(map[int64]int64)
+	for parentID, children := range splits {
+		for _, child := range children {
+			splitFrom[child.ID] = parentID
+		}
+	}
 	summaries := make([]TicketSummary, 0, len(tickets))
 	for _, ticket := range tickets {
 		summaries = append(summaries, TicketSummary{
 			Ticket: ticket, OpenQuestions: openCounts[ticket.ID], WaitingOn: waiting[ticket.ID],
 			Attempts: domain.CountStageAttempts(byTicket[ticket.ID]), Usage: usage[ticket.ID],
 			Build: builds[ticket.ID], Verdicts: verdicts[ticket.ID],
+			SplitFrom: splitFrom[ticket.ID], SplitInto: splits[ticket.ID],
 		})
 	}
 	return Board{Lanes: domain.Lanes(), Stages: domain.Stages(), Repos: codeRepos, Tickets: summaries}, nil

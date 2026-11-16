@@ -58,6 +58,7 @@ export function flowStage(t: Pick<TicketSummary, "stage" | "work_model">): FlowS
       return "shaping";
     case "ready":
       return "ready";
+    case "epic":
     case "design":
     case "design_review":
       return "design";

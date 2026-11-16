@@ -64,7 +64,7 @@ func ManagerFlags(facts []ManagerTicketFacts, settings BoardSettings, now time.T
 	var flags []ManagerFlag
 	for _, fact := range facts {
 		ticket := fact.Ticket
-		if !ticket.IsAutonomous || ticket.Stage.IsCompleted() {
+		if !ticket.IsAutonomous || ticket.Stage.IsCompleted() || ticket.Stage == StageEpic {
 			continue
 		}
 		add := func(kind ManagerFlagKind, key, detail string) {

@@ -215,6 +215,9 @@ func (s *BoardService) linkInTx(ctx context.Context, repos Repos, actor domain.A
 	if kind == domain.RelationDependsOn {
 		return s.linkDependencyInTx(ctx, repos, actor, ticket, otherID)
 	}
+	if kind == domain.RelationSplitFrom {
+		return TicketDetail{}, nil, domain.Invalidf("split_from links are made only by splitting a ticket (split_ticket)")
+	}
 	other, err := repos.Tickets().Get(ctx, otherID)
 	if err != nil {
 		return TicketDetail{}, nil, err

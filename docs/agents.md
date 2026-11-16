@@ -76,6 +76,7 @@ The MCP server offers these tools:
 | `link_tickets` | Relates two tickets (`caused_by`, `follow_up_of`, `duplicate_of`, `relates_to`, `depends_on`). |
 | `find_tickets_for_work` | Commit sha or PR URL → the tickets it was recorded on. |
 | `get_verdicts` | Whether a commit passed, per build target, by `repo` and `sha` or by `ticket_id` (see [Verification verdicts](#verification-verdicts)). |
+| `split_ticket` | Splits a ticket that is bigger than one half-day story into child stories in build order (see [Splitting oversized work](#splitting-oversized-work)). |
 | `report_clean_merge` | Records a conflict-free merge of the default branch into a passed commit as passed. Needs the lease. |
 | `list_tickets` | Read-only overview, optionally by lane or repo. Each line shows what the ticket is waiting on, if anything. |
 | `report_deploy` | Requires a live deployment lease. Takes `id`, `outcome` (`deployed` or `failed`) and a nonblank `summary` of up to 1,000 characters. Success needs runtime identity and health evidence; failure blocks the merged ticket. Both clear the lease. |
@@ -99,16 +100,18 @@ the whole board each time it runs:
    procedure, verifies runtime identity/health and calls `report_deploy`,
    bypassing the code pipeline. Tickets to refine go to a `business_developer`
    subagent on a model sized to the ticket (haiku, sonnet or opus). It asks
-   questions, or the loop saves the spec with `submit: true`.
+   questions, or the loop saves the spec with `submit: true`, or, when the
+   request is over the story size limits, splits it with `split_ticket`.
 3. Tickets to design (claimed from Ready, or resumed) go to `architect`, then
    `security_researcher`. The loop saves the design with `submit: true`. It
    stops there; the build is a later pass.
 4. Tickets to build go through `senior_dev` → `qa_engineer` →
    `security_researcher` → `technical_writer` in a separate git worktree,
    then `senior_dev` opens the PR with the `pr` skill and waits for green CI.
-   Each stage runs on a model picked by the spec's build tier (small, normal
-   or large), and two QA failures move the build up a tier. On normal and
-   large builds, and on every autonomous build whatever its tier, an optional
+   Each stage runs on a model picked by the spec's build tier (small or
+   normal; an older `large` means "split it"), and two QA failures first
+   check the size, then move the build up a tier. On normal builds, and on
+   every autonomous build whatever its tier, an optional
    advisory review by another model family runs after the security review
    when a `gpt-review` command is installed (the OpenAI Codex CLI wrapper in
    the agent runner). Its findings go to `senior_dev` once, and the ones not
@@ -364,14 +367,60 @@ that session it:
 - makes sure every open autonomous ticket has a live next step;
 - merges PRs whose exact head the board verified and whose checks all passed;
 - cancels duplicate or obsolete runs;
-- re-scopes tickets that cycle on their own size into a core plus a linked
-  follow-up;
+- re-scopes tickets that cycle on their own size with `split_ticket`: a
+  narrowed core plus child stories that wait for it;
 - parks loops.
 
 Merging and cancelling need access the deployment gives it through
 `MANAGER_LOCAL_RUNBOOK`. Without that, it reports those PRs to you. Each
 review's summary (moving, acted, stalled, cost, owner) appears with the other
 manager sessions in Settings > Board manager.
+
+## Splitting oversized work
+
+Every story is one tightly scoped task that Sonnet can finish in about half
+a day. A request is too big for one story when it has more than about 5
+acceptance criteria, touches more than about 15 files or 800 lines, crosses
+more than one module boundary, adds a new kernel or port plus its UI, or
+bumps a schema or format plus a feature on it. When unsure, it is too big.
+Every brief for refining, designing and building repeats these limits in a
+"Story size" section, so any worker, whatever its prompt, judges size the
+same way.
+
+`split_ticket` (`POST /api/v1/tickets/{id}/split`) takes a `reason` and
+`children` in build order. Each child has a `title`, its own `spec` with
+numbered acceptance criteria and their tests, and optionally `kind`, `body`
+and `after` (1-based earlier children it waits for; omitted means the one
+before it, `[]` means none).
+
+- **Full split.** The parent becomes an **epic** (stage `epic` in In
+  Progress). Nobody claims it, it holds no in-flight slot, and the manager
+  never flags it. The first children inherit whatever the parent was still
+  waiting for. When every child is **Deployed**, the board deploys the epic
+  itself, which releases tickets that waited for it and closes a parent epic
+  in turn.
+- **Narrowing** (`keep_spec`, autonomous tickets in design or build only).
+  The parent keeps building the narrowed spec, approved as a new revision,
+  and the children wait for it. Use it when a branch or PR already exists.
+- **Children** inherit the repo and the autonomous mode. Autonomous children
+  start Ready with their spec approved; others go to the spec checkpoint (or
+  Ready when the repo has it off).
+- **Who may split.** A person; the agent holding the lease; the board
+  manager on an autonomous ticket; or the agent that filed a ticket nobody
+  has started yet (so `/board-task` can file an agreed piece and break it
+  down at once). Only a ticket being refined, ready, designed or built can
+  be split, never one waiting on the owner.
+- **Audit trail.** The split is one transaction: a refused child files
+  nothing. The parent's decision log gets "Split into #a, #b: reason" with
+  every child listed, both ends get `split_from` / `split into` links, and
+  `split_from` links can be made only by a split.
+- **On the board.** An epic's card shows its stories as a segmented bar
+  ("2 of 5 deployed") instead of the stepper; each story shows "Part of
+  #N". The ticket page lists the stories with their stages. `split_from` and
+  `split_into` are on every ticket in `GET /api/v1/board`.
+
+A split moves whole features with their criteria and tests. It is never a
+way to drop or defer a test for code that stays.
 
 ## Verification verdicts
 

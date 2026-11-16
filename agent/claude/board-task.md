@@ -34,18 +34,30 @@ Markdown, in the shape the board's refinement produces:
   with the reason, so agents treat them as settled.
 - **Approach and risk**: what you learned about the code in this chat (files,
   patterns, pitfalls), and what could go wrong.
-- A last line `Build tier: small | normal | large` and one sentence on why:
-  small for copy, config or a one-file fix; normal for a few files; large for
-  cross-cutting, security- or data-sensitive, schema or auth changes. Pick the
-  larger when unsure.
+- A last line `Build tier: small | normal` and one sentence on why: small
+  for copy, config or a one-file fix; normal for a story touching a few
+  files. Say "sensitive" in that sentence for security-, auth- or
+  data-migration work.
+
+**Size check.** Every story must be one tightly scoped task Sonnet can
+finish in about half a day. The work is too big for one story when any of
+these holds: more than about 5 acceptance criteria; more than about 15
+files or about 800 changed lines; more than one module boundary; a new
+kernel, engine or port plus its UI; a schema or format bump plus a feature
+built on it. When unsure, it is too big. Then also write the breakdown:
+child stories in build order, each with its own title, its own spec in the
+shape above (numbered acceptance criteria with the tests that prove them,
+and the files it touches) and a small file set. Every criterion of the
+whole lands in exactly one story.
 
 Never put secrets, tokens, passwords or private keys in the spec. Keep it
 under 20,000 characters, with no raw HTML or HTML comments.
 
 ## 4. Show it and get a yes
 
-Show the owner the title, kind (story or bug), repo and the whole spec, then
-ask: "File this as an autonomous ticket?" Wait for an explicit yes to this
+Show the owner the title, kind (story or bug), repo and the whole spec (and
+the breakdown into stories, when the size check says to split), then ask:
+"File this as an autonomous ticket?" Wait for an explicit yes to this
 text. A yes to something earlier in the chat does not count, and neither does
 silence. If the owner changes anything, show it again.
 
@@ -54,8 +66,16 @@ silence. If the owner changes anything, show it again.
 Call `create_autonomous_ticket` with `kind`, `title`, `body` (the request in
 two or three sentences, in the owner's words), `spec` and `repo_id`.
 
-- On success, report the ticket number and that the runner will pick it up on
-  its next poll. Do not build it here, and do not claim it.
+- When the size check said to split, call `split_ticket` on the new ticket
+  right away, before any worker starts it: `reason` (which size limits it
+  breaks) and the agreed stories as `children`, in build order. The filed
+  ticket becomes an epic that closes itself when every story is deployed;
+  the stories inherit its repo and autonomous mode. If the split is
+  refused, say why and leave the ticket: the worker that claims it splits
+  it instead.
+- On success, report the ticket number (and the stories' numbers) and that
+  the runner will pick them up on its next poll. Do not build them here, and
+  do not claim them.
 - If the board refuses because the token is not a delegate, tell the owner:
   the desktop's `ownership` MCP server needs a delegate token (Settings, Agent
   tokens, "Delegate"). Do not fall back to `create_ticket`.
