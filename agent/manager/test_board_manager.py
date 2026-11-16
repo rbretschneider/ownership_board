@@ -59,6 +59,23 @@ class DueFlagsTests(unittest.TestCase):
         finally:
             m.SENSORS = original
 
+    def test_the_board_review_runs_on_its_own_timer(self):
+        original = m.REVIEW_INTERVAL
+        try:
+            m.REVIEW_INTERVAL = 0
+            self.assertFalse(m.review_due({}, 10**9))
+            m.REVIEW_INTERVAL = 3600
+            self.assertTrue(m.review_due({}, 10**9))
+            self.assertFalse(m.review_due({m.REVIEW_KEY: {'last': 10**9 - 60}}, 10**9))
+            self.assertTrue(m.review_due({m.REVIEW_KEY: {'last': 10**9 - 3600}}, 10**9))
+        finally:
+            m.REVIEW_INTERVAL = original
+
+    def test_the_review_prompt_covers_the_whole_board(self):
+        prompt = m.build_prompt(0, [], 5.0, local_runbook='', review=True)
+        self.assertIn('The board review', prompt)
+        self.assertIn('- none', prompt)
+
     def test_a_flag_past_its_attempts_is_left_for_the_owner(self):
         state = {'a': {'attempts': m.MAX_ATTEMPTS, 'last': 0}}
         self.assertEqual(m.due_flags([self.flag('a')], state, 10**9), [])

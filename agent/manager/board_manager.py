@@ -49,6 +49,10 @@ LOCAL_RUNBOOK = os.environ.get('MANAGER_LOCAL_RUNBOOK', '')
 # repo_id are optional (a flag without a ticket is about the deployment itself, such
 # as an offline CI runner) and get their own session.
 SENSORS = os.environ.get('MANAGER_SENSORS', '')
+# Optional board review (seconds; 0 = off): a session that reads the whole board,
+# not only the flags, and acts as the team lead ("Board review" in board-manager.md).
+REVIEW_INTERVAL = int(os.environ.get('MANAGER_REVIEW_INTERVAL', '0'))
+REVIEW_KEY = '_review'
 CLAUDE_ARGS = os.environ.get('CLAUDE_ARGS', '').split()
 
 
@@ -163,15 +167,20 @@ def sensor_flags():
     return good
 
 
-def build_prompt(repo_id, flags, budget_left, local_runbook=None):
-    lines = '\n'.join(flag_line(f) for f in flags)
+def build_prompt(repo_id, flags, budget_left, local_runbook=None, review=False):
+    lines = '\n'.join(flag_line(f) for f in flags) or '- none'
     runbook = COMMAND.read_text()
     if runbook.startswith('---'):
         # Drop the command front matter: a prompt starting with "---" reads as a CLI option.
         runbook = runbook.split('---', 2)[2].lstrip()
-    scope = f'Repo id {repo_id}.' if repo_id else 'Deployment flags (no ticket; from the deployment sensors).'
-    prompt = (runbook + f'\n\n## This session\n\n{scope} Budget left today: ${budget_left:.2f}. '
-              f'Flags to handle:\n\n{lines}\n')
+    if review:
+        prompt = (runbook + f'\n\n## This session\n\nThe board review (every repo; see "Board review"). '
+                  f'Budget left today: ${budget_left:.2f}. Flags open right now (their own sessions '
+                  f'handle them; use them as context only):\n\n{lines}\n')
+    else:
+        scope = f'Repo id {repo_id}.' if repo_id else 'Deployment flags (no ticket; from the deployment sensors).'
+        prompt = (runbook + f'\n\n## This session\n\n{scope} Budget left today: ${budget_left:.2f}. '
+                  f'Flags to handle:\n\n{lines}\n')
     if local_runbook is None and LOCAL_RUNBOOK:
         local_runbook = Path(LOCAL_RUNBOOK).read_text()
     if local_runbook:
@@ -179,11 +188,16 @@ def build_prompt(repo_id, flags, budget_left, local_runbook=None):
     return prompt
 
 
-def run_session(repo_id, flags, budget_left):
-    """One model session for one repo's flags. Returns (cost in USD, model, summary)."""
-    model = session_model(flags)
-    prompt = build_prompt(repo_id, flags, budget_left)
-    log(f'repo {repo_id}: {len(flags)} flag(s) on {model}')
+def review_due(state, now):
+    """True when the board review is on (MANAGER_REVIEW_INTERVAL > 0) and due."""
+    return REVIEW_INTERVAL > 0 and now - state.get(REVIEW_KEY, {}).get('last', 0) >= REVIEW_INTERVAL
+
+
+def run_session(repo_id, flags, budget_left, review=False):
+    """One model session for one repo's flags, or the board review. Returns (cost in USD, model, summary)."""
+    model = MODEL if review else session_model(flags)
+    prompt = build_prompt(repo_id, flags, budget_left, review=review)
+    log(f'board review on {model}' if review else f'repo {repo_id}: {len(flags)} flag(s) on {model}')
     try:
         result = subprocess.run(['claude', '-p', prompt, '--model', model, '--output-format', 'json', *CLAUDE_ARGS],
                                 capture_output=True, text=True, timeout=SESSION_TIMEOUT)
@@ -213,8 +227,9 @@ def main():
             flags = api('GET', '/api/v1/manager/flags')['flags'] + sensor_flags()
             state, now = load_state(), time.time()
             # Forget flags that cleared, so a new problem on the same ticket starts fresh.
+            # Keys starting with "_" are the loop's own bookkeeping (the review timer).
             current = {f['fingerprint'] for f in flags}
-            state = {k: v for k, v in state.items() if k in current}
+            state = {k: v for k, v in state.items() if k in current or k.startswith('_')}
             due = due_flags(flags, state, now)
             by_repo = {}
             for flag in due:
@@ -232,6 +247,12 @@ def main():
                 cost, model, summary = run_session(repo_id, repo_flags, remaining)
                 remaining = api('POST', '/api/v1/manager/usage',
                                 {'cost_usd': round(cost, 4), 'model': model, 'summary': summary})['remaining_usd']
+            if review_due(state, now) and remaining > 0:
+                state[REVIEW_KEY] = {'last': now}
+                save_state(state)
+                cost, model, summary = run_session(0, flags, remaining, review=True)
+                api('POST', '/api/v1/manager/usage',
+                    {'cost_usd': round(cost, 4), 'model': model, 'summary': 'Board review\n' + summary})
             save_state(state)
         except Exception as error:  # the loop must outlive any one bad pass
             log(f'pass failed: {type(error).__name__}: {error}')
