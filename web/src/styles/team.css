@@ -833,37 +833,39 @@ button.team-card:focus-visible,
 }
 
 /* ---------- CI runners ---------- */
+.team-ci {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--t-divider);
+}
+
+.team-ci__heading {
+  margin: 0;
+}
+
 .team-ci__list {
   margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
-  flex-direction: column;
-}
-
-.team-ci__row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   flex-wrap: wrap;
-  gap: 4px 12px;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--t-divider);
-  font-size: 13px;
+  gap: 6px 14px;
 }
 
-.team-ci__row:last-child {
-  border-bottom: none;
+.team-ci__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: default;
 }
 
 .team-ci__name {
   font-family: var(--t-mono);
   color: var(--t-text-2);
-  overflow-wrap: anywhere;
-}
-
-.team-ci__state {
-  font-size: 13px;
 }
 
 .team-dot--green { background: var(--t-green); }

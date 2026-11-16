@@ -211,39 +211,44 @@ export function TeamPage() {
           <section className="team-top" aria-label="Manager">
             <ManagerCard manager={team.manager} onOpen={() => setSelection({ kind: "manager" })} />
           </section>
-          <section className="team-runners" aria-label="Runners">
-            {team.runners.length === 0 && <p className="team-empty">No runners seen in the last few hours.</p>}
-            {team.runners.map((runner) => {
-              const own = ticketsByRunner.get(runner.name) ?? [];
-              return (
-                <TeamBranch key={runner.name}>
-                  <RunnerCard
-                    runner={runner}
-                    isActive={runner.name === highlighted}
-                    onEnter={() => setHovered(runner.name)}
-                    onLeave={() => setHovered((current) => (current === runner.name ? null : current))}
-                    onOpen={() => setSelection({ kind: "runner", name: runner.name })}
-                  />
-                  {own.map((ticket) => ticketCard(ticket, true))}
-                </TeamBranch>
-              );
-            })}
+          {/* Build hosts sit right under the manager; runners below them pair their tickets up to the slots. */}
+          <section className="team-section" aria-label="Build hosts">
+            <h2 className="team-heading">Build hosts</h2>
+            {team.build_hosts.length === 0
+              ? <p className="team-empty">No approved build hosts.</p>
+              : (
+                <div className="team-hosts">
+                  {team.build_hosts.map((host) => (
+                    <BuildHostCard key={host.id} host={host} now={now} renderSlotTicket={(id) => {
+                      const ticket = ticketsById.get(id);
+                      return ticket !== undefined && !heldIds.has(id) ? ticketCard(ticket) : null;
+                    }} slotOwner={slotOwner} pairedTicket={pairedOnView} pinnedTicket={pairPinned} onPairHover={setPairHover} onPairToggle={togglePair} />
+                  ))}
+                </div>
+              )}
           </section>
-          <section className="team-section" aria-label="Build hosts and CI runners">
-            <h2 className="team-heading">Build hosts and CI runners</h2>
-            {team.build_hosts.length === 0 && !hasCISample && <p className="team-empty">No approved build hosts.</p>}
-            {(team.build_hosts.length > 0 || hasCISample) && (
-              <div className="team-hosts">
-                {team.build_hosts.map((host) => (
-                  <BuildHostCard key={host.id} host={host} now={now} renderSlotTicket={(id) => {
-                    const ticket = ticketsById.get(id);
-                    return ticket !== undefined && !heldIds.has(id) ? ticketCard(ticket) : null;
-                  }} slotOwner={slotOwner} pairedTicket={pairedOnView} pinnedTicket={pairPinned} onPairHover={setPairHover} onPairToggle={togglePair} />
-                ))}
-                {hasCISample && team.ci_runners !== undefined && <CIRunnersCard sample={team.ci_runners} now={now} />}
-              </div>
-            )}
+          <section className="team-section" aria-label="Runners">
+            <h2 className="team-heading">Runners</h2>
+            <div className="team-runners">
+              {team.runners.length === 0 && <p className="team-empty">No runners seen in the last few hours.</p>}
+              {team.runners.map((runner) => {
+                const own = ticketsByRunner.get(runner.name) ?? [];
+                return (
+                  <TeamBranch key={runner.name}>
+                    <RunnerCard
+                      runner={runner}
+                      isActive={runner.name === highlighted}
+                      onEnter={() => setHovered(runner.name)}
+                      onLeave={() => setHovered((current) => (current === runner.name ? null : current))}
+                      onOpen={() => setSelection({ kind: "runner", name: runner.name })}
+                    />
+                    {own.map((ticket) => ticketCard(ticket, true))}
+                  </TeamBranch>
+                );
+              })}
+            </div>
           </section>
+          {hasCISample && team.ci_runners !== undefined && <CIRunnersCard sample={team.ci_runners} now={now} />}
           {panel !== null && <TeamPanel content={panel} onClose={close} />}
         </div>
       )}

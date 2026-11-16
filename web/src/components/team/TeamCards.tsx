@@ -18,40 +18,36 @@ export interface CIRunnersCardProps {
   now: number;
 }
 
-/** The repos' GitHub Actions runners: online and busy, idle, or offline. */
+/**
+ * The repos' GitHub Actions runners as one compact strip at the bottom: a
+ * status dot and name each, with state, labels and repo in the tooltip.
+ */
 export function CIRunnersCard({ sample, now }: CIRunnersCardProps) {
   const observed = sample.observed_at === null ? NaN : Date.parse(sample.observed_at);
   const isStale = Number.isFinite(observed) && now - observed > CI_SAMPLE_STALE_MS;
-  const repos = new Set(sample.runners.map((r) => r.repo));
   return (
-    <article className="team-card team-host team-ci" aria-label="CI runners">
-      <div className="team-row team-row--between">
-        <h3 className="team-host__name">CI runners</h3>
-        {isStale && sample.observed_at !== null && (
-          <span className="team-pill team-pill--amber">sampled {relativeTime(sample.observed_at, new Date(now))}</span>
-        )}
-      </div>
+    <section className="team-ci" aria-label="CI runners">
+      <h2 className="team-heading team-ci__heading">CI runners</h2>
       {sample.runners.length === 0
-        ? <p className="team-empty">No runners registered.</p>
+        ? <span className="team-faint">none registered</span>
         : (
           <ul className="team-ci__list">
             {sample.runners.map((runner) => {
               const state = ciRunnerStatus(runner);
-              const labels = ciRunnerLabels(runner);
+              const details = [runner.name, state.text, ciRunnerLabels(runner), runner.repo].filter((part) => part !== "").join(" · ");
               return (
-                <li key={`${runner.repo}/${runner.name}`} className="team-ci__row" data-ci-runner={runner.name}>
-                  <span className="team-row team-ci__who">
-                    <StatusDot status={state} />
-                    <span className="team-ci__name">{runner.name}</span>
-                    {repos.size > 1 && <span className="team-faint">{runner.repo}</span>}
-                  </span>
-                  <span className="team-faint team-ci__state">{[state.text, labels].filter((part) => part !== "").join(" · ")}</span>
+                <li key={`${runner.repo}/${runner.name}`} className="team-ci__item" data-ci-runner={runner.name} title={details} aria-label={details}>
+                  <StatusDot status={state} />
+                  <span className="team-ci__name" aria-hidden="true">{runner.name}</span>
                 </li>
               );
             })}
           </ul>
         )}
-    </article>
+      {isStale && sample.observed_at !== null && (
+        <span className="team-pill team-pill--amber team-pill--small">sampled {relativeTime(sample.observed_at, new Date(now))}</span>
+      )}
+    </section>
   );
 }
 

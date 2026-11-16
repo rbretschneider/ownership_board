@@ -83,7 +83,7 @@ it("shows one card per build host with its slots in a row, a status dot each and
   expect(slots[1]!.querySelector(".team-slot__owner")).toBeNull();
   expect(card.querySelector(".team-slot__bar")).toBeNull();
   // CI runners use the same scale: busy, idle, offline.
-  const dots = [...host.querySelectorAll(".team-ci__row .team-dot")].map((d) => d.className);
+  const dots = [...host.querySelectorAll(".team-ci__item .team-dot")].map((d) => d.className);
   expect(dots).toEqual(["team-dot team-dot--busy", "team-dot team-dot--idle", "team-dot team-dot--problem"]);
 });
 
@@ -141,11 +141,16 @@ it("draws the manager's lines only while it works, to each ticket, its runner an
   expect(host.querySelector('[data-testid="manager-lines"]')).toBeNull();
 });
 
-it("lists CI runners as busy, idle or offline, and flags a stale sample", async () => {
-  const row = (name: string) => host.querySelector(`[data-ci-runner="${name}"]`)?.textContent;
-  expect(row("linux-1")).toContain("busy · linux, X64");
-  expect(row("linux-2")).toContain("idle");
-  expect(row("win-old")).toContain("offline · windows");
+it("lists CI runners compactly last: a dot and name, details in the tooltip", async () => {
+  const row = (name: string) => host.querySelector(`[data-ci-runner="${name}"]`);
+  expect(row("linux-1")?.textContent).toBe("linux-1");
+  expect(row("linux-1")?.getAttribute("title")).toBe("linux-1 · busy · linux, X64 · acme/app");
+  expect(row("linux-2")?.getAttribute("title")).toContain("idle");
+  expect(row("win-old")?.getAttribute("title")).toContain("offline · windows");
+  // Order: manager, build hosts, runners, then CI runners.
+  const order = [...host.querySelectorAll('[aria-label="Manager"], [aria-label="Build hosts"], [aria-label="Runners"], [aria-label="CI runners"]')]
+    .map((el) => el.getAttribute("aria-label"));
+  expect(order).toEqual(["Manager", "Build hosts", "Runners", "CI runners"]);
   expect(host.querySelector('[aria-label="CI runners"]')?.textContent).not.toContain("sampled");
 
   const stale = teamFixture();
