@@ -7,8 +7,9 @@ import { nameRunnersInText } from "../../lib/runnerNames";
 import { relativeTime } from "../../lib/relativeTime";
 import {
   CI_SAMPLE_STALE_MS, ciRunnerLabels, ciRunnerStatus, clockTime, formatUSD, hostStatus, humanizeDoing, runnerModelChip, runnerPool,
-  RUNNER_STATES, slotStatus, ticketClock, type TicketActivity, type WorkStatus,
+  RUNNER_STATES, runnerFamily, slotStatus, ticketClock, type TicketActivity, type WorkStatus,
 } from "../../lib/team";
+import { MiningSprite } from "../board/MiningSprite";
 import { StageStepper } from "../board/StageStepper";
 import { RankChevrons, UsageBadge } from "../board/UsageBadge";
 
@@ -111,6 +112,24 @@ function managerNow(activity: ManagerActivity): string {
   return targets.length > 0 ? `${verb} ${targets.join(", ")}` : `${verb} a deployment flag`;
 }
 
+/**
+ * The runner's little worker, as on the Board's cards: a Claude crab or a
+ * Codex terminal that swings its pickaxe while the runner works and stands
+ * still, dimmed, while it waits or idles. A runner of no known family keeps a dot.
+ */
+function RunnerFigure({ runner }: { runner: TeamRunner }) {
+  const family = runnerFamily(runner.name);
+  const state = RUNNER_STATES[runner.state];
+  if (family === undefined) {
+    return <span className={`team-dot team-dot--${state.tone}${runner.state === "working" ? " team-dot--live" : ""}`} aria-hidden="true" />;
+  }
+  return (
+    <span className={`team-runner__figure team-runner__figure--${runner.state}`} data-figure={family}>
+      <MiningSprite family={family} />
+    </span>
+  );
+}
+
 /** Props for {@link RunnerCard}. */
 export interface RunnerCardProps {
   runner: TeamRunner;
@@ -140,7 +159,7 @@ export function RunnerCard({ runner, isActive, onEnter, onLeave, onOpen }: Runne
     >
       <span className="team-row team-row--between">
         <span className="team-row">
-          <span className={`team-dot team-dot--${state.tone}${runner.state === "working" ? " team-dot--live" : ""}`} aria-hidden="true" />
+          <RunnerFigure runner={runner} />
           <span className="team-runner__name" title={name.title}>{name.detail}{name.badge !== "" && <span className="runner-name__family">{name.badge}</span>}</span>
         </span>
         <span className={`team-pill team-pill--${state.tone}`}>{state.label}</span>
@@ -215,6 +234,11 @@ export function StatusDot({ status }: { status: WorkStatus }) {
   return <span className={`team-dot team-dot--${status.tone}`} aria-hidden="true" />;
 }
 
+/** The Board's little 3×3 build matrix, blinking in a busy slot in place of its dot. */
+function BuildMatrix() {
+  return <span className="pixel-loader team-slot__matrix" aria-hidden="true">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</span>;
+}
+
 /** Props for {@link BuildHostCard}. */
 export interface BuildHostCardProps {
   host: TeamBuildHost;
@@ -284,7 +308,7 @@ export function BuildHostCard({ host, now, renderSlotTicket, slotOwner, pairedTi
               <div key={i} className={`team-slot team-slot--${slot.tone}${isPaired ? " team-card--linked" : ""}${isPairable ? " team-slot--pairable" : ""}`}
                 data-slot={i + 1} {...pairProps}>
                 <div className="team-row team-row--between">
-                  <span className="team-row team-slot__label"><StatusDot status={slot} />Slot {i + 1}</span>
+                  <span className="team-row team-slot__label">{slot.tone === "busy" ? <BuildMatrix /> : <StatusDot status={slot} />}Slot {i + 1}</span>
                   {owner !== "" && <span className="team-faint team-slot__owner">{owner}</span>}
                 </div>
                 <div className="team-slot__job">{slot.text}</div>
