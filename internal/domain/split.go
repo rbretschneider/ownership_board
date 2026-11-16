@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -84,6 +85,9 @@ func ParseSplit(draft SplitDraft) (SplitPlan, error) {
 	minimum := minFullSplitChildren
 	if keep != "" {
 		minimum = minNarrowSplitChildren
+		if !hasNumberedCriteria(keep) {
+			return SplitPlan{}, Invalidf("keep_spec must keep the numbered acceptance criteria, with their tests, of the code that stays")
+		}
 	}
 	if len(draft.Children) < minimum || len(draft.Children) > MaxSplitChildren {
 		return SplitPlan{}, Invalidf("a split needs %d to %d children", minimum, MaxSplitChildren)
@@ -99,10 +103,20 @@ func ParseSplit(draft SplitDraft) (SplitPlan, error) {
 	return plan, nil
 }
 
+// numberedItem matches a numbered list line, "1. " or "1) ".
+var numberedItem = regexp.MustCompile(`(?m)^\s*\d+[.)]\s+\S`)
+
+// hasNumberedCriteria reports whether a spec lists numbered acceptance
+// criteria. A split moves features with their criteria; a spec without any
+// would leave nothing for the story's tests to prove.
+func hasNumberedCriteria(spec string) bool {
+	return numberedItem.MatchString(spec)
+}
+
 func parseSplitChild(index int, child SplitChildDraft) (SplitChildPlan, error) {
 	position := index + 1
-	if strings.TrimSpace(child.Spec) == "" {
-		return SplitChildPlan{}, Invalidf("child %d needs its own spec with numbered acceptance criteria", position)
+	if !hasNumberedCriteria(child.Spec) {
+		return SplitChildPlan{}, Invalidf("child %d needs its own spec with numbered acceptance criteria and their tests", position)
 	}
 	if !child.HasAfter {
 		if index == 0 {

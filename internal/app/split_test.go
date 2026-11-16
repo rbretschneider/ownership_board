@@ -147,7 +147,7 @@ func TestNarrowingNeedsAnAutonomousTicketInFlight(t *testing.T) {
 	api := f.repo("acme/api")
 	id := f.ticket("Threading", api.ID)
 	f.mustClaim(agent, app.ClaimInput{})
-	draft := domain.SplitDraft{Reason: "too big", KeepSpec: "core", Children: []domain.SplitChildDraft{{Title: "rest", Spec: "1. rest"}}}
+	draft := domain.SplitDraft{Reason: "too big", KeepSpec: "1. core", Children: []domain.SplitChildDraft{{Title: "rest", Spec: "1. rest"}}}
 	_, err := f.board.Split(f.ctx, agent, id, draft)
 	requireErrorKind(t, err, domain.KindConflict)
 	f.requireStage(id, domain.StageRefine)

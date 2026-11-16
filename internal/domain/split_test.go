@@ -52,12 +52,14 @@ func TestParseSplitRefusals(t *testing.T) {
 		tooMany[i] = storyDraft("x")
 	}
 	cases := map[string]SplitDraft{
-		"no reason":        {Children: []SplitChildDraft{storyDraft("a"), storyDraft("b")}},
-		"one child":        splitDraft(storyDraft("a")),
-		"too many":         splitDraft(tooMany...),
-		"no spec":          splitDraft(storyDraft("a"), SplitChildDraft{Title: "b"}),
-		"waits forward":    splitDraft(forward, storyDraft("b")),
-		"waits for itself": splitDraft(storyDraft("a"), itself),
+		"no reason":             {Children: []SplitChildDraft{storyDraft("a"), storyDraft("b")}},
+		"one child":             splitDraft(storyDraft("a")),
+		"too many":              splitDraft(tooMany...),
+		"no spec":               splitDraft(storyDraft("a"), SplitChildDraft{Title: "b"}),
+		"no criteria":           splitDraft(storyDraft("a"), SplitChildDraft{Title: "b", Spec: "Build the UI somehow."}),
+		"core without criteria": {Reason: "r", KeepSpec: "the core", Children: []SplitChildDraft{storyDraft("a")}},
+		"waits forward":         splitDraft(forward, storyDraft("b")),
+		"waits for itself":      splitDraft(storyDraft("a"), itself),
 	}
 	for name, draft := range cases {
 		if _, err := ParseSplit(draft); KindOf(err) != KindInvalid {
@@ -73,7 +75,7 @@ func TestParseSplitRefusals(t *testing.T) {
 
 func TestRequireSplittable(t *testing.T) {
 	full, _ := ParseSplit(splitDraft(storyDraft("a"), storyDraft("b")))
-	narrow, _ := ParseSplit(SplitDraft{Reason: "r", KeepSpec: "core", Children: []SplitChildDraft{storyDraft("a")}})
+	narrow, _ := ParseSplit(SplitDraft{Reason: "r", KeepSpec: "1. core", Children: []SplitChildDraft{storyDraft("a")}})
 	for _, stage := range []Stage{StageRefine, StageReady, StageDesign, StageBuild} {
 		ticket := Ticket{ID: 1, RepoID: 1, Stage: stage}
 		if err := ticket.RequireSplittable(full); err != nil {
