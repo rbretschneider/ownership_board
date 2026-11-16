@@ -70,13 +70,25 @@ it("nests each ticket under the runner working it, and a ticket no runner holds 
   expect(host.querySelector('[data-ticket="13"]')).toBeNull();
 });
 
+it("draws each runner as its family's worker sprite, swinging only while it works", () => {
+  const codex = runner("@worker/7/codex_1").querySelector(".team-runner__figure")!;
+  expect(codex.getAttribute("data-figure")).toBe("codex");
+  expect(codex.classList.contains("team-runner__figure--working")).toBe(true);
+  const claude = runner("@worker/7/claude_2").querySelector(".team-runner__figure")!;
+  expect(claude.getAttribute("data-figure")).toBe("claude");
+  expect(claude.classList.contains("team-runner__figure--idle")).toBe(true);
+  expect(runner("@worker/7/codex_1").querySelector(".team-dot")).toBeNull();
+});
+
 it("shows one card per build host with its slots in a row, a status dot each and no progress bar", () => {
   const card = host.querySelector('[data-host="builder-1"]')!;
   expect(card.querySelector(".team-host__name .team-dot--busy")).not.toBeNull();
   const slots = [...card.querySelectorAll(".team-slot")];
   expect(slots).toHaveLength(2);
   expect(card.querySelector<HTMLElement>(".team-slots")?.style.gridTemplateColumns).toBe("repeat(2, minmax(0, 1fr))");
-  expect(slots[0]!.querySelector(".team-dot--busy")).not.toBeNull();
+  // A building slot shows the Board's build matrix instead of a dot.
+  expect(slots[0]!.querySelectorAll(".team-slot__matrix i")).toHaveLength(9);
+  expect(slots[0]!.querySelector(".team-dot")).toBeNull();
   expect(slots[0]!.querySelector(".team-slot__job")?.textContent).toBe("#12 · testing · 1h 36m");
   // Slot 1 builds codex_1's ticket, so it names the runner; #17 has no runner.
   expect(slots[0]!.querySelector(".team-slot__owner")?.textContent).toBe("codex_1");
@@ -147,10 +159,10 @@ it("lists CI runners compactly last: a dot and name, details in the tooltip", as
   expect(row("linux-1")?.getAttribute("title")).toBe("linux-1 · busy · linux, X64 · acme/app");
   expect(row("linux-2")?.getAttribute("title")).toContain("idle");
   expect(row("win-old")?.getAttribute("title")).toContain("offline · windows");
-  // Order: manager, build hosts, runners, then CI runners.
+  // Order: manager, runners, build hosts, then CI runners.
   const order = [...host.querySelectorAll('[aria-label="Manager"], [aria-label="Build hosts"], [aria-label="Runners"], [aria-label="CI runners"]')]
     .map((el) => el.getAttribute("aria-label"));
-  expect(order).toEqual(["Manager", "Build hosts", "Runners", "CI runners"]);
+  expect(order).toEqual(["Manager", "Runners", "Build hosts", "CI runners"]);
   expect(host.querySelector('[aria-label="CI runners"]')?.textContent).not.toContain("sampled");
 
   const stale = teamFixture();
