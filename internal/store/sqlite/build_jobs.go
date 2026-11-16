@@ -187,6 +187,7 @@ func (r buildJobRepo) Supersede(ctx context.Context, ticketID int64, target doma
 	_, err := r.q.ExecContext(ctx, `UPDATE build_jobs SET status='superseded',finished_at=? WHERE ticket_id=? AND target_os=? AND target=? AND sha<>? AND status IN ('queued','running')`, formatTime(now), ticketID, target.OS, target.Canonical(), sha)
 	return err
 }
+
 // SupersedeCompleted retires open jobs of tickets that will never build
 // again: merged ones, and epics, whose work moved into their stories.
 func (r buildJobRepo) SupersedeCompleted(ctx context.Context, now time.Time) error {
