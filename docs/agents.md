@@ -75,6 +75,8 @@ The MCP server offers these tools:
 | `record_decision` | Records a significant choice; agents cannot replace the owner's binding decisions. |
 | `link_tickets` | Relates two tickets (`caused_by`, `follow_up_of`, `duplicate_of`, `relates_to`, `depends_on`). |
 | `find_tickets_for_work` | Commit sha or PR URL → the tickets it was recorded on. |
+| `get_verdicts` | Whether a commit passed, per build target, by `repo` and `sha` or by `ticket_id` (see [Verification verdicts](#verification-verdicts)). |
+| `report_clean_merge` | Records a conflict-free merge of the default branch into a passed commit as passed. Needs the lease. |
 | `list_tickets` | Read-only overview, optionally by lane or repo. Each line shows what the ticket is waiting on, if anything. |
 | `report_deploy` | Requires a live deployment lease. Takes `id`, `outcome` (`deployed` or `failed`) and a nonblank `summary` of up to 1,000 characters. Success needs runtime identity and health evidence; failure blocks the merged ticket. Both clear the lease. |
 | `report_pr_state` | For a ticket in stage `pr` within In Progress: `merged` → Deployed by default (Merged when `deploy_mode=agent`), `closed` → back to build, blocked until the owner decides, `open` → no change. The only agent write that needs no lease, and it only reconciles PR-stage tickets; `repair` returns to build without a block and needs evidence. |
@@ -370,6 +372,30 @@ Merging and cancelling need access the deployment gives it through
 `MANAGER_LOCAL_RUNBOOK`. Without that, it reports those PRs to you. Each
 review's summary (moving, acted, stalled, cost, owner) appears with the other
 manager sessions in Settings > Board manager.
+
+## Verification verdicts
+
+The board keeps the one record of whether a commit passed on a build target.
+Workers, merge sweeps and the manager read it from the board; none of them
+keeps a pass in a file of its own. A record kept in two places disagrees
+eventually, and the disagreement is a loop (`docs/engine_lessons.md`).
+
+- **Reading.** `get_verdicts` with `repo` and `sha`, or with `ticket_id`
+  (`GET /api/v1/verdicts`). Briefs and ticket summaries already list the
+  newest verdict per target, so a merge sweep or the manager needs no extra
+  call. The board does not know the PR head: compare the verdict's commit with
+  it. `passed` and `clean_merge` count as passed.
+- **Writing a run's verdict.** Nothing to do. The board records it when the
+  build host reports the job's result. A failure the host blamed on itself
+  (`infrastructure`, `cancelled`) is no verdict; submit the commit again.
+- **A clean merge.** After merging the default branch into a passed commit
+  with no conflicts and no other change, call `report_clean_merge` with the
+  merge commit as `sha` and the passed commit as `merge_of`
+  (`POST /api/v1/verdicts/clean-merge`). The merge then counts as passed
+  without another host run. You need the lease on the ticket; the board
+  records you as the reporter. It refuses when `merge_of` has no pass, or
+  when the merge commit already failed a run. Any merge with a conflict
+  resolution or another change goes to the build host instead.
 
 ## Dependencies
 

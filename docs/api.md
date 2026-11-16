@@ -630,6 +630,58 @@ uploads or published bundles; operators manage retention externally. SQLite
 backups alone do not contain bundle payloads. Back up the data volume to preserve
 both. Uploads retain the server's existing read timeout.
 
+## Verification verdicts
+
+The board is the one record of whether a commit passed on a build target. The
+worker, the merge sweep and the manager read it here instead of keeping their
+own copies. Owner and agent auth, like `/api/v1/board`.
+
+| Method | Path | Body | Result |
+|--------|------|------|--------|
+| GET  | `/api/v1/verdicts?repo=<full name>&sha=<commit>` | | `{"verdicts": Verdict[]}`: the commit's verdict on every target |
+| GET  | `/api/v1/verdicts?ticket=<id>` | | `{"verdicts": Verdict[]}`: the ticket's verdicts, newest first, at most 100 |
+| POST | `/api/v1/verdicts/clean-merge` | `CleanMerge` | `{"verdicts": Verdict[]}`: the merge commit's verdicts on the targets reported |
+
+A `Verdict` is keyed by `repo`, `target` and `sha`:
+
+| Field | Meaning |
+|-------|---------|
+| `repo` | Repository full name. |
+| `target` | The build target: the OS, then any required capabilities after a colon, sorted and comma-separated (`windows`, `windows:cuda,msvc`). |
+| `sha` | Full lowercase commit hash. |
+| `status` | `passed`, `failed`, or `clean_merge`. `passed` and `clean_merge` both count as passed. |
+| `merge_of` | For `clean_merge`: the passed commit the merge was made from. Absent otherwise. |
+| `job_id` | The build job whose run the verdict rests on. For a clean merge, the job that passed `merge_of` (or its own base). |
+| `ticket_id` | The ticket the verdict was recorded for. |
+| `source` | `build_job` or `clean_merge`. |
+| `reported_by` | `build-host/<id>` for a job; the agent's name for a clean merge. |
+| `recorded_at` | When the board recorded it. |
+
+A build job writes its verdict when its host reports the result, in the same
+transaction as the job's final status. A `failed` job whose `failure_kind` is
+`infrastructure` or `cancelled` blamed the host, not the commit, and writes no
+verdict. A later run of the same commit and target replaces the verdict.
+
+`CleanMerge` is `{ticket_id, repo, sha, merge_of, target?}`: the agent reports
+that `sha` is a conflict-free merge of the default branch into `merge_of`, with
+no other change. The board cannot see git, so it trusts the agent holding the
+ticket's lease and records its name. It answers:
+
+- `403` for a person, and `409` for an agent without the lease.
+- `400` when `repo` is not the ticket's repo, or a hash is not a full 40- or
+  64-character hash.
+- `409` when `merge_of` has no pass on `target` (or, with no `target`, on any
+  target), or when `sha` already failed on a target. A clean merge never
+  overrules a run.
+
+Without `target`, the merge is recorded on every target `merge_of` passed.
+Reporting the same merge again changes nothing.
+
+Ticket summaries (board cards, `GET /api/v1/tickets/{id}`) carry `verdicts`:
+the newest verdict per target for the ticket's commits. The board does not
+know the pull request's head, so compare `sha` with it before trusting a pass.
+Agents' briefs list the same verdicts.
+
 ## Repository deployment policy
 
 Repository objects expose `deploy_mode` through existing reads, including

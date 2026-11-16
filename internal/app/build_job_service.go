@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -365,14 +364,14 @@ func (s *BuildJobService) Complete(ctx context.Context, who AuthenticatedBuildHo
 		return j, e
 	}
 	e := s.store.Write(ctx, func(r Repos) error {
-		if _, e := approvedJobHost(ctx, r, who); e != nil {
+		host, e := approvedJobHost(ctx, r, who)
+		if e != nil {
 			return e
 		}
 		now := s.now()
 		if e := s.recover(ctx, r, now); e != nil {
 			return e
 		}
-		var e error
 		j, e = r.BuildJobs().Get(ctx, id)
 		if e != nil {
 			return e
@@ -404,7 +403,15 @@ func (s *BuildJobService) Complete(ctx context.Context, who AuthenticatedBuildHo
 		j.FinishedAt = &now
 		j.AssignmentReleasedAt = &now
 		j.Phase = c.Status
-		return r.BuildJobs().Save(ctx, j)
+		if e = r.BuildJobs().Save(ctx, j); e != nil {
+			return e
+		}
+		// The board is the one record of the commit's verdict: write it in the
+		// same transaction as the job's terminal status, so the two never disagree.
+		if v, ok := domain.VerdictForJob(j, fmt.Sprintf("build-host/%d", host.ID), now); ok {
+			return r.Verdicts().Record(ctx, v)
+		}
+		return nil
 	})
 	return j, e
 }
@@ -505,12 +512,7 @@ func (s *BuildJobService) requeueNoVerdict(ctx context.Context, r Repos, j *doma
 }
 
 // noVerdict reports whether a failed job's result blames the host, not the commit.
-func noVerdict(result []byte) bool {
-	var r struct {
-		FailureKind string `json:"failure_kind"`
-	}
-	return json.Unmarshal(result, &r) == nil && (r.FailureKind == "infrastructure" || r.FailureKind == "cancelled")
-}
+func noVerdict(result []byte) bool { return domain.JobResultBlamesHost(result) }
 
 // hotFirstJob picks the job a host claims next: the oldest queued job of a hot ticket
 // (HotBuildAttempts or more passes at the code), otherwise the oldest queued job.

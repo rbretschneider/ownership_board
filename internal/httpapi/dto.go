@@ -84,6 +84,8 @@ type ticketSummaryDTO struct {
 	Attempts       attemptsDTO    `json:"attempts"`
 	Usage          usageDTO       `json:"usage"`
 	Build          *buildClockDTO `json:"build"`
+	// Verdicts is the newest verdict per build target for the ticket's commits.
+	Verdicts []domain.Verdict `json:"verdicts"`
 }
 
 type ticketDetailDTO struct {
@@ -213,6 +215,7 @@ func toSummary(summary app.TicketSummary) ticketSummaryDTO {
 		PRURL: t.PRURL, Branch: t.Branch, OpenQuestions: summary.OpenQuestions, WaitingOn: nonNilIDs(summary.WaitingOn), Lease: activeLease(t),
 		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, LaneChangedAt: t.LaneChangedAt,
 		Attempts: attemptsDTO(summary.Attempts), Usage: toUsage(summary.Usage), Build: toBuildClock(summary.Build),
+		Verdicts: nonNilVerdicts(summary.Verdicts),
 	}
 }
 
@@ -342,4 +345,12 @@ func toBuildClock(job *domain.BuildJob) *buildClockDTO {
 		return nil
 	}
 	return &buildClockDTO{Status: job.Status, QueuedAt: job.CreatedAt, StartedAt: job.StartedAt}
+}
+
+// nonNilVerdicts keeps an empty verdict list a JSON array rather than null.
+func nonNilVerdicts(verdicts []domain.Verdict) []domain.Verdict {
+	if verdicts == nil {
+		return []domain.Verdict{}
+	}
+	return verdicts
 }

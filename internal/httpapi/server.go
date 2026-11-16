@@ -36,6 +36,7 @@ type Deps struct {
 	// PRStatusFile is the merge sweep's sanitized view of each open board PR.
 	PRStatusFile string
 	BuildJobs    *app.BuildJobService
+	Verdicts     *app.VerdictService
 	BuildHosts   *app.BuildHostService
 	Board        *app.BoardService
 	Agents       *app.AgentService
@@ -89,6 +90,7 @@ func (s *server) routes(rt *router) {
 	s.managerRoutes(rt)
 	s.buildHostRoutes(rt)
 	s.buildJobRoutes(rt)
+	s.verdictRoutes(rt)
 	s.statsRoutes(rt)
 	rt.human("GET /api/v1/account-usage", s.accountUsage)
 	rt.human("GET /api/v1/runners", s.windowsRunners)

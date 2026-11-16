@@ -15,6 +15,8 @@ type Services struct {
 	Board  *app.BoardService
 	Agents *app.AgentService
 	Repos  *app.RepoService
+	// Verdicts reads and records per-commit verification verdicts.
+	Verdicts *app.VerdictService
 }
 
 // maxToolWaitSeconds keeps a long-polling claim inside typical MCP client
@@ -30,6 +32,7 @@ func BoardTools(services Services) []Tool {
 		addWorkLink{services}, recordDecision{services}, linkTickets{services}, findTicketsForWork{services},
 		listTickets{services}, reportPRState{services}, reportDeploy{services}, setWorkModel{services},
 		managerFlags{services}, answerQuestions{services}, unblockTicket{services},
+		getVerdicts{services}, reportCleanMerge{services},
 	}
 }
 
