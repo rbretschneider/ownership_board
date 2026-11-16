@@ -22,8 +22,9 @@ func StaticToken(token secretbox.Secret) TokenSource {
 }
 
 // GitHubCI reads and acts on GitHub Actions. The token needs Actions read
-// and write (a GitHub App's "Actions" permission, or a classic token's repo
-// scope); listing runners also needs Administration read.
+// and write, Contents read (branch heads) and Pull requests read (PR heads),
+// or a classic token's repo scope; listing runners also needs Administration
+// read.
 type GitHubCI struct {
 	apiURL string
 	http   *http.Client
