@@ -88,6 +88,7 @@ func (s *server) routes(rt *router) {
 	s.agentRoutes(rt)
 	s.settingsRoutes(rt)
 	s.managerRoutes(rt)
+	s.teamRoutes(rt)
 	s.buildHostRoutes(rt)
 	s.buildJobRoutes(rt)
 	s.verdictRoutes(rt)

@@ -775,3 +775,74 @@ export interface ManagerSession {
   cost_usd: number;
   summary: string;
 }
+
+/** What a runner on the Team view is doing right now. */
+export type RunnerState = "working" | "waiting" | "idle";
+
+/** One agent seen recently: holding a lease, waiting on a build host, or idle. */
+export interface TeamRunner {
+  /** The lease holder, e.g. "@worker/7/codex_1". */
+  name: string;
+  state: RunnerState;
+  /** The model part of its work_model; "" when it reported none. */
+  model: string;
+  /** The signal part of its work_model, or what its state implies. */
+  doing: string;
+  ticket_id: number | null;
+  last_seen: string | null;
+  /** The role profile it loaded; "" until runners report it. */
+  profile_version: string;
+}
+
+/** A ticket in flight with the runner that holds or waits on it ("" for none). */
+export interface TeamTicket extends TicketSummary {
+  holder: string;
+}
+
+/** A build job running on a host. */
+export interface TeamHostJob {
+  ticket_id: number;
+  repo: string;
+  status: string;
+  phase: string;
+  detail: string;
+  started_at: string | null;
+  attempt: number;
+}
+
+/** A build job waiting for a host. */
+export interface TeamQueuedJob {
+  ticket_id: number;
+  repo: string;
+  queued_at: string;
+}
+
+/** A build host's slots, running jobs and eligible queue. */
+export interface TeamBuildHost {
+  id: number;
+  name: string;
+  os: BuildHostOS;
+  online: boolean;
+  enabled: boolean;
+  max_parallel: number;
+  running: TeamHostJob[];
+  queued: TeamQueuedJob[];
+}
+
+/** The board manager on the Team view: status, flags and recent sessions. */
+export interface TeamManager extends ManagerStatus {
+  open_flags: number;
+  latest_summary: string;
+  latest_at: string | null;
+  sessions: ManagerSession[];
+}
+
+/** GET /team: the manager, runners, tickets in flight and build hosts. */
+export interface Team {
+  observed_at: string;
+  manager: TeamManager;
+  runners: TeamRunner[];
+  tickets: TeamTicket[];
+  build_hosts: TeamBuildHost[];
+  queued_by_os: Partial<Record<BuildHostOS, number>>;
+}

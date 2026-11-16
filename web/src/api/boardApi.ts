@@ -32,6 +32,7 @@ import type {
   TicketDetail,
   TicketSummary,
   StatsReport,
+  Team,
   Token,
   User,
   WorkLinkInput,
@@ -110,6 +111,8 @@ export interface BoardApi {
   managerStatus(): Promise<ManagerStatus>;
   managerFlags(): Promise<{ flags: ManagerFlag[] }>;
   managerSessions(): Promise<{ sessions: ManagerSession[] }>;
+  /** The Team view: manager, runners, tickets in flight and build hosts. */
+  team(): Promise<Team>;
   revokeToken(id: number): Promise<void>;
   settings(): Promise<BoardSettings>;
   editSettings(input: Partial<BoardSettings>): Promise<BoardSettings>;
@@ -172,6 +175,7 @@ export function createBoardApi(http: HttpClient): BoardApi {
     managerStatus: () => http.request("GET", "/manager/status"),
     managerFlags: () => http.request("GET", "/manager/flags"),
     managerSessions: () => http.request("GET", "/manager/sessions"),
+    team: () => http.request("GET", "/team"),
     revokeToken: (id) => http.request("DELETE", `/tokens/${id}`),
     settings: () => http.request("GET", "/settings"),
     editSettings: (input) => http.request("PATCH", "/settings", input),

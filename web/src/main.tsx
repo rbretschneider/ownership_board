@@ -11,6 +11,7 @@ import "./styles/ticket.css";
 import "./styles/trace.css";
 import "./styles/stats.css";
 import "./styles/flow.css";
+import "./styles/team.css";
 
 const SERVICE_WORKER_URL = "/sw.js";
 

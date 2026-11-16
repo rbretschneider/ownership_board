@@ -11,6 +11,7 @@ import { LoadingState } from "./components/common/LoadingState";
 import { FlowPage } from "./components/flow/FlowPage";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { StatsPage } from "./components/stats/StatsPage";
+import { TeamPage } from "./components/team/TeamPage";
 import { CurrentUserContext } from "./hooks/useCurrentUser";
 import { useHashRoute } from "./hooks/useHashRoute";
 import { BOARD_HASH, navigate } from "./lib/hashRoute";
@@ -60,7 +61,7 @@ export function App() {
   function renderScreen() {
     if (status === null) {
       return loadError === null
-        ? <main className="splash"><LoadingState label="Loading" /></main>
+        ? <main className="splash"><div className="splash__stack"><img className="splash__emblem" src="/emblem.svg" alt="" width="200" height="150" /><LoadingState label="Loading" /></div></main>
         : <main className="splash"><ErrorState message={`Couldn't reach the server: ${loadError}`} onRetry={() => void loadStatus()} /></main>;
     }
     if (status.setup_required) {
@@ -85,6 +86,9 @@ export function App() {
     }
     if (route.name === "stats") {
       return <StatsPage route={route} />;
+    }
+    if (route.name === "team") {
+      return <TeamPage />;
     }
     if (route.name === "flow") {
       return <FlowPage />;
