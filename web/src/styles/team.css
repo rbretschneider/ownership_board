@@ -20,6 +20,7 @@
   --t-green: #3fb97f;
   --t-amber: #e5a93a;
   --t-grey: #6b7484;
+  --t-red: #f2877a;
   --t-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --t-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "Cascadia Code", Menlo, Consolas, monospace;
 
@@ -283,10 +284,16 @@ button.team-card:focus-visible,
   color: var(--t-text-2);
 }
 
+/* Hosts wrap as cards, each as wide as its slots need (the basis is set inline). */
 .team-hosts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 14px;
+}
+
+.team-hosts > .team-host {
+  flex: 1 1 300px;
 }
 
 .team-host {
@@ -299,6 +306,7 @@ button.team-card:focus-visible,
 
 .team-host__name {
   margin: 0;
+  gap: 8px;
   font-size: 14px;
   font-weight: 600;
   color: var(--t-title);
@@ -310,46 +318,79 @@ button.team-card:focus-visible,
   overflow-wrap: anywhere;
 }
 
+/* All of a host's slots side by side in one row; the column count is set inline. */
 .team-slots {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 10px;
 }
 
 .team-slot {
+  min-width: 0;
   border: 1px solid var(--t-border);
   border-radius: 8px;
   padding: 10px 12px;
 }
 
-.team-slot__job {
-  margin-top: 2px;
-  font-size: 13px;
-  color: var(--t-title);
-}
-
-.team-slot__bar {
-  height: 4px;
-  margin-top: 8px;
-  border-radius: 2px;
-  background: var(--t-chip);
-  overflow: hidden;
-}
-
-.team-slot--busy .team-slot__fill {
-  height: 4px;
-  width: 100%;
-  border-radius: 2px;
-  background: var(--t-accent);
-  opacity: 0.8;
-}
-
-.team-slot__clock {
-  margin-top: 6px;
-  font-family: var(--t-mono);
+.team-slot__label {
+  gap: 7px;
   font-size: 12px;
-  color: var(--t-text-2);
+  color: var(--t-text-3);
 }
+
+.team-slot__owner {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-slot__job {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--t-title);
+  overflow-wrap: anywhere;
+}
+
+.team-slot--idle .team-slot__job {
+  color: var(--t-text-3);
+}
+
+.team-slot--problem {
+  border-color: rgba(242, 135, 122, 0.45);
+}
+
+.team-slot--problem .team-slot__job {
+  color: var(--t-red);
+}
+
+.team-slot--pairable,
+.team-ticket[data-pairs-slot] {
+  cursor: pointer;
+}
+
+.team-slot--pairable:hover,
+.team-slot--pairable:focus-visible {
+  border-color: var(--t-border-hi);
+  outline: none;
+}
+
+/* A slot paired with its ticket card: the same highlight as the card. */
+.team-slot.team-card--linked {
+  border-color: var(--t-accent);
+}
+
+/* A host's state in its header: plain text in the status tone, never the link colour. */
+.team-status {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--t-text-3);
+}
+
+.team-status--busy { color: var(--t-amber); }
+.team-status--problem { color: var(--t-red); }
 
 /* ---------- Pills, dots, tones ---------- */
 .team-pill {
@@ -384,6 +425,10 @@ button.team-card:focus-visible,
 }
 
 .team-dot--amber { background: var(--t-amber); }
+/* The shared idle / busy / problem scale of build slots, hosts and CI runners. */
+.team-dot--idle { background: var(--t-grey); }
+.team-dot--busy { background: var(--t-amber); }
+.team-dot--problem { background: var(--t-red); }
 .team-dot--grey { background: var(--t-grey); }
 .team-dot--live { animation: team-live 2s ease-out infinite; }
 
@@ -709,8 +754,11 @@ button.team-card:focus-visible,
   border-bottom-left-radius: 6px;
 }
 
-.team-slot > .team-ticket {
-  margin-top: 10px;
+/* Tickets no runner holds, under their host's slot row. */
+.team-host__tickets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
 }
 
 .team-ticket .stepper {
@@ -753,9 +801,11 @@ button.team-card:focus-visible,
   .team-stat__value {
     font-size: 16px;
   }
-  .team-runners,
-  .team-hosts {
+  .team-runners {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .team-hosts > .team-host {
+    flex-basis: 100%;
   }
   /* The details modal is a full-screen sheet on a phone. */
   .team-modal {
@@ -783,37 +833,39 @@ button.team-card:focus-visible,
 }
 
 /* ---------- CI runners ---------- */
+.team-ci {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--t-divider);
+}
+
+.team-ci__heading {
+  margin: 0;
+}
+
 .team-ci__list {
   margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
-  flex-direction: column;
-}
-
-.team-ci__row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   flex-wrap: wrap;
-  gap: 4px 12px;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--t-divider);
-  font-size: 13px;
+  gap: 6px 14px;
 }
 
-.team-ci__row:last-child {
-  border-bottom: none;
+.team-ci__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: default;
 }
 
 .team-ci__name {
   font-family: var(--t-mono);
   color: var(--t-text-2);
-  overflow-wrap: anywhere;
-}
-
-.team-ci__state {
-  font-size: 13px;
 }
 
 .team-dot--green { background: var(--t-green); }

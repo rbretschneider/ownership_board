@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { teamFixture, ticketDetailFixture, TEAM_NOW } from "../components/team/teamFixture";
 import {
-  activityLines, formatTokens, historyEntry, hostLoad, humanizeDoing, linkPath, managerTargets, runnerEngine, runnerPool, runnerShortName,
+  activityLines, ciRunnerStatus, formatTokens, historyEntry, hostStatus, humanizeDoing, JOB_RUNNING_TOO_LONG_MS, linkPath, managerTargets, runnerEngine, runnerPool, runnerShortName, slotStatus,
   ticketActivity, ticketClock, ticketRole,
 } from "./team";
 
@@ -87,12 +87,25 @@ describe("tickets in flight", () => {
     expect(formatTokens(undefined)).toBe("0 tok");
   });
 
-  it("summarizes host load", () => {
+  it("puts hosts, slots and CI runners on one idle / busy / problem scale", () => {
+    const now = TEAM_NOW;
     const host = teamFixture().build_hosts[0]!;
-    expect(hostLoad(host).text).toBe("2 of 2 slots busy");
-    expect(hostLoad({ ...host, running: host.running.slice(0, 1) }).text).toBe("1 of 2 slots busy");
-    expect(hostLoad({ ...host, running: [] }).text).toBe("2 slots free");
-    expect(hostLoad({ ...host, online: false }).text).toBe("offline");
+    expect(hostStatus(host, now)).toEqual({ tone: "busy", text: "2 of 2 building" });
+    expect(hostStatus({ ...host, running: host.running.slice(0, 1) }, now).text).toBe("1 of 2 building");
+    expect(hostStatus({ ...host, running: [] }, now)).toEqual({ tone: "idle", text: "idle" });
+    expect(hostStatus({ ...host, online: false }, now)).toEqual({ tone: "problem", text: "offline" });
+
+    expect(slotStatus(host, host.running[1], now)).toEqual({ tone: "busy", text: "#17 · building · 40m" });
+    expect(slotStatus(host, undefined, now)).toEqual({ tone: "idle", text: "idle" });
+    expect(slotStatus({ ...host, online: false }, host.running[1], now)).toEqual({ tone: "problem", text: "#17 · host offline" });
+    // Past the manager's stuck-job limit, a running job is a problem.
+    const stuck = { ...host.running[1]!, started_at: new Date(now - JOB_RUNNING_TOO_LONG_MS - 60_000).toISOString() };
+    expect(slotStatus(host, stuck, now).tone).toBe("problem");
+    expect(slotStatus(host, stuck, now).text).toMatch(/· stuck$/);
+    expect(hostStatus({ ...host, running: [stuck] }, now)).toEqual({ tone: "problem", text: "1 stuck" });
+
+    const ci = teamFixture().ci_runners!.runners;
+    expect(ci.map((r) => ciRunnerStatus(r).tone)).toEqual(["busy", "idle", "problem"]);
   });
 });
 

@@ -1,13 +1,13 @@
 import { Bot } from "lucide-react";
-import type { ReactNode } from "react";
+import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import type { CIRunners, ManagerActivity, TeamBuildHost, TeamManager, TeamRunner, TeamTicket } from "../../api/types";
 import { useRunnerLabel, useRunnerNames } from "../../hooks/useRunnerNames";
 import { formatElapsed } from "../../lib/buildClock";
 import { nameRunnersInText } from "../../lib/runnerNames";
 import { relativeTime } from "../../lib/relativeTime";
 import {
-  CI_SAMPLE_STALE_MS, ciRunnerLabels, ciRunnerState, clockTime, formatUSD, hostLoad, humanizeDoing, runnerModelChip, runnerPool,
-  RUNNER_STATES, ticketClock, type TicketActivity,
+  CI_SAMPLE_STALE_MS, ciRunnerLabels, ciRunnerStatus, clockTime, formatUSD, hostStatus, humanizeDoing, runnerModelChip, runnerPool,
+  RUNNER_STATES, slotStatus, ticketClock, type TicketActivity, type WorkStatus,
 } from "../../lib/team";
 import { StageStepper } from "../board/StageStepper";
 import { RankChevrons, UsageBadge } from "../board/UsageBadge";
@@ -18,40 +18,36 @@ export interface CIRunnersCardProps {
   now: number;
 }
 
-/** The repos' GitHub Actions runners: online and busy, idle, or offline. */
+/**
+ * The repos' GitHub Actions runners as one compact strip at the bottom: a
+ * status dot and name each, with state, labels and repo in the tooltip.
+ */
 export function CIRunnersCard({ sample, now }: CIRunnersCardProps) {
   const observed = sample.observed_at === null ? NaN : Date.parse(sample.observed_at);
   const isStale = Number.isFinite(observed) && now - observed > CI_SAMPLE_STALE_MS;
-  const repos = new Set(sample.runners.map((r) => r.repo));
   return (
-    <article className="team-card team-host team-ci" aria-label="CI runners">
-      <div className="team-row team-row--between">
-        <h3 className="team-host__name">CI runners</h3>
-        {isStale && sample.observed_at !== null && (
-          <span className="team-pill team-pill--amber">sampled {relativeTime(sample.observed_at, new Date(now))}</span>
-        )}
-      </div>
+    <section className="team-ci" aria-label="CI runners">
+      <h2 className="team-heading team-ci__heading">CI runners</h2>
       {sample.runners.length === 0
-        ? <p className="team-empty">No runners registered.</p>
+        ? <span className="team-faint">none registered</span>
         : (
           <ul className="team-ci__list">
             {sample.runners.map((runner) => {
-              const state = ciRunnerState(runner);
-              const labels = ciRunnerLabels(runner);
+              const state = ciRunnerStatus(runner);
+              const details = [runner.name, state.text, ciRunnerLabels(runner), runner.repo].filter((part) => part !== "").join(" · ");
               return (
-                <li key={`${runner.repo}/${runner.name}`} className="team-ci__row" data-ci-runner={runner.name}>
-                  <span className="team-row team-ci__who">
-                    <span className={`team-dot team-dot--${state.tone}`} aria-hidden="true" />
-                    <span className="team-ci__name">{runner.name}</span>
-                    {repos.size > 1 && <span className="team-faint">{runner.repo}</span>}
-                  </span>
-                  <span className="team-faint team-ci__state">{[state.text, labels].filter((part) => part !== "").join(" · ")}</span>
+                <li key={`${runner.repo}/${runner.name}`} className="team-ci__item" data-ci-runner={runner.name} title={details} aria-label={details}>
+                  <StatusDot status={state} />
+                  <span className="team-ci__name" aria-hidden="true">{runner.name}</span>
                 </li>
               );
             })}
           </ul>
         )}
-    </article>
+      {isStale && sample.observed_at !== null && (
+        <span className="team-pill team-pill--amber team-pill--small">sampled {relativeTime(sample.observed_at, new Date(now))}</span>
+      )}
+    </section>
   );
 }
 
@@ -74,7 +70,7 @@ export function ManagerCard({ manager, onOpen }: ManagerCardProps) {
     <button type="button" className={`team-card team-manager${isWorking ? " team-manager--working" : ""}`} data-manager="" onClick={onOpen} aria-label="Board manager: open history">
       <span className="team-manager__head">
         <span className="team-row">
-          <span className={`team-dot${isWorking ? " team-dot--live" : manager.enabled ? "" : " team-dot--grey"}`} aria-hidden="true" />
+          <span className={`team-dot ${isWorking ? "team-dot--busy team-dot--live" : "team-dot--idle"}`} aria-hidden="true" />
           <span className="team-manager__name">Board manager</span>
           <span className="team-faint">{[latest?.model, manager.enabled ? "on" : "off"].filter(Boolean).join(" · ")}</span>
         </span>
@@ -173,6 +169,9 @@ export interface TeamTicketCardProps {
   activity: TicketActivity;
   isLinked: boolean;
   now: number;
+  /** Set when the ticket builds in a host slot: hovering, focusing or tapping the card shows that slot. */
+  onPairHover?: (ticketId: number | null) => void;
+  onPairToggle?: (ticketId: number) => void;
 }
 
 /**
@@ -180,10 +179,19 @@ export interface TeamTicketCardProps {
  * it: what it is doing, then the Board card's own token badge and stage
  * stepper with attempt counts, the signals that show a problem at a glance.
  */
-export function TeamTicketCard({ ticket, activity, isLinked, now }: TeamTicketCardProps) {
+export function TeamTicketCard({ ticket, activity, isLinked, now, onPairHover, onPairToggle }: TeamTicketCardProps) {
   const clock = ticketClock(ticket, now);
+  const pairProps = onPairToggle === undefined ? {} : {
+    "data-pairs-slot": true,
+    onPointerEnter: (e: PointerEvent<HTMLElement>) => { if (e.pointerType === "mouse") onPairHover?.(ticket.id); },
+    onPointerLeave: (e: PointerEvent<HTMLElement>) => { if (e.pointerType === "mouse") onPairHover?.(null); },
+    onFocus: () => onPairHover?.(ticket.id),
+    onBlur: () => onPairHover?.(null),
+    // A tap anywhere but the ticket link pins the pairing, so it reads on a phone.
+    onClick: (e: MouseEvent<HTMLElement>) => { if (!(e.target instanceof Element && e.target.closest("a"))) onPairToggle(ticket.id); },
+  };
   return (
-    <article className={`team-card team-ticket team-ticket--${activity.group}${isLinked ? " team-card--linked" : ""}`} data-ticket={ticket.id}>
+    <article className={`team-card team-ticket team-ticket--${activity.group}${isLinked ? " team-card--linked" : ""}`} data-ticket={ticket.id} {...pairProps}>
       <div className="team-row team-row--between team-row--top">
         <a className="team-ticket__id" href={`#/t/${ticket.id}`}>#{ticket.id}</a>
         <UsageBadge usage={ticket.usage} />
@@ -202,48 +210,96 @@ export function TeamBranch({ children }: { children: ReactNode }) {
   return <div className="team-branch">{children}</div>;
 }
 
+/** A status dot on the shared idle / busy / problem scale. */
+export function StatusDot({ status }: { status: WorkStatus }) {
+  return <span className={`team-dot team-dot--${status.tone}`} aria-hidden="true" />;
+}
+
 /** Props for {@link BuildHostCard}. */
 export interface BuildHostCardProps {
   host: TeamBuildHost;
   now: number;
   /** Renders the ticket card for a slot whose ticket no runner holds; null otherwise. */
   renderSlotTicket?: (ticketId: number) => ReactNode;
+  /** The runner whose ticket a slot builds, as a short label; "" when no runner holds it. */
+  slotOwner?: (ticketId: number) => string;
+  /** The ticket whose card and slot are shown as a pair, if any; pinned is the one a tap fixed. */
+  pairedTicket?: number | null;
+  pinnedTicket?: number | null;
+  /** Hovering or focusing a paired slot shows its pair; null ends it. */
+  onPairHover?: (ticketId: number | null) => void;
+  /** Tapping a paired slot pins or unpins its pair, so it reads on a phone too. */
+  onPairToggle?: (ticketId: number) => void;
 }
 
 const OS_LABELS: Record<TeamBuildHost["os"], string> = { windows: "Windows", linux: "Linux", macos: "macOS" };
 
-/** A build host: one box per slot with the job, phase and elapsed time, then its queue. */
-export function BuildHostCard({ host, now, renderSlotTicket }: BuildHostCardProps) {
-  const load = hostLoad(host);
+/**
+ * One build server: a status dot and the build count in its header, then all
+ * of its slots side by side, each with a dot and "#175 · building · 7m". A
+ * slot whose ticket a runner holds pairs with that ticket's card; a ticket
+ * no runner holds shows under the row. The queue line shows only when jobs wait.
+ */
+export function BuildHostCard({ host, now, renderSlotTicket, slotOwner, pairedTicket = null, pinnedTicket = null, onPairHover, onPairToggle }: BuildHostCardProps) {
+  const status = hostStatus(host, now);
   const slots = Math.max(host.max_parallel, host.running.length);
+  const unheld = host.running.map((job) => renderSlotTicket?.(job.ticket_id) ?? null).filter((node) => node !== null);
   return (
-    <article className="team-card team-host" data-host={host.name}>
+    <article className={`team-card team-host team-host--${status.tone}`} data-host={host.name}
+      style={{ flexGrow: Math.max(1, slots), flexBasis: `${Math.max(300, slots * 170)}px` }}>
       <div className="team-row team-row--between">
-        <h3 className="team-host__name">{host.name} <span className="team-faint">· {OS_LABELS[host.os]} build host</span></h3>
-        <span className={`team-pill team-pill--${load.tone}`}>{load.text}</span>
+        <h3 className="team-host__name team-row">
+          <StatusDot status={status} />
+          <span>{host.name} <span className="team-faint">· {OS_LABELS[host.os]}</span></span>
+        </h3>
+        <span className={`team-status team-status--${status.tone}`}>{status.text}</span>
       </div>
       {slots > 0 && (
-        <div className="team-slots">
+        <div className="team-slots" style={{ gridTemplateColumns: `repeat(${slots}, minmax(0, 1fr))` }}>
           {Array.from({ length: slots }, (_, i) => {
             const job = host.running[i];
-            const started = job?.started_at ? Date.parse(job.started_at) : NaN;
+            const slot = slotStatus(host, job, now);
+            const owner = job === undefined ? "" : slotOwner?.(job.ticket_id) ?? "";
+            const isPairable = job !== undefined && owner !== "" && onPairToggle !== undefined;
+            const isPaired = job !== undefined && job.ticket_id === pairedTicket;
+            const pairProps = isPairable ? {
+              role: "button",
+              tabIndex: 0,
+              "aria-pressed": job.ticket_id === pinnedTicket,
+              "aria-label": `Slot ${i + 1}: ${slot.text}, ${owner}'s ticket. Show its card`,
+              "data-slot-ticket": job.ticket_id,
+              onPointerEnter: (e: PointerEvent<HTMLDivElement>) => { if (e.pointerType === "mouse") onPairHover?.(job.ticket_id); },
+              onPointerLeave: (e: PointerEvent<HTMLDivElement>) => { if (e.pointerType === "mouse") onPairHover?.(null); },
+              onFocus: () => onPairHover?.(job.ticket_id),
+              onBlur: () => onPairHover?.(null),
+              onClick: () => onPairToggle?.(job.ticket_id),
+              onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onPairToggle?.(job.ticket_id);
+                }
+              },
+            } : {};
             return (
-              <div key={i} className={`team-slot${job ? " team-slot--busy" : ""}`}>
-                <div className="team-faint">Slot {i + 1}</div>
-                <div className="team-slot__job">{job ? `#${job.ticket_id} · ${job.phase || job.status}` : "free"}</div>
-                <div className="team-slot__bar" aria-hidden="true"><div className="team-slot__fill" /></div>
-                <div className="team-slot__clock">{job && Number.isFinite(started) ? formatElapsed(now - started) : "—"}</div>
-                {job && renderSlotTicket?.(job.ticket_id)}
+              <div key={i} className={`team-slot team-slot--${slot.tone}${isPaired ? " team-card--linked" : ""}${isPairable ? " team-slot--pairable" : ""}`}
+                data-slot={i + 1} {...pairProps}>
+                <div className="team-row team-row--between">
+                  <span className="team-row team-slot__label"><StatusDot status={slot} />Slot {i + 1}</span>
+                  {owner !== "" && <span className="team-faint team-slot__owner">{owner}</span>}
+                </div>
+                <div className="team-slot__job">{slot.text}</div>
               </div>
             );
           })}
         </div>
       )}
-      <div className="team-host__queue">
-        {host.queued.length === 0
-          ? "Queue empty"
-          : <>Queue: {host.queued.map((job) => `#${job.ticket_id} waiting ${formatElapsed(now - Date.parse(job.queued_at))}`).join(" · ")}</>}
-      </div>
+      {/* Tickets no runner holds sit under the slot row at full width, so a narrow slot stays readable. */}
+      {unheld.length > 0 && <div className="team-host__tickets">{unheld}</div>}
+      {host.queued.length > 0 && (
+        <div className="team-host__queue">
+          Queue: {host.queued.map((job) => `#${job.ticket_id} waiting ${formatElapsed(now - Date.parse(job.queued_at))}`).join(" · ")}
+        </div>
+      )}
     </article>
   );
 }
