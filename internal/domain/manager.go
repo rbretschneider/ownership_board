@@ -67,9 +67,12 @@ func ManagerFlags(facts []ManagerTicketFacts, settings BoardSettings, now time.T
 		if !ticket.IsAutonomous || ticket.Stage.IsCompleted() || ticket.Stage == StageEpic {
 			continue
 		}
+		// The board's own build verdict rides on every flag (not in the
+		// fingerprint, so it never adds a session).
+		note := LatestBuildNote(fact.RecentJobs)
 		add := func(kind ManagerFlagKind, key, detail string) {
 			flags = append(flags, ManagerFlag{TicketID: ticket.ID, RepoID: ticket.RepoID, Title: ticket.Title, Stage: ticket.Stage,
-				Kind: kind, Fingerprint: fmt.Sprintf("%s:%d:%s", kind, ticket.ID, key), Detail: detail})
+				Kind: kind, Fingerprint: fmt.Sprintf("%s:%d:%s", kind, ticket.ID, key), Detail: WithBuildNote(detail, note)})
 		}
 		if ticket.BlockedReason != "" {
 			add(FlagEscalated, "blocked:"+shortHash(ticket.BlockedReason), "blocked: "+clip(ticket.BlockedReason, 400))

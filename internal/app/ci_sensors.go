@@ -30,6 +30,8 @@ type ciSensorScope struct {
 	repos          []domain.Repo
 	tickets        map[int64][]domain.Ticket
 	boardCancelled map[int64]bool
+	// buildNotes holds each ticket's newest board build verdict.
+	buildNotes map[int64]string
 }
 
 // Flags runs the CI sensors over every repository that has an open
@@ -53,6 +55,9 @@ func (s *CIService) Flags(ctx context.Context, actor domain.Actor, scope RepoSco
 		facts, notes := s.readRepoCI(ctx, repo, sensorScope.tickets[repo.ID])
 		result.Notes = append(result.Notes, notes...)
 		if facts != nil {
+			for i := range facts.Tickets {
+				facts.Tickets[i].BuildNote = sensorScope.buildNotes[facts.Tickets[i].Ticket.ID]
+			}
 			input.Repos = append(input.Repos, *facts)
 		}
 	}
@@ -63,7 +68,7 @@ func (s *CIService) Flags(ctx context.Context, actor domain.Actor, scope RepoSco
 // loadSensorScope reads the repositories with open autonomous tickets, those
 // tickets, and the runs the board itself cancelled.
 func (s *CIService) loadSensorScope(ctx context.Context, scope RepoScope) (ciSensorScope, error) {
-	out := ciSensorScope{tickets: map[int64][]domain.Ticket{}, boardCancelled: map[int64]bool{}}
+	out := ciSensorScope{tickets: map[int64][]domain.Ticket{}, boardCancelled: map[int64]bool{}, buildNotes: map[int64]string{}}
 	err := s.store.Read(ctx, func(repos Repos) error {
 		tickets, err := repos.Tickets().List(ctx, scope.filter())
 		if err != nil {
@@ -72,6 +77,11 @@ func (s *CIService) loadSensorScope(ctx context.Context, scope RepoScope) (ciSen
 		for _, ticket := range tickets {
 			if ticket.IsAutonomous && !ticket.Stage.IsCompleted() && ticket.RepoID != 0 {
 				out.tickets[ticket.RepoID] = append(out.tickets[ticket.RepoID], ticket)
+				jobs, err := repos.BuildJobs().RecentForTicket(ctx, ticket.ID, recentJobsPerTicket)
+				if err != nil {
+					return err
+				}
+				out.buildNotes[ticket.ID] = domain.LatestBuildNote(jobs)
 			}
 		}
 		if out.repos, err = reposWithCI(ctx, repos, out.tickets); err != nil {

@@ -69,6 +69,10 @@ type TicketDraft struct {
 type AutonomousDraft struct {
 	TicketDraft
 	Spec string
+	// Files are the repo paths the work expects to change. The board manager
+	// must name them, so the board can refuse a ticket that duplicates open
+	// work (see ManagerFilingOverlap).
+	Files []string
 }
 
 // TicketEdit lists the fields to change; nil leaves a field as it is.

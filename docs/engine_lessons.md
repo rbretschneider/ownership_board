@@ -14,6 +14,14 @@ closes a seam.
 
 ## Failure modes
 
+### The manager parked a failing ticket on an unrelated CI fix
+
+| | |
+|---|---|
+| Symptom | A ticket waited on a CI-fix ticket for hours while its own new performance test failed on the build host at twice its budget. The manager had filed that CI fix as a duplicate of an open PR. Its spec said "no test is changed" while the policy test asserted the bug, so the fix could only publish unresolved. The owner was told to "add a runner" every pass. |
+| Cause | The manager read only the provider's CI, where every code job was green, and never saw the board's own failing verdict. Nothing checked its links, its filings or its specs, and each session started with no memory of what it had already told the owner. |
+| Fix | **Permanent.** Every manager flag carries the ticket's newest board verdict and its failing tests (fingerprints unchanged, so no extra sessions). The board refuses a manager `depends_on` from a ticket whose newest board build failed in its own code, and expires the manager's links after 6 hours. A manager filing must name its files and is refused when an open ticket names any of them. The runbook requires fix specs to put tests that assert the defect in scope, and the loop drops owner asks repeated within 24 hours. |
+
 ### Verification results thrown away
 
 | | |

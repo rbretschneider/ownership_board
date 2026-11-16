@@ -71,6 +71,9 @@ func (s *BoardService) insertDependency(ctx context.Context, repos Repos, actor 
 	if err := requireSameRepo(dependant, prerequisite); err != nil {
 		return domain.TimelineEntry{}, nil, err
 	}
+	if err := requireNoOwnFailure(ctx, repos, actor, dependant, prerequisite); err != nil {
+		return domain.TimelineEntry{}, nil, err
+	}
 	now := s.clock.Now()
 	relation, err := domain.NewRelation(dependant.ID, prerequisite.ID, domain.RelationDependsOn, actor, now)
 	if err != nil {
@@ -131,6 +134,83 @@ func requireNoInFlightStall(ctx context.Context, repos Repos, edges map[int64][]
 	return domain.Conflictf(
 		"depends_on: autonomous ticket %d holds an in-flight slot and would wait, through ticket %d depends_on ticket %d, on autonomous ticket %d, which has not started; the cap would keep ticket %d from starting while ticket %d waits for it",
 		stall.Holder, dependant.ID, prerequisite.ID, stall.Waiter, stall.Waiter, stall.Holder)
+}
+
+// requireNoOwnFailure refuses a board manager's depends_on link while the
+// dependant's newest board build failed in its own code. Parking such a
+// ticket on another one hides a real failure that only a repair fixes
+// (2026-11-16: a ticket waited on a CI fix while its own perf test failed).
+func requireNoOwnFailure(ctx context.Context, repos Repos, actor domain.Actor, dependant, prerequisite domain.Ticket) error {
+	if !actor.IsBoardManager() {
+		return nil
+	}
+	jobs, err := repos.BuildJobs().RecentForTicket(ctx, dependant.ID, recentJobsPerTicket)
+	if err != nil {
+		return err
+	}
+	job, what, isOwn := domain.OwnBuildFailure(jobs)
+	if !isOwn {
+		return nil
+	}
+	return domain.Conflictf(
+		"depends_on refused: ticket %d's newest board build (%s on %s) failed in its own code (%s); waiting on ticket %d would hide that, so direct a repair of those failures instead",
+		dependant.ID, job.Target.OS, domain.ShortSHA(job.SHA), what, prerequisite.ID)
+}
+
+// ManagerLinkTTL is how long a board manager's depends_on link holds a
+// ticket. The manager re-adds a link that still applies; one it forgot no
+// longer parks the ticket for good.
+const ManagerLinkTTL = 6 * time.Hour
+
+// ExpireManagerLinks removes the calling board manager's depends_on links
+// older than ManagerLinkTTL and says so on each waiting ticket. It returns
+// how many it removed. The manager calls it every pass.
+func (s *BoardService) ExpireManagerLinks(ctx context.Context, actor domain.Actor) (int, error) {
+	if !actor.IsBoardManager() {
+		return 0, domain.Forbiddenf("only the board manager token expires its own links")
+	}
+	now := s.clock.Now()
+	removed := 0
+	var events []Event
+	err := s.store.Write(ctx, func(repos Repos) error {
+		relations, err := repos.Relations().DependenciesAddedBy(ctx, actor.ID)
+		if err != nil {
+			return err
+		}
+		for _, relation := range relations {
+			if now.Sub(relation.AddedAt) < ManagerLinkTTL {
+				continue
+			}
+			ticket, err := repos.Tickets().Get(ctx, relation.FromID)
+			if err != nil {
+				return err
+			}
+			if err := repos.Relations().Delete(ctx, relation); err != nil {
+				return err
+			}
+			removed++
+			if ticket.Stage.IsCompleted() {
+				continue
+			}
+			_, recorded, err := s.writer.apply(ctx, repos, &ticket, func(context.Context, Repos, *domain.Ticket) ([]domain.TimelineEntry, error) {
+				ticket.UpdatedAt = now
+				entry := domain.NewEntry(ticket.ID, domain.TimelineRelation, domain.SystemActor, now).
+					With("kind", string(domain.RelationDependsOn)).With("ticket_id", relation.ToID).
+					With("removed", true).With("expired", true)
+				return []domain.TimelineEntry{entry}, nil
+			})
+			if err != nil {
+				return err
+			}
+			events = append(events, recorded...)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	s.writer.sink.Publish(ctx, events)
+	return removed, nil
 }
 
 // requireSameRepo keeps dependencies within one repo. The message names only

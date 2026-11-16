@@ -436,18 +436,23 @@ func (createAutonomousTicket) Definition() Definition {
 			"spec":       prop("string", "The agreed spec in markdown: problem, scope, out of scope, numbered acceptance criteria, approach and risk, and a line `Build tier: small | normal`. Work bigger than one half-day story is filed whole and then broken down with split_ticket."),
 			"repo_id":    prop("integer", "The agreed repo (see list_repos)."),
 			"depends_on": dependsOnProp(),
+			"files": map[string]any{
+				"type": "array", "items": map[string]any{"type": "string"}, "maxItems": domain.MaxDeclaredFiles,
+				"description": "Repo-relative paths the work expects to change. Required for the board manager: a filing whose files an open ticket already names is refused, and the manager comments on that ticket instead.",
+			},
 		}, "kind", "title", "spec", "repo_id"),
 	}
 }
 
 func (t createAutonomousTicket) Call(ctx context.Context, actor domain.Actor, raw json.RawMessage) (string, error) {
 	var args struct {
-		Kind      string  `json:"kind"`
-		Title     string  `json:"title"`
-		Body      string  `json:"body"`
-		Spec      string  `json:"spec"`
-		RepoID    int64   `json:"repo_id"`
-		DependsOn []int64 `json:"depends_on"`
+		Kind      string   `json:"kind"`
+		Title     string   `json:"title"`
+		Body      string   `json:"body"`
+		Spec      string   `json:"spec"`
+		RepoID    int64    `json:"repo_id"`
+		DependsOn []int64  `json:"depends_on"`
+		Files     []string `json:"files"`
 	}
 	if err := decodeArguments(raw, &args); err != nil {
 		return "", err
@@ -455,6 +460,7 @@ func (t createAutonomousTicket) Call(ctx context.Context, actor domain.Actor, ra
 	draft := domain.AutonomousDraft{
 		TicketDraft: domain.TicketDraft{RepoID: args.RepoID, Kind: args.Kind, Title: args.Title, Body: args.Body, DependsOn: args.DependsOn},
 		Spec:        args.Spec,
+		Files:       args.Files,
 	}
 	detail, err := t.s.Board.CreateAutonomous(ctx, actor, draft)
 	return outcome(detail, "filed as autonomous; the runner takes it from here to a pull request.", err)

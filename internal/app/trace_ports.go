@@ -37,6 +37,9 @@ type RelationRepository interface {
 	Insert(ctx context.Context, relation domain.Relation) error
 	Delete(ctx context.Context, relation domain.Relation) error
 	CountOutgoing(ctx context.Context, ticketID int64) (int, error)
+	// DependenciesAddedBy returns the depends_on links one agent token added,
+	// oldest first.
+	DependenciesAddedBy(ctx context.Context, agentID int64) ([]domain.Relation, error)
 	// Waiting maps each ticket that depends on an incomplete ticket to the ids
 	// of those tickets, in id order.
 	Waiting(ctx context.Context) (map[int64][]int64, error)

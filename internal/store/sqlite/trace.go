@@ -215,6 +215,19 @@ func (r relationRepo) ForTicket(ctx context.Context, ticketID int64) ([]domain.R
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: relations of ticket %d: %w", ticketID, err)
 	}
+	return scanRelations(rows)
+}
+
+func (r relationRepo) DependenciesAddedBy(ctx context.Context, agentID int64) ([]domain.Relation, error) {
+	rows, err := r.q.QueryContext(ctx,
+		`SELECT `+relationColumns+` FROM relations WHERE kind = 'depends_on' AND added_by_kind = 'agent' AND added_by_id = ? ORDER BY added_at`, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: dependencies added by agent %d: %w", agentID, err)
+	}
+	return scanRelations(rows)
+}
+
+func scanRelations(rows *sql.Rows) ([]domain.Relation, error) {
 	defer rows.Close()
 	var relations []domain.Relation
 	for rows.Next() {
@@ -224,6 +237,7 @@ func (r relationRepo) ForTicket(ctx context.Context, ticketID int64) ([]domain.R
 			return nil, err
 		}
 		relation.Kind, relation.AddedBy.Kind = domain.RelationKind(kind), domain.ActorKind(addedByKind)
+		var err error
 		if relation.AddedAt, err = parseTime(addedAt); err != nil {
 			return nil, err
 		}
