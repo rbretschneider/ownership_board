@@ -131,6 +131,20 @@ it("hides the CI runners card when the server has no sample", async () => {
   expect(host.textContent).toContain("builder-1");
 });
 
+it("nests every ticket a runner holds or waits on under it", async () => {
+  const two = teamFixture();
+  // #13 waits on a host queue after codex_1 released it: it is codex_1's too.
+  two.tickets = two.tickets.map((t) => (t.id === 13 ? { ...t, holder: "@worker/7/codex_1" } : t));
+  api.team.mockResolvedValue(two);
+  await act(async () => {
+    stream.onEvent?.({ type: "ticket_moved", ticket_id: 13 } as unknown as BoardEvent);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  });
+  const branch = runner("@worker/7/codex_1").closest(".team-branch")!;
+  expect([...branch.querySelectorAll("[data-ticket]")].map((el) => el.getAttribute("data-ticket"))).toEqual(["12", "13"]);
+  expect(branch.querySelector('[data-ticket="13"]')?.textContent).toContain("1st in builder-1 queue");
+});
+
 it("highlights a hovered or focused runner's branch without drawing a line", async () => {
   await act(async () => { runner("@worker/7/codex_1").dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); });
   expect(runner("@worker/7/codex_1").className).toContain("team-card--active");

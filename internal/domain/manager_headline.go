@@ -1,10 +1,26 @@
 package domain
 
 import (
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
 )
+
+// lineMarkers are the markdown markers a summary line may start with: heading
+// hashes followed by a space, list bullets and quotes. A ticket reference such
+// as "#64" is not a marker and stays.
+var lineMarkers = regexp.MustCompile(`^(?:#{1,6}\s+|[-*+>]\s+)+`)
+
+// legacyEntry is the pre-2026-11-16 summary line "#64 <fingerprints>: why: ... |
+// action: ... | expect: ...". Its headline is the ticket and the action.
+var legacyEntry = regexp.MustCompile(`^#(\d+)\b[^|]*?\bwhy:.*?\|\s*action:\s*([^|]+)`)
+
+// plainLine is a summary line without its leading markdown markers and emphasis.
+func plainLine(line string) string {
+	line = lineMarkers.ReplaceAllString(strings.TrimSpace(line), "")
+	return strings.TrimSpace(strings.Trim(strings.TrimSpace(line), "*_`"))
+}
 
 // MaxManagerHeadlineLength bounds the one-line headline the Team view shows.
 const MaxManagerHeadlineLength = 100
@@ -18,8 +34,7 @@ const headlinePrefix = "HEADLINE:"
 // MaxManagerHeadlineLength characters.
 func ManagerHeadline(summary string) string {
 	for _, line := range strings.Split(summary, "\n") {
-		line = strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(line), "#*-> "))
-		if rest, ok := cutPrefixFold(line, headlinePrefix); ok {
+		if rest, ok := cutPrefixFold(plainLine(line), headlinePrefix); ok {
 			if headline := strings.TrimSpace(strings.Trim(strings.TrimSpace(rest), "*_`")); headline != "" {
 				return truncateRunes(headline, MaxManagerHeadlineLength)
 			}
@@ -46,7 +61,7 @@ func WithManagerHeadline(summary, headline string) string {
 // structured format the runbook asks for since 2026-11-16.
 func HasManagerHeadline(summary string) bool {
 	for _, line := range strings.Split(summary, "\n") {
-		if _, ok := cutPrefixFold(strings.TrimLeft(strings.TrimSpace(line), "#*-> "), headlinePrefix); ok {
+		if _, ok := cutPrefixFold(plainLine(line), headlinePrefix); ok {
 			return true
 		}
 	}
@@ -64,10 +79,12 @@ func cutPrefixFold(s, prefix string) (string, bool) {
 // sentence end, skipping markdown headings and block labels.
 func firstSentence(summary string) string {
 	for _, line := range strings.Split(summary, "\n") {
-		line = strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(line), "#*-> "))
-		line = strings.Trim(line, "*_`")
-		if line == "" || strings.HasSuffix(line, ":") && len(line) < 40 || strings.EqualFold(line, "MANAGER SUMMARY") {
+		line = plainLine(line)
+		if line == "" || strings.HasSuffix(line, ":") && len(line) < 40 || strings.EqualFold(line, "MANAGER SUMMARY") || strings.EqualFold(line, "Board review") {
 			continue
+		}
+		if m := legacyEntry.FindStringSubmatch(line); m != nil {
+			return "#" + m[1] + ": " + strings.TrimSpace(m[2])
 		}
 		for i, r := range line {
 			if (r == '.' || r == '!' || r == '?') && (i+1 == len(line) || line[i+1] == ' ') {

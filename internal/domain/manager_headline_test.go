@@ -12,6 +12,9 @@ func TestManagerHeadline(t *testing.T) {
 		{"case-insensitive", "headline: Nothing to do.", "Nothing to do."},
 		{"old summary: first sentence", "MANAGER SUMMARY\nMoving:\nRepeated #64 directions. Then more text follows here.", "Repeated #64 directions."},
 		{"empty", "", ""},
+		{"ticket refs keep their hash", "MANAGER SUMMARY\n- #64 is waiting on #55.", "#64 is waiting on #55."},
+		{"legacy line: the ticket and its action", "MANAGER SUMMARY\n- #64 cycling:64:failure:4074394c:2: why: same Windows failure | action: parked it for a fix | expect: x",
+			"#64: parked it for a fix"},
 	}
 	for _, c := range cases {
 		if got := ManagerHeadline(c.summary); got != c.want {
