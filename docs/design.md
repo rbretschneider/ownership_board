@@ -171,6 +171,10 @@ opening it. A person's own actions never notify them.
   metadata (cost, model, timestamps) and status text use the neutral text
   colors or a neutral chip. Link-colored text that does nothing reads as
   broken. Status pills and badges keep their tinted backgrounds.
+- **Workers use one status scale.** Build slots, build hosts and CI runners
+  show a dot: gray for idle, orange for busy, red for a problem (offline, or
+  a job past the stuck limit). Green has no separate meaning there, and a
+  status never uses the link color.
 - **Details open in a modal.** It is centered over a dimmed backdrop and
   closes on ×, a click on the backdrop, or Escape. Focus stays inside while
   it is open. On a phone it is a full-screen sheet.

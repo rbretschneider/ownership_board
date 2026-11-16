@@ -64,6 +64,49 @@ export function TeamPage() {
   const heldIds = useMemo(() => new Set([...ticketsByRunner.values()].flat().map((t) => t.id)), [ticketsByRunner]);
   const highlightedTickets = new Set((highlighted === null ? [] : ticketsByRunner.get(highlighted) ?? []).map((t) => t.id));
 
+  // A runner's ticket building in a host slot pairs with that slot: hovering or
+  // focusing either shows a line between them, and a tap pins it (phones).
+  const runnerOfTicket = useMemo(() => {
+    const out = new Map<number, TeamRunner>();
+    for (const runner of team?.runners ?? []) {
+      for (const ticket of ticketsByRunner.get(runner.name) ?? []) out.set(ticket.id, runner);
+    }
+    return out;
+  }, [team, ticketsByRunner]);
+  const slotTicketIds = useMemo(() => new Set((team?.build_hosts ?? []).flatMap((h) => h.running.map((j) => j.ticket_id))), [team]);
+  const [pairHover, setPairHover] = useState<number | null>(null);
+  const [pairPinned, setPairPinned] = useState<number | null>(null);
+  const togglePair = useCallback((id: number) => setPairPinned((current) => (current === id ? null : id)), []);
+  const paired = pairHover ?? pairPinned;
+  const pairedOnView = paired !== null && slotTicketIds.has(paired) && runnerOfTicket.has(paired) ? paired : null;
+  const [pairLine, setPairLine] = useState<LinkLine | null>(null);
+
+  const measurePair = useCallback(() => {
+    const container = containerRef.current;
+    if (container === null || pairedOnView === null) {
+      setPairLine(null);
+      return;
+    }
+    const from = container.querySelector(`.team-runners [data-ticket="${pairedOnView}"]`);
+    const to = container.querySelector(`[data-slot-ticket="${pairedOnView}"]`);
+    if (from === null || to === null) {
+      setPairLine(null);
+      return;
+    }
+    const box = container.getBoundingClientRect();
+    const scale = container.offsetWidth > 0 ? box.width / container.offsetWidth : 1;
+    setPairLine(linkPath(box, from.getBoundingClientRect(), to.getBoundingClientRect(), scale));
+  }, [pairedOnView]);
+
+  useLayoutEffect(() => {
+    measurePair();
+  }, [measurePair, team]);
+
+  useEffect(() => {
+    window.addEventListener("resize", measurePair);
+    return () => window.removeEventListener("resize", measurePair);
+  }, [measurePair]);
+
   const measureManager = useCallback(() => {
     const container = containerRef.current;
     const from = container?.querySelector("[data-manager]") ?? null;
@@ -121,10 +164,18 @@ export function TeamPage() {
     return selectedRunner === null ? null : runnerPanel(selectedRunner, detail?.ticketId === selectedRunner.ticket_id ? detail : null, now, directory);
   }, [team, selection, selectedRunner, detail, now, directory]);
 
-  const ticketCard = (ticket: TeamTicket) => (
-    <TeamTicketCard key={ticket.id} ticket={ticket} activity={ticketActivity(ticket, team?.build_hosts ?? [], now, directory)}
-      isLinked={highlightedTickets.has(ticket.id)} now={now} />
-  );
+  const ticketCard = (ticket: TeamTicket, isUnderRunner = false) => {
+    const pairs = isUnderRunner && slotTicketIds.has(ticket.id);
+    return (
+      <TeamTicketCard key={ticket.id} ticket={ticket} activity={ticketActivity(ticket, team?.build_hosts ?? [], now, directory)}
+        isLinked={highlightedTickets.has(ticket.id) || ticket.id === pairedOnView} now={now}
+        onPairHover={pairs ? setPairHover : undefined} onPairToggle={pairs ? togglePair : undefined} />
+    );
+  };
+  const slotOwner = (ticketId: number) => {
+    const runner = runnerOfTicket.get(ticketId);
+    return runner === undefined ? "" : labelRunner(runner.name, directory, runner).label;
+  };
 
   return (
     <PageShell page="team" title="Team" isWide>
@@ -150,7 +201,13 @@ export function TeamPage() {
               ))}
             </svg>
           )}
-          <p className="team-intro">Each runner with the ticket it is working. Tap a card for details.</p>
+          {pairLine !== null && (
+            <svg className="team-wire team-wire--pair" aria-hidden="true" data-testid="pair-line" key={pairedOnView ?? ""}>
+              <path className="team-wire__path" d={pairLine.d} />
+              <circle className="team-wire__end" cx={pairLine.x2} cy={pairLine.y2} r="4" />
+            </svg>
+          )}
+          <p className="team-intro">Each runner with the ticket it is working. Tap a runner for details; tap a building ticket or its slot to pair them.</p>
           <section className="team-top" aria-label="Manager">
             <ManagerCard manager={team.manager} onOpen={() => setSelection({ kind: "manager" })} />
           </section>
@@ -167,7 +224,7 @@ export function TeamPage() {
                     onLeave={() => setHovered((current) => (current === runner.name ? null : current))}
                     onOpen={() => setSelection({ kind: "runner", name: runner.name })}
                   />
-                  {own.map((ticket) => ticketCard(ticket))}
+                  {own.map((ticket) => ticketCard(ticket, true))}
                 </TeamBranch>
               );
             })}
@@ -181,7 +238,7 @@ export function TeamPage() {
                   <BuildHostCard key={host.id} host={host} now={now} renderSlotTicket={(id) => {
                     const ticket = ticketsById.get(id);
                     return ticket !== undefined && !heldIds.has(id) ? ticketCard(ticket) : null;
-                  }} />
+                  }} slotOwner={slotOwner} pairedTicket={pairedOnView} pinnedTicket={pairPinned} onPairHover={setPairHover} onPairToggle={togglePair} />
                 ))}
                 {hasCISample && team.ci_runners !== undefined && <CIRunnersCard sample={team.ci_runners} now={now} />}
               </div>

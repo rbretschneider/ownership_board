@@ -1,4 +1,4 @@
-import type { CIRunner, RunnerState, StageId, Team, TeamBuildHost, TeamRunner, TeamTicket, TimelineEntry } from "../api/types";
+import type { CIRunner, RunnerState, StageId, Team, TeamBuildHost, TeamHostJob, TeamRunner, TeamTicket, TimelineEntry } from "../api/types";
 import { formatElapsed } from "./buildClock";
 import { EMPTY_RUNNER_DIRECTORY, labelRunner, workerIdOf, type RunnerDirectory } from "./runnerNames";
 import { modelFamily, parseWorkModel, type ModelFamily } from "./workModel";
@@ -51,9 +51,9 @@ export function humanizeDoing(doing: string): string {
 }
 
 /** Display label and tone for a runner state. */
-export const RUNNER_STATES: Record<RunnerState, { label: string; tone: "accent" | "amber" | "grey" }> = {
-  working: { label: "Working", tone: "accent" },
-  waiting: { label: "Waiting", tone: "amber" },
+export const RUNNER_STATES: Record<RunnerState, { label: string; tone: "amber" | "grey" }> = {
+  working: { label: "Working", tone: "amber" },
+  waiting: { label: "Waiting", tone: "grey" },
   idle: { label: "Idle", tone: "grey" },
 };
 
@@ -206,14 +206,46 @@ export function clockTime(iso: string): string {
   return `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
 }
 
-/** "slot busy" text for a host: "2 of 2 slots busy", "idle", "offline". */
-export function hostLoad(host: TeamBuildHost): { text: string; tone: "accent" | "amber" | "green" | "grey" } {
-  if (!host.online) return { text: "offline", tone: "grey" };
-  if (!host.enabled) return { text: "disabled", tone: "grey" };
-  const busy = host.running.length;
-  const slots = Math.max(host.max_parallel, busy);
-  if (busy === 0) return { text: `${slots} ${slots === 1 ? "slot" : "slots"} free`, tone: "green" };
-  return { text: `${busy} of ${slots} slots busy`, tone: busy >= slots ? "amber" : "accent" };
+/**
+ * The one status scale for build slots, build hosts and CI runners: idle
+ * (gray), busy (orange) or a problem (red). Green has no meaning of its own
+ * here, and the link colour is never a status.
+ */
+export type WorkStatusTone = "idle" | "busy" | "problem";
+
+/** A status dot's tone and the words beside it. */
+export interface WorkStatus {
+  tone: WorkStatusTone;
+  text: string;
+}
+
+/** A running build job past this is stuck: the manager flags it at the same limit. */
+export const JOB_RUNNING_TOO_LONG_MS = 4 * 60 * 60_000;
+
+/**
+ * One slot of a build host: idle, "#175 · building · 7m", or a problem (the
+ * host is offline, or its job has run past {@link JOB_RUNNING_TOO_LONG_MS}).
+ */
+export function slotStatus(host: TeamBuildHost, job: TeamHostJob | undefined, now: number): WorkStatus {
+  if (!host.online) return { tone: "problem", text: job === undefined ? "host offline" : `#${job.ticket_id} · host offline` };
+  if (job === undefined) return { tone: "idle", text: host.enabled ? "idle" : "disabled" };
+  const started = job.started_at === null ? NaN : Date.parse(job.started_at);
+  const elapsed = Number.isFinite(started) ? now - started : NaN;
+  const parts = [`#${job.ticket_id}`, job.phase || job.status || "building"];
+  if (Number.isFinite(elapsed)) parts.push(formatElapsed(elapsed));
+  if (elapsed > JOB_RUNNING_TOO_LONG_MS) return { tone: "problem", text: `${parts.join(" · ")} · stuck` };
+  return { tone: "busy", text: parts.join(" · ") };
+}
+
+/** A host's header status: the worst of its slots, with how many are building. */
+export function hostStatus(host: TeamBuildHost, now: number): WorkStatus {
+  if (!host.online) return { tone: "problem", text: "offline" };
+  if (!host.enabled) return { tone: "idle", text: "disabled" };
+  const slots = Math.max(host.max_parallel, host.running.length);
+  const stuck = host.running.filter((job) => slotStatus(host, job, now).tone === "problem").length;
+  if (stuck > 0) return { tone: "problem", text: `${stuck} stuck` };
+  if (host.running.length === 0) return { tone: "idle", text: "idle" };
+  return { tone: "busy", text: `${host.running.length} of ${slots} building` };
 }
 
 /** One line of a runner's recent activity, from a ticket timeline entry. */
@@ -312,10 +344,10 @@ export function linkPath(container: Box, from: Box, to: Box, scale = 1): LinkLin
 /** A CI sample older than this is shown as stale: the sweep runs every 5 minutes. */
 export const CI_SAMPLE_STALE_MS = 15 * 60_000;
 
-/** A CI runner's state on its row: busy, idle or offline. */
-export function ciRunnerState(runner: CIRunner): { text: string; tone: "accent" | "green" | "grey" } {
-  if (runner.status !== "online") return { text: "offline", tone: "grey" };
-  return runner.busy ? { text: "busy", tone: "accent" } : { text: "idle", tone: "green" };
+/** A CI runner's status on its row: busy, idle, or offline (a problem). */
+export function ciRunnerStatus(runner: CIRunner): WorkStatus {
+  if (runner.status !== "online") return { tone: "problem", text: "offline" };
+  return runner.busy ? { tone: "busy", text: "busy" } : { tone: "idle", text: "idle" };
 }
 
 /** The labels worth showing: every label but the generic "self-hosted". */

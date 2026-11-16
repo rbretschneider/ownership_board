@@ -49,7 +49,7 @@ it("draws the org chart: manager, runners with their tickets, and build hosts", 
   expect(runner("@worker/7/codex_1").textContent).toContain("Working");
   expect(runner("@worker/7/claude_2").textContent).toContain("Idle");
   expect(host.querySelector('[data-ticket="12"]')?.textContent).toContain("Testing on builder-1 slot 1");
-  expect(host.textContent).toContain("2 of 2 slots busy");
+  expect(host.textContent).toContain("2 of 2 building");
   expect(host.textContent).toContain("Queue: #13 waiting 1h 06m");
 });
 
@@ -64,10 +64,49 @@ it("nests each ticket under the runner working it, and a ticket no runner holds 
   expect(child.querySelector(".badge--usage")?.textContent).toContain("1.9M tok");
   expect(runner("@worker/7/claude_2").closest(".team-branch")!.querySelector("[data-ticket]")).toBeNull();
   const slot = host.querySelector('[data-host="builder-1"] [data-ticket="17"]');
-  expect(slot?.closest(".team-slot")).not.toBeNull();
+  expect(slot?.closest(".team-host__tickets")).not.toBeNull();
   // Each ticket appears once: #12 under its runner, not again in its slot; #13 is only queued.
   expect(host.querySelectorAll('[data-ticket="12"]')).toHaveLength(1);
   expect(host.querySelector('[data-ticket="13"]')).toBeNull();
+});
+
+it("shows one card per build host with its slots in a row, a status dot each and no progress bar", () => {
+  const card = host.querySelector('[data-host="builder-1"]')!;
+  expect(card.querySelector(".team-host__name .team-dot--busy")).not.toBeNull();
+  const slots = [...card.querySelectorAll(".team-slot")];
+  expect(slots).toHaveLength(2);
+  expect(card.querySelector<HTMLElement>(".team-slots")?.style.gridTemplateColumns).toBe("repeat(2, minmax(0, 1fr))");
+  expect(slots[0]!.querySelector(".team-dot--busy")).not.toBeNull();
+  expect(slots[0]!.querySelector(".team-slot__job")?.textContent).toBe("#12 · testing · 1h 36m");
+  // Slot 1 builds codex_1's ticket, so it names the runner; #17 has no runner.
+  expect(slots[0]!.querySelector(".team-slot__owner")?.textContent).toBe("codex_1");
+  expect(slots[1]!.querySelector(".team-slot__owner")).toBeNull();
+  expect(card.querySelector(".team-slot__bar")).toBeNull();
+  // CI runners use the same scale: busy, idle, offline.
+  const dots = [...host.querySelectorAll(".team-ci__row .team-dot")].map((d) => d.className);
+  expect(dots).toEqual(["team-dot team-dot--busy", "team-dot team-dot--idle", "team-dot team-dot--problem"]);
+});
+
+it("pairs a runner's ticket with the slot building it on hover, focus or tap", async () => {
+  const card = () => host.querySelector<HTMLElement>('.team-runners [data-ticket="12"]')!;
+  const slot = () => host.querySelector<HTMLElement>('[data-slot-ticket="12"]')!;
+  expect(slot().getAttribute("aria-pressed")).toBe("false");
+  expect(host.querySelector('[data-testid="pair-line"]')).toBeNull();
+
+  await act(async () => { slot().focus(); });
+  expect(card().classList.contains("team-card--linked")).toBe(true);
+  expect(slot().classList.contains("team-card--linked")).toBe(true);
+  expect(host.querySelector('[data-testid="pair-line"]')).not.toBeNull();
+  await act(async () => { slot().blur(); });
+  expect(host.querySelector('[data-testid="pair-line"]')).toBeNull();
+
+  // A tap on the card pins the pairing until the next tap.
+  await act(async () => { card().querySelector<HTMLElement>(".team-ticket__title")!.click(); });
+  expect(slot().getAttribute("aria-pressed")).toBe("true");
+  expect(host.querySelector('[data-testid="pair-line"]')).not.toBeNull();
+  await act(async () => { slot().click(); });
+  expect(slot().getAttribute("aria-pressed")).toBe("false");
+  expect(host.querySelector('[data-testid="pair-line"]')).toBeNull();
 });
 
 it("shows the manager's headline, not its raw summary, and no feed bar or profile chips", () => {
