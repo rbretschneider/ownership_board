@@ -37,6 +37,14 @@ export function teamFixture(): Team {
       queued: [{ ticket_id: 13, repo: "acme/app", queued_at: minutesAgo(66) }],
     }],
     queued_by_os: { windows: 1 },
+    ci_runners: {
+      observed_at: minutesAgo(2),
+      runners: [
+        { repo: "acme/app", name: "linux-1", status: "online", busy: true, labels: ["self-hosted", "linux", "X64"] },
+        { repo: "acme/app", name: "linux-2", status: "online", busy: false, labels: ["self-hosted", "linux", "X64"] },
+        { repo: "acme/app", name: "win-old", status: "offline", busy: false, labels: ["self-hosted", "windows"] },
+      ],
+    },
   };
 }
 

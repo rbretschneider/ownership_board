@@ -86,13 +86,14 @@ func build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*applic
 		return nil, err
 	}
 	handler := httpapi.New(httpapi.Deps{
-		UsageFile:    filepath.Join(cfg.DataDir, "account_usage.json"),
-		RunnersFile:  filepath.Join(cfg.DataDir, "windows_runners.json"),
-		PRStatusFile: filepath.Join(cfg.DataDir, "pr_status.json"),
-		BuildJobs:    jobs,
-		Verdicts:     services.Verdicts,
-		BuildHosts:   app.NewBuildHostService(db, systemClock, logger, boardNotifier(cfg)),
-		Board:        services.Board, Agents: services.Agents, Repos: services.Repos,
+		UsageFile:     filepath.Join(cfg.DataDir, "account_usage.json"),
+		RunnersFile:   filepath.Join(cfg.DataDir, "windows_runners.json"),
+		PRStatusFile:  filepath.Join(cfg.DataDir, "pr_status.json"),
+		CIRunnersFile: filepath.Join(cfg.DataDir, "ci_runners.json"),
+		BuildJobs:     jobs,
+		Verdicts:      services.Verdicts,
+		BuildHosts:    app.NewBuildHostService(db, systemClock, logger, boardNotifier(cfg)),
+		Board:         services.Board, Agents: services.Agents, Repos: services.Repos,
 		Connections: connections.NewService(catalog, services.Repos, boardNotifier(cfg), connectionPolicy(cfg)),
 		Auth:        authService, OIDC: auth.NewOIDC(oidcConfig(cfg), authService),
 		Broker: hub, Health: db, Logger: logger,

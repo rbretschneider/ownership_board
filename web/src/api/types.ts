@@ -845,4 +845,21 @@ export interface Team {
   tickets: TeamTicket[];
   build_hosts: TeamBuildHost[];
   queued_by_os: Partial<Record<BuildHostOS, number>>;
+  /** The repos' GitHub Actions runners as the merge sweep last sampled them; absent from older servers. */
+  ci_runners?: CIRunners;
+}
+
+/** A GitHub Actions runner of one repo. */
+export interface CIRunner {
+  repo: string;
+  name: string;
+  status: "online" | "offline";
+  busy: boolean;
+  labels: string[];
+}
+
+/** The latest CI runner sample; observed_at is null when there is none. */
+export interface CIRunners {
+  observed_at: string | null;
+  runners: CIRunner[];
 }

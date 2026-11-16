@@ -55,6 +55,35 @@ it("draws the org chart: manager, runners, tickets in flight and build hosts", (
   expect(host.textContent).toContain("Queue: #13 waiting 1h 06m");
 });
 
+it("lists CI runners as busy, idle or offline, and flags a stale sample", async () => {
+  const row = (name: string) => host.querySelector(`[data-ci-runner="${name}"]`)?.textContent;
+  expect(row("linux-1")).toContain("busy · linux, X64");
+  expect(row("linux-2")).toContain("idle");
+  expect(row("win-old")).toContain("offline · windows");
+  expect(host.querySelector('[aria-label="CI runners"]')?.textContent).not.toContain("sampled");
+
+  const stale = teamFixture();
+  stale.ci_runners = { ...stale.ci_runners!, observed_at: new Date(TEAM_NOW - 40 * 60_000).toISOString() };
+  api.team.mockResolvedValue(stale);
+  await act(async () => {
+    stream.onEvent?.({ type: "ticket_moved", ticket_id: 12 } as unknown as BoardEvent);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  });
+  expect(host.querySelector('[aria-label="CI runners"]')?.textContent).toContain("sampled 40m ago");
+});
+
+it("hides the CI runners card when the server has no sample", async () => {
+  const none = teamFixture();
+  none.ci_runners = { observed_at: null, runners: [] };
+  api.team.mockResolvedValue(none);
+  await act(async () => {
+    stream.onEvent?.({ type: "ticket_moved", ticket_id: 12 } as unknown as BoardEvent);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  });
+  expect(host.querySelector('[aria-label="CI runners"]')).toBeNull();
+  expect(host.textContent).toContain("builder-1");
+});
+
 it("links a hovered or focused runner to its ticket and clears the link on leave", async () => {
   expect(host.querySelector(".team-wire")).toBeNull();
   await act(async () => { runner("@worker/7/codex_1").dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); });

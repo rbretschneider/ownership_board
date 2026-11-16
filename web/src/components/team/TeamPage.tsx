@@ -12,7 +12,7 @@ import {
 import { ErrorState } from "../common/ErrorState";
 import { LoadingState } from "../common/LoadingState";
 import { PageShell } from "../common/PageShell";
-import { BuildHostCard, ManagerCard, RunnerCard, TeamTicketCard } from "./TeamCards";
+import { BuildHostCard, CIRunnersCard, ManagerCard, RunnerCard, TeamTicketCard } from "./TeamCards";
 import { TeamPanel, type PanelContent } from "./TeamPanel";
 
 const CLOCK_TICK_MS = 30_000;
@@ -89,6 +89,9 @@ export function TeamPage() {
     setHovered(null);
   }, []);
 
+  // Older servers send no CI sample, and a board without the sweep has none.
+  const hasCISample = (team?.ci_runners?.observed_at ?? null) !== null;
+
   const panel = useMemo<PanelContent | null>(() => {
     if (team === null || selection === null) return null;
     if (selection.kind === "manager") return managerPanel(team);
@@ -148,15 +151,15 @@ export function TeamPage() {
                 </div>
               )}
           </section>
-          <section className="team-section" aria-label="Build hosts">
-            <h2 className="team-heading">Build hosts</h2>
-            {team.build_hosts.length === 0
-              ? <p className="team-empty">No approved build hosts.</p>
-              : (
-                <div className="team-hosts">
-                  {team.build_hosts.map((host) => <BuildHostCard key={host.id} host={host} now={now} />)}
-                </div>
-              )}
+          <section className="team-section" aria-label="Build hosts and CI runners">
+            <h2 className="team-heading">Build hosts and CI runners</h2>
+            {team.build_hosts.length === 0 && !hasCISample && <p className="team-empty">No approved build hosts.</p>}
+            {(team.build_hosts.length > 0 || hasCISample) && (
+              <div className="team-hosts">
+                {team.build_hosts.map((host) => <BuildHostCard key={host.id} host={host} now={now} />)}
+                {hasCISample && team.ci_runners !== undefined && <CIRunnersCard sample={team.ci_runners} now={now} />}
+              </div>
+            )}
           </section>
           {panel !== null && <TeamPanel content={panel} onClose={close} />}
         </div>

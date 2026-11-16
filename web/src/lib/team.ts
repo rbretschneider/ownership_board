@@ -1,4 +1,4 @@
-import type { RunnerState, StageId, TeamBuildHost, TeamRunner, TeamTicket, TimelineEntry } from "../api/types";
+import type { CIRunner, RunnerState, StageId, TeamBuildHost, TeamRunner, TeamTicket, TimelineEntry } from "../api/types";
 import { formatElapsed } from "./buildClock";
 import { modelFamily, parseWorkModel } from "./workModel";
 
@@ -207,4 +207,18 @@ export function linkPath(container: Box, from: Box, to: Box, scale = 1): LinkLin
   const bend = Math.max(30, Math.abs(y2 - y1) / 2) * (isBelow ? 1 : -1);
   const r = (n: number) => Math.round(n * 10) / 10;
   return { d: `M${r(x1)} ${r(y1)} C ${r(x1)} ${r(y1 + bend)}, ${r(x2)} ${r(y2 - bend)}, ${r(x2)} ${r(y2)}`, x2: r(x2), y2: r(y2) };
+}
+
+/** A CI sample older than this is shown as stale: the sweep runs every 5 minutes. */
+export const CI_SAMPLE_STALE_MS = 15 * 60_000;
+
+/** A CI runner's state on its row: busy, idle or offline. */
+export function ciRunnerState(runner: CIRunner): { text: string; tone: "accent" | "green" | "grey" } {
+  if (runner.status !== "online") return { text: "offline", tone: "grey" };
+  return runner.busy ? { text: "busy", tone: "accent" } : { text: "idle", tone: "green" };
+}
+
+/** The labels worth showing: every label but the generic "self-hosted". */
+export function ciRunnerLabels(runner: CIRunner): string {
+  return runner.labels.filter((label) => label.toLowerCase() !== "self-hosted").join(", ");
 }

@@ -633,3 +633,39 @@ button.team-card:focus-visible,
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   }
 }
+
+/* ---------- CI runners ---------- */
+.team-ci__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.team-ci__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--t-divider);
+  font-size: 13px;
+}
+
+.team-ci__row:last-child {
+  border-bottom: none;
+}
+
+.team-ci__name {
+  font-family: var(--t-mono);
+  color: var(--t-text-2);
+  overflow-wrap: anywhere;
+}
+
+.team-ci__state {
+  font-size: 13px;
+}
+
+.team-dot--green { background: var(--t-green); }
