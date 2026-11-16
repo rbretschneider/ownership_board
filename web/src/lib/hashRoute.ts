@@ -1,5 +1,5 @@
 /** The screens reachable through the URL hash. */
-export type RouteName = "board" | "ticket" | "settings" | "stats" | "flow" | "login";
+export type RouteName = "board" | "ticket" | "settings" | "stats" | "flow" | "team" | "login";
 
 /** A parsed hash route. */
 export interface Route {
@@ -17,6 +17,7 @@ const PAGE_PATHS: Partial<Record<string, RouteName>> = {
   "/settings": "settings",
   "/stats": "stats",
   "/flow": "flow",
+  "/team": "team",
   "/login": "login",
 };
 
@@ -48,6 +49,9 @@ export const STATS_HASH = "#/stats";
 
 /** The hash for the product owner's flow view. */
 export const FLOW_HASH = "#/flow";
+
+/** The hash for the team org chart. */
+export const TEAM_HASH = "#/team";
 
 /** Navigates by setting `location.hash`. */
 export function navigate(hash: string): void {

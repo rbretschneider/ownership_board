@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/rbretschneider/ownership_board/internal/domain"
 )
@@ -43,22 +44,27 @@ func (s *BoardService) ManagerFlags(ctx context.Context, actor domain.Actor, sco
 		if err != nil {
 			return err
 		}
-		var facts []domain.ManagerTicketFacts
-		for _, summary := range board.Tickets {
-			if !summary.Ticket.IsAutonomous || summary.Ticket.Stage.IsCompleted() {
-				continue
-			}
-			jobs, err := repos.BuildJobs().RecentForTicket(ctx, summary.Ticket.ID, recentJobsPerTicket)
-			if err != nil {
-				return err
-			}
-			facts = append(facts, domain.ManagerTicketFacts{Ticket: summary.Ticket, OpenQuestions: summary.OpenQuestions,
-				WaitingOn: summary.WaitingOn, Attempts: summary.Attempts, RecentJobs: jobs})
-		}
-		flags = domain.ManagerFlags(facts, settings, s.clock.Now())
-		return nil
+		flags, err = managerFlagsOf(ctx, repos, board.Tickets, settings, s.clock.Now())
+		return err
 	})
 	return flags, err
+}
+
+// managerFlagsOf derives the manager's flags from loaded ticket summaries.
+func managerFlagsOf(ctx context.Context, repos Repos, tickets []TicketSummary, settings domain.BoardSettings, now time.Time) ([]domain.ManagerFlag, error) {
+	var facts []domain.ManagerTicketFacts
+	for _, summary := range tickets {
+		if !summary.Ticket.IsAutonomous || summary.Ticket.Stage.IsCompleted() {
+			continue
+		}
+		jobs, err := repos.BuildJobs().RecentForTicket(ctx, summary.Ticket.ID, recentJobsPerTicket)
+		if err != nil {
+			return nil, err
+		}
+		facts = append(facts, domain.ManagerTicketFacts{Ticket: summary.Ticket, OpenQuestions: summary.OpenQuestions,
+			WaitingOn: summary.WaitingOn, Attempts: summary.Attempts, RecentJobs: jobs})
+	}
+	return domain.ManagerFlags(facts, settings, now), nil
 }
 
 // ManagerStatus returns the manager's settings and today's spend.

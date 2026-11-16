@@ -64,6 +64,25 @@ type User = { id: number; name: string; email: string; is_admin: boolean; sso_li
 | POST   | `/api/v1/tickets/{id}/block` | `{reason}` | `TicketDetail` |
 | POST   | `/api/v1/tickets/{id}/questions` | `AskQuestions` | `TicketDetail` (the ticket keeps its lane and stage) |
 | GET    | `/api/v1/events/stream` | | Server-sent events |
+| GET    | `/api/v1/team` | | `Team`, for the Team view |
+
+`GET /team` returns one snapshot of the autonomous team:
+
+- `manager`: the manager status fields of `GET /manager/status`, plus
+  `open_flags`, `latest_summary`, `latest_at` and the 20 newest `sessions`.
+- `runners`: one per agent seen recently, derived from live leases and
+  work-model reports. Each has `name` (the lease holder), `state` (`working`,
+  `waiting` or `idle`), `model`, `doing` (the work-model signal),
+  `ticket_id`, `last_seen` and `profile_version` (empty until runners report
+  it). A worker that released a build ticket while it awaits Windows stays
+  `waiting` on that ticket. An agent with no lease that reported a model in
+  the last 6 hours is `idle`.
+- `tickets`: open tickets with a live lease, a waiting runner or an open
+  build job. Each is a `TicketSummary` plus `holder` (`""` when none).
+- `build_hosts`: approved hosts with `os`, `online`, `enabled`,
+  `max_parallel`, their `running` jobs (ticket, phase, `started_at`) and their
+  eligible `queued` jobs (ticket, `queued_at`). `queued_by_os` counts every
+  queued job by target OS.
 
 `after_id` places the card directly below that card in the target lane; `null`
 places it at the top.
