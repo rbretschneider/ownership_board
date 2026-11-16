@@ -46,4 +46,10 @@ type RelationRepository interface {
 	// DependencyEdges maps every dependant to the tickets it depends on,
 	// merged or not.
 	DependencyEdges(ctx context.Context) (map[int64][]int64, error)
+	// SplitChildren maps every split parent to its children, oldest first.
+	SplitChildren(ctx context.Context) (map[int64][]domain.SplitChild, error)
+	// SplitChildrenOf returns one parent's children, oldest first.
+	SplitChildrenOf(ctx context.Context, parentID int64) ([]domain.SplitChild, error)
+	// SplitParentOf returns the ticket childID was split from, or 0.
+	SplitParentOf(ctx context.Context, childID int64) (int64, error)
 }

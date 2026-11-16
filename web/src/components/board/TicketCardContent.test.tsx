@@ -229,6 +229,29 @@ it("shows deployment, animation and the live holder while suppressing stale mode
  expect(blocked.querySelector(".badge--blocked")?.getAttribute("title")).toContain("Deployment failed");
 });
 
+describe("split work", () => {
+ const children = [
+  {id: 10, title: "Kernel", stage: "deployed" as const, lane: "deployed" as const},
+  {id: 11, title: "UI", stage: "build" as const, lane: "in_progress" as const},
+ ];
+ it("shows an epic's story progress instead of the stepper and no worker status", () => {
+  const card = dom({stage: "epic", lease: null, work_model: "", split_into: children});
+  expect(card.querySelector(".stepper")).toBeNull();
+  expect(card.querySelector(".epic-bar")?.getAttribute("aria-label")).toBe("Epic: 1 of 2 deployed");
+  expect(card.querySelectorAll(".epic-bar__part--deployed")).toHaveLength(1);
+  expect(card.querySelector(".card__activity")).toBeNull();
+ });
+ it("marks a story with the epic it belongs to", () => {
+  expect(dom({split_from: 7}).textContent).toContain("Part of #7");
+  expect(dom({split_from: null}).textContent).not.toContain("Part of");
+ });
+ it("keeps the stepper on a narrowed ticket and notes its moved stories", () => {
+  const card = dom({stage: "build", split_into: children});
+  expect(card.querySelector(".stepper")).not.toBeNull();
+  expect(card.textContent).toContain("Split · 1 of 2 deployed");
+ });
+});
+
 describe("token usage", () => {
  const usage = {calls: 4, input_tokens: 300, cache_write_tokens: 40_000, cache_read_tokens: 2_000_000, output_tokens: 9_700, cost_usd: 1.25, weighted_tokens: 250_000};
  it("shows nothing until usage is reported", () => {

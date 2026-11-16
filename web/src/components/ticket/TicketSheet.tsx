@@ -17,6 +17,7 @@ import { CheckpointPanel } from "./CheckpointPanel";
 import { CommentComposer } from "./CommentComposer";
 import { DecisionsSection } from "./DecisionsSection";
 import { EditableMarkdown } from "./EditableMarkdown";
+import { EpicSection } from "./EpicSection";
 import { PrRow } from "./PrRow";
 import { QuestionsPanel } from "./QuestionsPanel";
 import { RelatedSection } from "./RelatedSection";
@@ -131,6 +132,7 @@ export function TicketSheet({ ticketId, lanes, stages, repos, tickets, refreshSi
               <TicketHeader ticket={ticket} lanes={lanes} stages={stages} repos={repos} run={run} />
               {open.length > 0 && <QuestionsPanel key={open.map((q) => q.id).join(",")} ticket={ticket} open={open} run={run} />}
               <PrRow ticket={ticket} run={run} />
+              <EpicSection ticket={ticket} stages={stages} repo={repos.find((repo) => repo.id === ticket.repo_id)} />
               <EditableMarkdown
                 title="Request"
                 value={ticket.body}

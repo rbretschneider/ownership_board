@@ -6,9 +6,12 @@ type Stage string
 
 // The stages, in workflow order.
 const (
-	StageRefine       Stage = "refine"
-	StageSpecReview   Stage = "spec_review"
-	StageReady        Stage = "ready"
+	StageRefine     Stage = "refine"
+	StageSpecReview Stage = "spec_review"
+	StageReady      Stage = "ready"
+	// StageEpic parks a ticket that was split into child stories. Nobody
+	// works it; it closes on its own when every child is deployed.
+	StageEpic         Stage = "epic"
 	StageDesign       Stage = "design"
 	StageDesignReview Stage = "design_review"
 	StageBuild        Stage = "build"
@@ -31,6 +34,7 @@ var stageCatalog = []StageInfo{
 	{StageRefine, LaneTodo, "Shaping the idea", false},
 	{StageSpecReview, LaneTodo, "Approve the plan", true},
 	{StageReady, LaneTodo, "Ready to start", false},
+	{StageEpic, LaneInProgress, "Split into stories", false},
 	{StageDesign, LaneInProgress, "Designing", false},
 	{StageDesignReview, LaneInProgress, "Approve the approach", true},
 	{StageBuild, LaneInProgress, "Making it happen", false},

@@ -6,6 +6,7 @@ import {
   FileCheck,
   GitMerge,
   GitPullRequest,
+  Layers,
   Hammer,
   PenLine,
 } from "lucide-react";
@@ -16,6 +17,7 @@ const ICONS: Record<StageId, typeof PenLine> = {
   refine: PenLine,
   spec_review: FileCheck,
   ready: CircleDashed,
+  epic: Layers,
   design: DraftingCompass,
   design_review: ClipboardCheck,
   build: Hammer,

@@ -25,6 +25,10 @@ type TicketSummary struct {
 	// commits. The board cannot see the PR head: compare SHA with it before
 	// trusting a pass.
 	Verdicts []domain.Verdict
+	// SplitFrom is the ticket this one was split out of, or 0.
+	SplitFrom int64
+	// SplitInto lists the stories this ticket was split into, oldest first.
+	SplitInto []domain.SplitChild
 }
 
 // TicketDetail is a ticket with everything needed to work on it.

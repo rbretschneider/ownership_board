@@ -62,6 +62,7 @@ type User = { id: number; name: string; email: string; is_admin: boolean; sso_li
 | PUT    | `/api/v1/tickets/{id}/spec` | `{spec, submit?}` | `TicketDetail` |
 | PUT    | `/api/v1/tickets/{id}/design` | `{design, submit?}` | `TicketDetail` |
 | POST   | `/api/v1/tickets/{id}/block` | `{reason}` | `TicketDetail` |
+| POST   | `/api/v1/tickets/{id}/split` | `{reason, keep_spec?, children: [{title, spec, kind?, body?, after?}]}` | 201 `{parent: TicketDetail, child_ids}`. Splits an oversized ticket into child stories in build order; see [agents.md](agents.md#splitting-oversized-work). Without `keep_spec` the parent becomes stage `epic`. |
 | POST   | `/api/v1/tickets/{id}/questions` | `AskQuestions` | `TicketDetail` (the ticket keeps its lane and stage) |
 | GET    | `/api/v1/events/stream` | | Server-sent events |
 | GET    | `/api/v1/team` | | `Team`, for the Team view |
@@ -261,6 +262,8 @@ type TicketSummary = {
   pr_url: string; branch: string;
   open_questions: number;
   waiting_on: number[];      // depends_on targets outside done, deploying and deployed; [] when none
+  split_from: number | null; // the epic this story was split out of
+  split_into: { id: number; title: string; stage: Stage; lane: Lane }[]; // stories this ticket was split into, oldest first
   lease: Lease | null;
   created_at: string; updated_at: string; lane_changed_at: string;
   attempts: StageAttempts;

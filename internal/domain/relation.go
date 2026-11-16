@@ -19,6 +19,9 @@ const (
 	// RelationDependsOn means the "from" ticket waits until the "to" ticket
 	// is completed: agents cannot claim it before then.
 	RelationDependsOn RelationKind = "depends_on"
+	// RelationSplitFrom means the "from" ticket is a child story split out of
+	// the "to" ticket. Only a split makes this link.
+	RelationSplitFrom RelationKind = "split_from"
 )
 
 // MaxOutgoingRelations caps the links a ticket can make to others.
@@ -34,6 +37,7 @@ var relationLabels = map[RelationKind][2]string{
 	RelationDuplicateOf: {"duplicate of", "duplicated by"},
 	RelationRelatesTo:   {"relates to", "relates to"},
 	RelationDependsOn:   {"depends on", "needed by"},
+	RelationSplitFrom:   {"split from", "split into"},
 }
 
 // Relation is a directed link from one ticket to another.
@@ -49,7 +53,7 @@ type Relation struct {
 func ParseRelationKind(raw string) (RelationKind, error) {
 	kind := RelationKind(raw)
 	if _, isKnown := relationLabels[kind]; !isKnown {
-		return "", Invalidf("relation must be caused_by, follow_up_of, duplicate_of, relates_to or depends_on")
+		return "", Invalidf("relation must be caused_by, follow_up_of, duplicate_of, relates_to, depends_on or split_from")
 	}
 	return kind, nil
 }

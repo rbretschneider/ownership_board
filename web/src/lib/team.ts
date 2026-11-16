@@ -63,6 +63,8 @@ export function ticketRole(stage: StageId): { label: string; tone: "accent" | "g
     case "refine":
     case "spec_review":
       return { label: "Refine", tone: "grey" };
+    case "epic":
+      return { label: "Epic", tone: "grey" };
     case "ready":
     case "design":
     case "design_review":

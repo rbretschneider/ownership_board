@@ -4,7 +4,7 @@
 export type LaneId = "todo" | "in_progress" | "merged" | "deployed";
 
 /** A ticket's place within its lane (each stage belongs to one lane). */
-export type StageId = "refine" | "spec_review" | "ready" | "design" | "design_review" | "build" | "pr" | "done" | "deploying" | "deployed";
+export type StageId = "refine" | "spec_review" | "ready" | "epic" | "design" | "design_review" | "build" | "pr" | "done" | "deploying" | "deployed";
 
 export type DeployMode = "off" | "agent";
 
@@ -252,6 +252,18 @@ export interface TicketSummary {
   usage?: TokenUsage;
   /** The ticket's newest queued or running build job; null when none. Absent from older servers. */
   build?: BuildClock | null;
+  /** The epic this story was split out of; null when none. Absent from older servers. */
+  split_from?: number | null;
+  /** The stories this ticket was split into, oldest first. Absent from older servers. */
+  split_into?: SplitChild[];
+}
+
+/** One story of a split, enough to show the epic's progress. */
+export interface SplitChild {
+  id: number;
+  title: string;
+  stage: StageId;
+  lane: LaneId;
 }
 
 /** When a ticket's open build job was queued and started. */
@@ -413,7 +425,7 @@ export interface DecisionInput {
 }
 
 /** The stored kinds of ticket relation (always read from the "from" side). */
-export type RelationKind = "caused_by" | "follow_up_of" | "duplicate_of" | "relates_to" | "depends_on";
+export type RelationKind = "caused_by" | "follow_up_of" | "duplicate_of" | "relates_to" | "depends_on" | "split_from";
 
 /** A relation as seen from one ticket. */
 export interface Relation {

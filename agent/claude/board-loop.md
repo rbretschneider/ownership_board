@@ -38,6 +38,7 @@ ticket when you hand it on.
 |---|---|---|
 | Todo | refine → spec_review → ready | agent refines; owner approves the spec |
 | In Progress | design → design_review → build → pr | agent designs and builds; owner approves gated design and reviews the PR |
+| In Progress | epic | nobody: a split parent waits for its stories and closes itself when all are deployed |
 | Merged | done → deploying | person requests release; agent deploys |
 | Deployed | deployed | nobody |
 
@@ -183,11 +184,15 @@ business analyst subagent on a model that fits:
 When unsure between two rows, pick the larger one.
 
 Use the Agent tool with `subagent_type: business_developer` and that `model`.
-Give it the brief and tell it: produce either (a) at most 5 questions, multiple
-choice with a recommended option where possible, or (b) a spec with problem,
-scope, out of scope, numbered acceptance criteria, and approach notes, ending
-with a line `Build tier: small | normal | large` and one sentence on why
-(see "Pick the tier"). It must not write code or files in the repo.
+Give it the brief and the size limits from "Split oversized work" below, and
+tell it: produce either (a) at most 5 questions, multiple choice with a
+recommended option where possible, (b) a spec with problem, scope, out of
+scope, numbered acceptance criteria, and approach notes, ending with a line
+`Build tier: small | normal` and one sentence on why (see "Pick the tier"),
+or (c) when the request is over any size limit, a split: one reason and an
+ordered list of child stories, each in the shape of (b) with its own small
+file set. When unsure between (b) and (c), choose (c). It must not write code
+or files in the repo.
 
 Then you act on its result:
 
@@ -195,9 +200,50 @@ Then you act on its result:
 - Spec → set `repo_id` with `update_ticket` if the ticket has none,
   `record_decision` for each real choice it made (approach, scope cuts,
   anything answered "your call"), then `save_spec` with `submit: true`.
+- Split → set `repo_id` if the ticket has none, then `split_ticket` (see
+  "Split oversized work"). Done for this pass.
 
 If the owner requested changes, the newest comment says what to change; the
 refinement must address it.
+
+## Split oversized work
+
+Every story is one tightly scoped task that Sonnet can finish in about half
+a day. A request is **too big** for one story when any of these holds:
+
+- more than about 5 acceptance criteria;
+- more than about 15 files, or about 800 changed lines;
+- more than one module boundary;
+- a new kernel, engine or port plus its UI;
+- a schema or format bump plus a feature built on it.
+
+When unsure, it is too big. "Large" never means "use a bigger model": it
+means split.
+
+Any agent may split at any time it holds the ticket: refining (step 3),
+designing (step 4, once the code is read), building (step 5) or repairing
+at the fix-round limit. Do it instead of building, not after:
+
+- Call `split_ticket` with `reason` (which limits it breaks) and `children`
+  in build order. Each child has a `title`, its own `spec` (problem, scope,
+  out of scope, numbered acceptance criteria with the tests that prove them,
+  the files it touches, `Build tier: small | normal`) and a small file set.
+  Each child waits for the one before it; give `after` (1-based earlier
+  children, `[]` for none) only when stories really are independent.
+- Children inherit the repo and autonomous mode. The parent becomes an
+  epic: nobody works it, the board shows its stories' progress, and it
+  closes itself when every child is deployed. Stop work on the parent.
+- An **autonomous** ticket that is already part built (design or build, a
+  branch or PR exists) may keep its core instead: pass `keep_spec` with the
+  narrowed spec, the criteria the existing work covers. The moved features
+  wait for it. Carry on with the narrowed spec in this pass.
+- A split moves **whole features with their acceptance criteria and
+  tests**. Every criterion lands in exactly one child. Never drop a
+  criterion, and never defer a test for code that stays in the parent.
+- The board records the split as a decision on the parent. Add a short
+  `add_comment` on the parent if the reason needs more than one line.
+- Each child is refined, designed and built on its own later passes. Do not
+  build children in this pass.
 
 ## Pick the tier
 
@@ -206,29 +252,32 @@ way step 3 judges size, and pick the larger tier when unsure:
 
 - **small**: copy, config, a one-file fix, an obvious bug with steps to reproduce.
 - **normal**: a story or bug touching a few files.
-- **large**: cross-cutting, security- or data-sensitive, schema or auth
-  changes, or a rebuild after the owner closed the PR.
+- `large` (older specs) is not a tier: the story is over the size limits,
+  so split it (see "Split oversized work") instead of designing or building it.
+
+Security-, auth-, secret- or data-migration-sensitive work stays **normal**
+but runs `security_researcher` on `opus`.
 
 Pass the tier's model as `model` on every Agent call. It overrides the
 agent's default.
 
-| Stage | small | normal | large |
-|---|---|---|---|
-| `architect` | `haiku` | `sonnet` | `opus` |
-| `security_researcher` (never below `sonnet`) | `sonnet` | `sonnet` | `opus` |
-| `senior_dev` (code, PR, CI fixes) | `sonnet` | `sonnet` | `opus` |
-| `qa_engineer` | `haiku` | `sonnet` | `sonnet` |
-| `technical_writer` | `haiku` | `haiku` | `sonnet` |
+| Stage | small | normal |
+|---|---|---|
+| `architect` | `haiku` | `sonnet` |
+| `security_researcher` (never below `sonnet`; `opus` when sensitive) | `sonnet` | `sonnet` |
+| `senior_dev` (code, PR, CI fixes) | `sonnet` | `sonnet` |
+| `qa_engineer` | `haiku` | `sonnet` |
+| `technical_writer` | `haiku` | `haiku` |
 
 With `--builder codex`:
 
-| Stage | small | normal | large |
-|---|---|---|---|
-| build (`codex-build`) | `codex` | `codex` | `codex` |
-| `qa_engineer` | `sonnet` | `sonnet` | `sonnet` |
-| `security_researcher` | `sonnet` | `sonnet` | `opus` |
-| `technical_writer` | `haiku` | `haiku` | `haiku` |
-| PR, findings round (`senior_dev`) | `sonnet` | `sonnet` | `sonnet` |
+| Stage | small | normal |
+|---|---|---|
+| build (`codex-build`) | `codex` | `codex` |
+| `qa_engineer` | `sonnet` | `sonnet` |
+| `security_researcher` (`opus` when sensitive) | `sonnet` | `sonnet` |
+| `technical_writer` | `haiku` | `haiku` |
+| PR, findings round (`senior_dev`) | `sonnet` | `sonnet` |
 
 Codex builds every tier; exit-20 fallback uses table one.
 
@@ -249,6 +298,11 @@ Note the tier, and any escalation, in the ticket comment.
 1. `architect`: reads the repo (in the worktree) and `FRD.md`, writes
    `ADD.md` in the run folder. If the owner requested changes to an earlier
    design, give it the newest comments and the board's current design.
+   Tell it to judge the size against "Split oversized work" now that it
+   has read the code: if `ADD.md` would change more than about 15 files or
+   800 lines, or cross more than one module boundary, it writes the split
+   (ordered child stories) instead of the design, and you call
+   `split_ticket` and end the pass.
 2. `security_researcher`: reviews `ADD.md` against the repo. On REVISE, send
    its report back to `architect` once; if it is still REVISE, ask the owner
    (`ask_questions`) with the two options and stop. On an autonomous ticket,
@@ -311,8 +365,11 @@ do it now instead of handing it off.
    `Ownership-Ticket: <ticket id>`.
 2. `qa_engineer`: runs the full suite and checks the acceptance criteria. On
    FAIL, back to `senior_dev` with the report, at most twice. If QA fails
-   twice below large, move up one tier for the remaining stages and give
-   `senior_dev` one more round. Still failing → comment with the QA report and
+   twice, check the size first: a story over the limits in "Split oversized
+   work" is split (with `keep_spec` when it is autonomous and part built),
+   never rescued with a bigger model. Otherwise move small up to normal, or
+   give a normal `senior_dev` `opus`, for one more round. Still failing →
+   comment with the QA report and
    `ask_questions` about how to proceed. On an autonomous ticket,
    `mark_blocked` with the QA report instead.
 3. `security_researcher`: reviews the diff (`git diff origin/<default>...HEAD`)
@@ -446,6 +503,10 @@ Return the same PR to stage `pr` within In Progress once repairs are pushed and 
 Healthy pending checks follow the waiting rules below. Record what changed
 in plain product language. Escalate only an actual owner decision, missing
 access, or an exhausted documented recovery path with concrete evidence.
+A repair that has reached its fix-round limit because the change is too
+big follows "Split oversized work": narrow it with `keep_spec` (autonomous)
+or split it, moving whole features with their tests. Never shrink a repair
+by deleting or deferring tests.
 
 ## Waiting on CI (build stage)
 
@@ -493,6 +554,7 @@ End the pass with one line per thing you did, for example:
 
 - `#12 PR merged → Merged`
 - `#15 refined on haiku → spec submitted (2 decisions)`
+- `#19 refined on sonnet → split into #20, #21, #22 (9 criteria, kernel + UI)`
 - `#16 designed (tier normal) → design submitted, security APPROVE`
 - `#17 built (tier normal) → PR https://… (CI green, GPT review 3 findings, 2 fixed) → In Progress (PR open)`
 - #18 built by codex (tier normal) → Claude QA 1 finding fixed by codex, security APPROVE, GPT review skipped (builder codex) → PR https://… → In Progress (PR open)

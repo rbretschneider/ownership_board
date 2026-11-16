@@ -206,7 +206,7 @@ func (t *Ticket) Owner(openQuestions int) Owner {
 		return OwnerHuman
 	case t.Stage.IsAgentStage():
 		return OwnerAgent
-	case t.Stage.IsCompleted():
+	case t.Stage.IsCompleted(), t.Stage == StageEpic:
 		return OwnerNobody
 	default:
 		return OwnerAgent

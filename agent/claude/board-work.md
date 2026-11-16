@@ -64,17 +64,27 @@ stage: you hand a ticket on with the tools below and the board moves it.
      most one "waiting on CI" comment per head sha, then end the pass with
      just a report line; waiting on healthy CI is the one case where ending
      without a terminal tool is correct.
-6. If only the human can make a decision, use `ask_questions` instead of
+6. **Too big? Split it.** Every story is one tightly scoped task Sonnet can
+   finish in about half a day. Follow the brief's "Story size" section: when
+   the ticket you hold is over any size limit (more than about 5 acceptance
+   criteria, about 15 files or 800 lines, more than one module boundary, a
+   new kernel or port plus UI, a schema bump plus a feature; when unsure, it
+   is too big), call `split_ticket` with child stories in build order
+   instead of refining, designing or building it as one. Each child gets its
+   own spec with numbered acceptance criteria, their tests and its files.
+   A split moves whole features with their tests; it never drops a criterion
+   or defers a test for code that stays.
+7. If only the human can make a decision, use `ask_questions` instead of
    guessing. If you cannot go on and no question would help, use
    `mark_blocked` with a short reason — but over CI only after two failed
    self-heals, quoting the per-job evidence read from `gh` in this pass.
    Never just release a ticket you cannot finish.
-7. Never merge a pull request or push to a default branch. Deployment is
+8. Never merge a pull request or push to a default branch. Deployment is
    authorized only for a claimed, person-requested `deploy` action, using
    the documented procedure below. A merged ticket
    reaches Merged when the owner drags it there or a board-loop pass reports
    the merge.
-8. Finish with one line: the ticket number, what you did, and where it is now.
+9. Finish with one line: the ticket number, what you did, and where it is now.
 
 ## Working a deployment
 

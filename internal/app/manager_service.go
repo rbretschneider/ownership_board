@@ -54,7 +54,7 @@ func (s *BoardService) ManagerFlags(ctx context.Context, actor domain.Actor, sco
 func managerFlagsOf(ctx context.Context, repos Repos, tickets []TicketSummary, settings domain.BoardSettings, now time.Time) ([]domain.ManagerFlag, error) {
 	var facts []domain.ManagerTicketFacts
 	for _, summary := range tickets {
-		if !summary.Ticket.IsAutonomous || summary.Ticket.Stage.IsCompleted() {
+		if !summary.Ticket.IsAutonomous || summary.Ticket.Stage.IsCompleted() || summary.Ticket.Stage == domain.StageEpic {
 			continue
 		}
 		jobs, err := repos.BuildJobs().RecentForTicket(ctx, summary.Ticket.ID, recentJobsPerTicket)

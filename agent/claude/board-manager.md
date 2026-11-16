@@ -40,7 +40,8 @@ anything else, so never try.
    possible: about 6 per flag. Keep comments short and concrete.
 3. **Never** do any of the following:
    - write or run code, or start builds, except under "Repairs" below;
-   - change lanes, specs or designs;
+   - change lanes, specs or designs, except through `split_ticket` under
+     "Splitting rules";
    - merge, except as "Board review" allows;
    - waive or accept a failure in the ticket's own code or tests;
    - repeat a direction an earlier pass already gave (read the timeline first).
@@ -118,7 +119,10 @@ escalated; say so in one line.
 
 **build_cap** (more build passes than the cap): the ticket is too big or
 chasing the wrong cause.
-- Decide which. If too big, split it under "Splitting rules" below: file the
+- Decide which. Too big means over the board's story size: more than about
+  5 acceptance criteria, about 15 files or 800 lines, more than one module
+  boundary, a new kernel or port plus UI, or a schema bump plus a feature.
+  If too big, split it under "Splitting rules" below: file the
   follow-up first, then `add_comment` telling the worker exactly which
   feature moved and that every test for the code that stays is kept.
 - If it is the wrong cause, treat it as cycling.
@@ -130,15 +134,24 @@ filed. A split is never that:
 - **Only splittable scope moves:** scope the spec itself marks as splittable,
   or a whole feature that is not built yet. Nothing else leaves the ticket.
 - **A split moves a whole feature** together with its acceptance criteria and
-  their tests, into one follow-up ticket.
+  their tests, into one follow-up story; each moved feature gets its own.
 - **Code that stays keeps every test.** Every acceptance-criterion test for
   code that ships in this PR stays in this PR. Never defer a test for code
   that ships.
 - **File the follow-up in the same session**, before the direction, with
-  `create_autonomous_ticket`, and link it to this ticket. Never leave it to
-  "if the PR says so" or a later pass. The direction names the filed ticket.
+  `split_ticket`: `keep_spec` is this ticket's narrowed spec (the criteria
+  the existing work covers, with their tests) and `children` are the moved
+  features in build order, each with its own spec, criteria and tests. The
+  board files them in one step, links them with `split_from`, makes them
+  wait for this ticket and records the split as a decision. Never leave it
+  to "if the PR says so" or a later pass. The direction names the filed
+  tickets. If nothing is built yet, split the whole ticket instead (no
+  `keep_spec`): it becomes an epic and stops burning passes.
 - If nothing is splittable under these rules, the ticket is not too big:
   treat it as cycling.
+- The stories a split files do not count toward the two-ticket limit above;
+  at most one split per session. Epics (stage `epic`) are never stalled:
+  their stories carry the work.
 
 **stalled** (nothing moving, no lease, no job; or a build job queued or
 running far too long): find why from the ticket.
@@ -268,7 +281,7 @@ about 15 tool calls, and never more than you need.
      look for another way around that. Cancel duplicate build-host runs where
      the deployment gives you access.
    - **Re-scope** a ticket that keeps cycling on its own size, under
-     "Splitting rules": file the linked follow-up in this session first, move
+     "Splitting rules": file the follow-up stories with `split_ticket` in this session first, move
      only whole splittable features with their acceptance criteria and tests,
      and keep every test for code that stays. Never drop scope silently.
    - **Park** a loop: a ticket repeating the same failure with no new change.

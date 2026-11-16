@@ -1,4 +1,6 @@
-import { Bot, CircleAlert, GitPullRequest, Hand, HeartPulse, Hourglass, MessageCircleQuestion, Server, Timer, Zap } from "lucide-react";
+import { Bot, CircleAlert, GitPullRequest, Hand, HeartPulse, Hourglass, Layers, MessageCircleQuestion, Server, Timer, Zap } from "lucide-react";
+import { epicProgress } from "../../lib/epic";
+import { EpicProgressBar } from "./EpicProgressBar";
 import { isCompletedStage } from "../../lib/stages";
 import { platformStatuses } from "../../lib/progress";
 import { PlatformIcon } from "../common/PlatformIcon";
@@ -37,7 +39,10 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
   const at = now ?? clock;
   const liveLease = hasLiveLease(ticket, at);
   const activity = cardActivity(ticket, at);
-  const showActivity = ticket.stage === "deploying" || !isCompletedStage(ticket.stage) && (ticket.is_autonomous || ticket.lease !== null || ticket.lane !== "todo" || activity.blocked);
+  // An epic is never worked itself: its stories carry the activity.
+  const epic = epicProgress(ticket);
+  const isEpic = ticket.stage === "epic";
+  const showActivity = !isEpic && (ticket.stage === "deploying" || !isCompletedStage(ticket.stage) && (ticket.is_autonomous || ticket.lease !== null || ticket.lane !== "todo" || activity.blocked));
   const model = parseWorkModel(ticket.work_model);
   const showModel = !isCompletedStage(ticket.stage) && (liveLease || (activity.buildServer === true && model !== undefined));
   const isBlocked = ticket.blocked_reason !== "";
@@ -149,6 +154,18 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
             {platforms.map((p) => <PlatformIcon key={p.platform} status={p} />)}
           </span>
         )}
+        {ticket.split_from != null && (
+          <span className="badge badge--waiting" title={`Split out of epic #${ticket.split_from}`}>
+            <Layers size={13} aria-hidden="true" />
+            Part of #{ticket.split_from}
+          </span>
+        )}
+        {epic && !isEpic && (
+          <span className="badge badge--waiting" title={`Work moved out of this ticket into ${epic.total} stories`}>
+            <Layers size={13} aria-hidden="true" />
+            Split · {epic.label}
+          </span>
+        )}
         <UsageBadge usage={ticket.usage} />
         {ticket.open_questions > 0 && (
           <span className="badge badge--human">
@@ -157,7 +174,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
           </span>
         )}
       </div>
-      <StageStepper ticket={ticket} />
+      {isEpic && epic ? <EpicProgressBar progress={epic} /> : <StageStepper ticket={ticket} />}
     </>
   );
 }
