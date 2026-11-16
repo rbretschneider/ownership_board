@@ -21,6 +21,10 @@ type TicketSummary struct {
 	// Build is the ticket's newest queued or running build job, if any, so the
 	// board can show how long it has waited or run.
 	Build *domain.BuildJob
+	// Verdicts is the newest verdict on each build target for the ticket's
+	// commits. The board cannot see the PR head: compare SHA with it before
+	// trusting a pass.
+	Verdicts []domain.Verdict
 }
 
 // TicketDetail is a ticket with everything needed to work on it.

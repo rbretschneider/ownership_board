@@ -28,7 +28,7 @@ closes a seam.
 |---|---|
 | Symptom | The merge sweep queued a repair every 5 minutes for a PR the worker had already accepted. Each repair was a strong-model pass that changed nothing. |
 | Cause | The worker skipped re-verifying a clean merge of a passed commit, but recorded only the original commit as passed. The sweep looks up the PR's exact head and found no pass. |
-| Fix | **Permanent.** A clean-merge skip records the merged head as passed too. **Open:** the record is a worker-local file. Pass/fail per commit should live in the board, which every component reads (see backlog). |
+| Fix | **Permanent.** The board stores the verdict per repo, target and commit (`verdicts`), written in the same transaction as the build job's result. A clean merge of the default branch into a passed commit is recorded there with `report_clean_merge`, by the agent holding the ticket's lease. The worker, merge sweep and manager read that one record (`get_verdicts`, or the ticket's `verdicts`). Switching the deployment's worker and merge sweep off their local files follows the board change. |
 
 ### Questions answered, then asked again
 
@@ -138,7 +138,8 @@ closes a seam.
 Ordered by expected effect. Each item is generic; the per-repository details
 live in that repository's settings and verification script.
 
-1. **Verdicts in the board.** The board stores pass/fail per commit and target,
+1. **Verdicts in the board.** *Built: the `verdicts` record and API; the
+   deployment's scripts switch over next.* The board stores pass/fail per commit and target,
    plus "clean merge of a passed commit" equivalence. The worker, merge sweep,
    manager and merge reflex all read the same record. This removes the whole
    class of record-in-one-place loops.

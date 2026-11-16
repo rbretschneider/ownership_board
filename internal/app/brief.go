@@ -274,6 +274,7 @@ func (r *briefRenderer) facts(input BriefInput) {
 	if ticket.PRURL != "" {
 		fmt.Fprintf(&r.b, "- Pull request: `%s`\n", oneLine(ticket.PRURL))
 	}
+	r.verdictFacts(input.Detail.Verdicts)
 	r.b.WriteString("\n")
 	if input.Repo != nil && input.Repo.Description != "" {
 		r.field("About the repo", input.Repo.Description, "")
@@ -666,4 +667,16 @@ func deploymentEvidence(timeline []domain.TimelineEntry, prURL string) (string, 
 		}
 	}
 	return "", -1
+}
+
+// verdictFacts list the newest verdict per build target, the board's one
+// record of whether a commit passed. Agents compare the SHA with the PR head.
+func (r *briefRenderer) verdictFacts(verdicts []domain.Verdict) {
+	for _, v := range verdicts {
+		status := string(v.Status)
+		if v.Status == domain.VerdictCleanMerge {
+			status = "passed as a clean merge of `" + v.MergeOf + "`"
+		}
+		fmt.Fprintf(&r.b, "- Verdict on %s: commit `%s` %s (job `%s`)\n", oneLine(v.Target), v.SHA, status, v.JobID)
+	}
 }

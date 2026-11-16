@@ -26,4 +26,5 @@ func (r repos) BuildHostPairingCodes() app.BuildHostPairingCodeRepository {
 func (r repos) BuildHostEvents() app.BuildHostEventRepository { return buildHostEventRepo{q: r.q} }
 
 func (r repos) BuildJobs() app.BuildJobRepository        { return buildJobRepo{q: r.q} }
+func (r repos) Verdicts() app.VerdictRepository          { return verdictRepo{q: r.q} }
 func (r repos) ManagerUsage() app.ManagerUsageRepository { return managerUsageRepo{q: r.q} }

@@ -62,9 +62,10 @@ func newServerWithRunnersFile(t *testing.T, publicBaseURL, runnersFile string) *
 	}
 	hub := broker.New()
 	services := mcp.Services{
-		Board:  app.NewBoardService(db, clk, hub),
-		Agents: app.NewAgentService(db, clk, hub, hub),
-		Repos:  app.NewRepoService(db, clk, noSources{}, logger),
+		Board:    app.NewBoardService(db, clk, hub),
+		Agents:   app.NewAgentService(db, clk, hub, hub),
+		Repos:    app.NewRepoService(db, clk, noSources{}, logger),
+		Verdicts: app.NewVerdictService(db, clk),
 	}
 	catalog, err := connections.NewCatalog(connections.CatalogDeps{
 		Store: sqlite.NewConnectionStore(db), MasterSecret: "0123456789abcdef0123456789abcdef",
@@ -81,6 +82,7 @@ func newServerWithRunnersFile(t *testing.T, publicBaseURL, runnersFile string) *
 		PublicBaseURL: publicBaseURL,
 		RunnersFile:   runnersFile,
 		BuildJobs:     app.NewBuildJobService(db, clk, bundles, logger),
+		Verdicts:      services.Verdicts,
 		BuildHosts:    app.NewBuildHostService(db, clk, logger, nil),
 		Board:         services.Board, Agents: services.Agents, Repos: services.Repos, Auth: authService,
 		OIDC: auth.NewOIDC(auth.OIDCConfig{}, authService), Broker: hub, Health: db, Logger: logger,

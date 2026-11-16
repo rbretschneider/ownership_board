@@ -19,6 +19,7 @@ type Store interface {
 // here is the persistence pattern; code repositories are Repo.)
 type Repos interface {
 	BuildJobs() BuildJobRepository
+	Verdicts() VerdictRepository
 	ManagerUsage() ManagerUsageRepository
 	BuildHostEvents() BuildHostEventRepository
 	BuildHosts() BuildHostRepository

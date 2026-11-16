@@ -66,9 +66,10 @@ func build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*applic
 		return nil, err
 	}
 	services := mcp.Services{
-		Board:  app.NewBoardService(db, systemClock, sink),
-		Agents: app.NewAgentService(db, systemClock, sink, hub),
-		Repos:  app.NewRepoService(db, systemClock, catalog, logger),
+		Board:    app.NewBoardService(db, systemClock, sink),
+		Agents:   app.NewAgentService(db, systemClock, sink, hub),
+		Repos:    app.NewRepoService(db, systemClock, catalog, logger),
+		Verdicts: app.NewVerdictService(db, systemClock),
 	}
 	bundles, err := buildbundle.New(cfg.BuildJobsDir())
 	if err != nil {
@@ -89,6 +90,7 @@ func build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*applic
 		RunnersFile:  filepath.Join(cfg.DataDir, "windows_runners.json"),
 		PRStatusFile: filepath.Join(cfg.DataDir, "pr_status.json"),
 		BuildJobs:    jobs,
+		Verdicts:     services.Verdicts,
 		BuildHosts:   app.NewBuildHostService(db, systemClock, logger, boardNotifier(cfg)),
 		Board:        services.Board, Agents: services.Agents, Repos: services.Repos,
 		Connections: connections.NewService(catalog, services.Repos, boardNotifier(cfg), connectionPolicy(cfg)),
