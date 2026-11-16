@@ -44,11 +44,22 @@ export function TeamPage() {
 
   const selectedRunner = selection?.kind === "runner" ? team?.runners.find((r) => r.name === selection.name) ?? null : null;
   const highlighted = selectedRunner?.name ?? hovered;
-  const highlightedTicket = team?.runners.find((r) => r.name === highlighted)?.ticket_id ?? null;
+
 
   const ticketsById = useMemo(() => new Map((team?.tickets ?? []).map((t) => [t.id, t])), [team]);
   // A ticket nests under the runner that holds it; one no runner holds nests in its host slot.
-  const heldIds = useMemo(() => new Set((team?.runners ?? []).map((r) => r.ticket_id).filter((id): id is number => id !== null)), [team]);
+  // A runner may hold one ticket and wait on another (released while it awaits
+  // Windows), so every ticket whose holder is that runner nests under it.
+  const ticketsByRunner = useMemo(() => {
+    const out = new Map<string, TeamTicket[]>();
+    for (const runner of team?.runners ?? []) {
+      const own = (team?.tickets ?? []).filter((t) => t.holder === runner.name || (t.holder === "" && t.id === runner.ticket_id));
+      out.set(runner.name, own);
+    }
+    return out;
+  }, [team]);
+  const heldIds = useMemo(() => new Set([...ticketsByRunner.values()].flat().map((t) => t.id)), [ticketsByRunner]);
+  const highlightedTickets = new Set((highlighted === null ? [] : ticketsByRunner.get(highlighted) ?? []).map((t) => t.id));
 
   const measureManager = useCallback(() => {
     const container = containerRef.current;
@@ -109,7 +120,7 @@ export function TeamPage() {
 
   const ticketCard = (ticket: TeamTicket) => (
     <TeamTicketCard key={ticket.id} ticket={ticket} activity={ticketActivity(ticket, team?.build_hosts ?? [], now)}
-      isLinked={ticket.id === highlightedTicket} now={now} />
+      isLinked={highlightedTickets.has(ticket.id)} now={now} />
   );
 
   return (
@@ -143,7 +154,7 @@ export function TeamPage() {
           <section className="team-runners" aria-label="Runners">
             {team.runners.length === 0 && <p className="team-empty">No runners seen in the last few hours.</p>}
             {team.runners.map((runner) => {
-              const ticket = runner.ticket_id === null ? undefined : ticketsById.get(runner.ticket_id);
+              const own = ticketsByRunner.get(runner.name) ?? [];
               return (
                 <TeamBranch key={runner.name}>
                   <RunnerCard
@@ -153,7 +164,7 @@ export function TeamPage() {
                     onLeave={() => setHovered((current) => (current === runner.name ? null : current))}
                     onOpen={() => setSelection({ kind: "runner", name: runner.name })}
                   />
-                  {ticket !== undefined && ticketCard(ticket)}
+                  {own.map((ticket) => ticketCard(ticket))}
                 </TeamBranch>
               );
             })}
