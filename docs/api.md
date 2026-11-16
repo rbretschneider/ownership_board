@@ -83,6 +83,13 @@ type User = { id: number; name: string; email: string; is_admin: boolean; sso_li
   `max_parallel`, their `running` jobs (ticket, phase, `started_at`) and their
   eligible `queued` jobs (ticket, `queued_at`). `queued_by_os` counts every
   queued job by target OS.
+- `ci_runners`: the repos' GitHub Actions runners as an outside sampler last
+  saw them: `observed_at` (null when there is no sample) and `runners`, each
+  with `repo`, `name`, `status` (`online` or `offline`), `busy` and `labels`.
+  The board reads `ci_runners.json` from its data directory and never calls
+  GitHub for it. The file is `{"at": <epoch seconds>, "runners": [...]}` in
+  the same shape. Entries that do not validate are dropped, and an offline
+  runner is never busy.
 
 `after_id` places the card directly below that card in the target lane; `null`
 places it at the top.

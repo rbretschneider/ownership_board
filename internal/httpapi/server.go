@@ -35,12 +35,14 @@ type Deps struct {
 	RunnersFile string
 	// PRStatusFile is the merge sweep's sanitized view of each open board PR.
 	PRStatusFile string
-	BuildJobs    *app.BuildJobService
-	Verdicts     *app.VerdictService
-	BuildHosts   *app.BuildHostService
-	Board        *app.BoardService
-	Agents       *app.AgentService
-	Repos        *app.RepoService
+	// CIRunnersFile is the merge sweep's sanitized sample of the repos' GitHub Actions runners.
+	CIRunnersFile string
+	BuildJobs     *app.BuildJobService
+	Verdicts      *app.VerdictService
+	BuildHosts    *app.BuildHostService
+	Board         *app.BoardService
+	Agents        *app.AgentService
+	Repos         *app.RepoService
 	// Connections manages provider accounts in Settings.
 	Connections *connections.Service
 	Auth        *auth.Service

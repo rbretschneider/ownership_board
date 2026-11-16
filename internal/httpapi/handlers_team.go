@@ -18,6 +18,7 @@ type teamDTO struct {
 	Tickets    []teamTicketDTO            `json:"tickets"`
 	BuildHosts []teamBuildHostDTO         `json:"build_hosts"`
 	QueuedByOS map[domain.BuildHostOS]int `json:"queued_by_os"`
+	CIRunners  ciRunnersSnapshot          `json:"ci_runners"`
 }
 
 type teamManagerDTO struct {
@@ -79,7 +80,9 @@ func (s *server) team(w http.ResponseWriter, r *http.Request, _ caller) error {
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, toTeam(team))
+	out := toTeam(team)
+	out.CIRunners = readCIRunners(s.deps.CIRunnersFile)
+	writeJSON(w, http.StatusOK, out)
 	return nil
 }
 

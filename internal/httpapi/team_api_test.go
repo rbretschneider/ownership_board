@@ -37,6 +37,9 @@ func TestTeamIsReadByPeopleAndAgents(t *testing.T) {
 			t.Fatalf("%s = %v, want an empty list", key, team[key])
 		}
 	}
+	if ci := team["ci_runners"].(map[string]any); ci["observed_at"] != nil || len(ci["runners"].([]any)) != 0 {
+		t.Fatalf("ci runners without a sample = %v", ci)
+	}
 	manager := team["manager"].(map[string]any)
 	if manager["open_flags"] != float64(0) || manager["latest_at"] != nil || len(manager["sessions"].([]any)) != 0 {
 		t.Fatalf("manager = %v", manager)
