@@ -17,6 +17,8 @@ type Services struct {
 	Repos  *app.RepoService
 	// Verdicts reads and records per-commit verification verdicts.
 	Verdicts *app.VerdictService
+	// CI reads and acts on the repos' CI for the board manager.
+	CI *app.CIService
 }
 
 // maxToolWaitSeconds keeps a long-polling claim inside typical MCP client
@@ -25,7 +27,7 @@ const maxToolWaitSeconds = 300
 
 // BoardTools returns every tool the board offers.
 func BoardTools(services Services) []Tool {
-	return []Tool{
+	return append([]Tool{
 		claimWork{services}, getTicket{services}, listRepos{services}, askQuestions{services},
 		saveSpec{services}, saveDesign{services}, markBlocked{services}, moveTicket{services}, addComment{services}, updateTicket{services},
 		heartbeat{services}, releaseTicket{services}, createTicket{services}, createAutonomousTicket{services},
@@ -33,7 +35,7 @@ func BoardTools(services Services) []Tool {
 		listTickets{services}, reportPRState{services}, reportDeploy{services}, setWorkModel{services},
 		managerFlags{services}, answerQuestions{services}, unblockTicket{services},
 		getVerdicts{services}, reportCleanMerge{services},
-	}
+	}, ciTools(services)...)
 }
 
 type claimWork struct{ s Services }

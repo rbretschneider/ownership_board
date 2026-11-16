@@ -12,6 +12,7 @@ import (
 	"slices"
 
 	"github.com/rbretschneider/ownership_board/internal/domain"
+	"github.com/rbretschneider/ownership_board/internal/reposource"
 )
 
 // Protocol facts.
@@ -159,7 +160,8 @@ func (s *Server) callTool(ctx context.Context, actor domain.Actor, params json.R
 // call. Only failures that are not the caller's doing are logged.
 func toolError(logger *slog.Logger, name string, err error) any {
 	var argumentErr *ArgumentError
-	if domain.KindOf(err) == 0 && !errors.As(err, &argumentErr) {
+	// A provider's answer (a refused token, a 404) is fixed board text the model can act on.
+	if domain.KindOf(err) == 0 && !errors.As(err, &argumentErr) && !reposource.IsProviderError(err) {
 		logger.Error("mcp tool failed", "tool", name, "error", err)
 		return textResult("The board hit an internal error running "+name+". Try again shortly.", true)
 	}

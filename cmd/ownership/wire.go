@@ -70,6 +70,7 @@ func build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*applic
 		Agents:   app.NewAgentService(db, systemClock, sink, hub),
 		Repos:    app.NewRepoService(db, systemClock, catalog, logger),
 		Verdicts: app.NewVerdictService(db, systemClock),
+		CI:       app.NewCIService(db, systemClock, sink, catalog),
 	}
 	bundles, err := buildbundle.New(cfg.BuildJobsDir())
 	if err != nil {
@@ -93,6 +94,7 @@ func build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*applic
 		CIRunnersFile: filepath.Join(cfg.DataDir, "ci_runners.json"),
 		BuildJobs:     jobs,
 		Verdicts:      services.Verdicts,
+		CI:            services.CI,
 		BuildHosts:    app.NewBuildHostService(db, systemClock, logger, boardNotifier(cfg)),
 		Board:         services.Board, Agents: services.Agents, Repos: services.Repos,
 		Connections: connections.NewService(catalog, services.Repos, boardNotifier(cfg), connectionPolicy(cfg)),

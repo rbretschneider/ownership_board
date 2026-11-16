@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/rbretschneider/ownership_board/internal/app"
@@ -25,6 +26,8 @@ func (s *server) managerRoutes(rt *router) {
 	// The board manager polls these every few minutes; people read them on the Manager page.
 	rt.anyone("GET /api/v1/manager/status", s.managerStatus)
 	rt.anyone("GET /api/v1/manager/flags", s.managerFlags)
+	// CI sensors call the repos' providers, so they have their own endpoint and cost.
+	rt.anyone("GET /api/v1/manager/ci-flags", s.managerCIFlags)
 	rt.anyone("POST /api/v1/manager/usage", s.managerUsage)
 	rt.anyone("GET /api/v1/manager/sessions", s.managerSessions)
 	// The manager loop reports when a session starts and ends; the Team view draws it.
@@ -60,6 +63,53 @@ func (s *server) managerFlags(w http.ResponseWriter, r *http.Request, who caller
 	}
 	writeJSON(w, http.StatusOK, managerFlagsDTO{Flags: flags})
 	return nil
+}
+
+type managerCIFlagsDTO struct {
+	Flags []domain.ManagerFlag `json:"flags"`
+	// Notes name what the board could not read (a refused token, a missing
+	// permission), for the loop's log.
+	Notes []string `json:"notes"`
+}
+
+func (s *server) managerCIFlags(w http.ResponseWriter, r *http.Request, who caller) error {
+	scope, err := parseRepoScope(r.URL.Query().Get("repo"))
+	if err != nil {
+		return err
+	}
+	queueLimit, err := parseQueueMinutes(r.URL.Query().Get("queue_minutes"))
+	if err != nil {
+		return err
+	}
+	if s.deps.CI == nil {
+		writeJSON(w, http.StatusOK, managerCIFlagsDTO{Flags: []domain.ManagerFlag{}, Notes: []string{}})
+		return nil
+	}
+	result, err := s.deps.CI.Flags(r.Context(), who.actor, scope, queueLimit)
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, managerCIFlagsDTO{Flags: nonNil(result.Flags), Notes: nonNil(result.Notes)})
+	return nil
+}
+
+// parseQueueMinutes reads the CI queue limit; empty means the board default.
+func parseQueueMinutes(raw string) (time.Duration, error) {
+	if raw == "" {
+		return 0, nil
+	}
+	minutes, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, domain.Invalidf("queue_minutes must be a whole number of minutes")
+	}
+	return time.Duration(minutes) * time.Minute, nil
+}
+
+func nonNil[T any](items []T) []T {
+	if items == nil {
+		return []T{}
+	}
+	return items
 }
 
 func (s *server) managerUsage(w http.ResponseWriter, r *http.Request, who caller) error {

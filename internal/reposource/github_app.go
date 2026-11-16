@@ -111,6 +111,11 @@ func NewGitHubApp(client *http.Client, clientID, loginURL, apiURL string, now fu
 	}
 }
 
+// APIURL is the GitHub API the app's user tokens are for.
+func (g *GitHubApp) APIURL() string {
+	return g.apiURL
+}
+
 // IsAvailable reports whether a client ID is configured.
 func (g *GitHubApp) IsAvailable() bool {
 	return g.clientID != ""
