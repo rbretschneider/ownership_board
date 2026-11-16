@@ -74,16 +74,8 @@
 .brand-mark {
   display: block;
   flex-shrink: 0;
-  border-radius: 4px;
-}
-
-/* The mark is drawn for a dark ground; the light theme gives it a dark tile. */
-.brand-mark__tile {
-  display: none;
-}
-
-:root[data-theme="light"] .brand-mark__tile {
-  display: inline;
+  /* The emblem art sits on black; rounding it reads as a tile on either theme. */
+  border-radius: 22%;
 }
 
 .offline {

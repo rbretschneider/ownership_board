@@ -1,9 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ownership board">
   <title>ownership board</title>
-  <rect width="64" height="64" rx="12" fill="#0e1116"/>
-  <g transform="translate(4 6) scale(0.875)">
-    <path d="M12 20 L30 12 L34 32 L16 38 Z M52 20 L34 12 L30 32 L48 38 Z" fill="#c9d0db"/>
-    <rect x="20" y="32" width="24" height="20" rx="3" fill="#8a93a3"/>
-    <path d="M20 16 L10 6 L16 7 L8 0 L28 12 L22 11 L28 16 Z M44 16 L54 6 L48 7 L56 0 L36 12 L42 11 L36 16 Z" fill="#4f8cff"/>
+  <defs>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6f7886"/>
+      <stop offset="0.35" stop-color="#f4f6f9"/>
+      <stop offset="0.6" stop-color="#c3cad4"/>
+      <stop offset="1" stop-color="#5d6674"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#e9f7ff"/>
+      <stop offset="1" stop-color="#3aa0ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="12" fill="#0b0e13"/>
+  <!-- lightning firing straight up out of the crown -->
+  <g fill="url(#bolt)" stroke="#1f7dff" stroke-width="0.6" stroke-linejoin="round">
+    <path d="M29.5 21 L26 13 L30.5 13.5 L27 3 L37.5 15 L33 14.5 L35.5 21 Z"/>
+    <path d="M22.5 21.5 L15 14.5 L19 14.5 L9.5 7 L23 14.5 L20.5 15.5 L27 21 Z"/>
+    <path d="M41.5 21.5 L49 14.5 L45 14.5 L54.5 7 L41 14.5 L43.5 15.5 L37 21 Z"/>
   </g>
+  <!-- connecting rod and big end -->
+  <path d="M27.8 40 L36.2 40 L35 50 L29 50 Z" fill="url(#metal)" stroke="#1f7dff" stroke-width="0.8"/>
+  <circle cx="32" cy="54" r="6.6" fill="url(#metal)" stroke="#1f7dff" stroke-width="0.8"/>
+  <circle cx="32" cy="54" r="2.8" fill="#232a35"/>
+  <!-- piston: crown, ring grooves, pin boss -->
+  <rect x="15.5" y="21" width="33" height="20" rx="3" fill="url(#metal)" stroke="#1f7dff" stroke-width="0.9"/>
+  <rect x="16" y="25" width="32" height="1.8" fill="#2b3240"/>
+  <rect x="16" y="28.6" width="32" height="1.8" fill="#2b3240"/>
+  <circle cx="32" cy="35" r="3.6" fill="#232a35" stroke="#e4e8ee" stroke-width="1.1"/>
 </svg>

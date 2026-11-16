@@ -61,7 +61,7 @@ export function App() {
   function renderScreen() {
     if (status === null) {
       return loadError === null
-        ? <main className="splash"><div className="splash__stack"><img className="splash__emblem" src="/emblem.svg" alt="" width="200" height="150" /><LoadingState label="Loading" /></div></main>
+        ? <main className="splash"><div className="splash__stack"><img className="splash__emblem" src="/brand-192.png" srcSet="/brand-192.png 192w, /brand-512.png 512w" sizes="200px" alt="" width="200" height="200" /><LoadingState label="Loading" /></div></main>
         : <main className="splash"><ErrorState message={`Couldn't reach the server: ${loadError}`} onRetry={() => void loadStatus()} /></main>;
     }
     if (status.setup_required) {
