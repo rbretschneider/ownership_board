@@ -47,6 +47,9 @@ func (s *AgentService) Claim(ctx context.Context, actor domain.Actor, input Clai
 	if err != nil {
 		return Work{}, false, err
 	}
+	if _, _, err := s.EnsureRunnerName(ctx, actor); err != nil {
+		return Work{}, false, err
+	}
 	listener := s.doorbell.Listen()
 	defer listener.Close()
 	deadline := s.clock.Now().Add(time.Duration(input.WaitSeconds) * time.Second)
@@ -379,6 +382,11 @@ func (s *AgentService) claimChange(actor domain.Actor, lease time.Duration) tick
 // repo when it has none so the agent can work out which one is meant.
 func briefInput(ctx context.Context, repos Repos, detail TicketDetail, action domain.WorkAction, now time.Time) (BriefInput, error) {
 	input := BriefInput{Detail: detail, Action: action, Now: now}
+	holder, err := leaseHolderLabel(ctx, repos, detail.Ticket)
+	if err != nil {
+		return BriefInput{}, err
+	}
+	input.LeaseHolder = holder
 	if detail.Ticket.RepoID == 0 {
 		known, err := repos.CodeRepos().List(ctx)
 		input.KnownRepos = activeRepos(known)

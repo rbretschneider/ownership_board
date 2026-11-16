@@ -796,6 +796,10 @@ export type RunnerState = "working" | "waiting" | "idle";
 export interface TeamRunner {
   /** The lease holder, e.g. "@worker/7/codex_1". */
   name: string;
+  /** Its friendly name from its family's pool, e.g. "Ray"; "" when it has none. Absent from older servers. */
+  display_name?: string;
+  /** The pool its display name comes from, e.g. "codex"; "" without one. */
+  family?: string;
   state: RunnerState;
   /** The model part of its work_model; "" when it reported none. */
   model: string;
@@ -909,4 +913,15 @@ export interface CIRunner {
 export interface CIRunners {
   observed_at: string | null;
   runners: CIRunner[];
+}
+
+/** A runner's friendly name; worker stays the raw id that leases match on. */
+export interface RunnerName {
+  /** The worker id, e.g. "claude_1". */
+  worker: string;
+  /** The agent family whose pool the name comes from, e.g. "claude". */
+  family: string;
+  position: number;
+  display_name: string;
+  assigned_at: string | null;
 }

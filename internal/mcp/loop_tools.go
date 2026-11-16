@@ -39,6 +39,10 @@ func (t listTickets) Call(ctx context.Context, _ domain.Actor, raw json.RawMessa
 	if err != nil {
 		return "", err
 	}
+	runners, err := t.s.Board.RunnerDirectory(ctx)
+	if err != nil {
+		return "", err
+	}
 	names := repoNames(board.Repos)
 	var b strings.Builder
 	for _, summary := range board.Tickets {
@@ -46,7 +50,7 @@ func (t listTickets) Call(ctx context.Context, _ domain.Actor, raw json.RawMessa
 		if (args.Lane != "" && string(ticket.Lane) != args.Lane) || (args.Repo != "" && !strings.EqualFold(names[ticket.RepoID], args.Repo)) {
 			continue
 		}
-		writeTicketLine(&b, summary, names[ticket.RepoID])
+		writeTicketLine(&b, summary, names[ticket.RepoID], runners)
 	}
 	if b.Len() == 0 {
 		return "No tickets match.", nil
@@ -54,7 +58,7 @@ func (t listTickets) Call(ctx context.Context, _ domain.Actor, raw json.RawMessa
 	return b.String(), nil
 }
 
-func writeTicketLine(b *strings.Builder, summary app.TicketSummary, repo string) {
+func writeTicketLine(b *strings.Builder, summary app.TicketSummary, repo string, runners domain.RunnerDirectory) {
 	ticket := summary.Ticket
 	fmt.Fprintf(b, "- #%d [%s] %s, repo %s", ticket.ID, ticket.Lane, ticket.Kind, firstNonEmpty(repo, "none"))
 	if ticket.PRURL != "" {
@@ -67,7 +71,7 @@ func writeTicketLine(b *strings.Builder, summary app.TicketSummary, repo string)
 		fmt.Fprintf(b, ", waiting on %s", ticketRefs(summary.WaitingOn))
 	}
 	if ticket.Lease != nil {
-		fmt.Fprintf(b, ", leased by %s", oneLineText(ticket.Lease.Holder))
+		fmt.Fprintf(b, ", leased by %s", oneLineText(runners.Label(ticket.Lease.Holder)))
 	}
 	fmt.Fprintf(b, ": %s\n", oneLineText(ticket.Title))
 }

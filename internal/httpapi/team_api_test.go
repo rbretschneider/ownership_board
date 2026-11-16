@@ -74,7 +74,8 @@ func TestTeamShowsRunnersTicketsHostsAndManager(t *testing.T) {
 	}
 	runner := runners[0].(map[string]any)
 	if !strings.HasSuffix(runner["name"].(string), "/codex_1") || runner["state"] != "working" || runner["model"] != "gpt-test" ||
-		runner["doing"] != "refining the spec" || runner["ticket_id"] != float64(1) || runner["profile_version"] != "" {
+		runner["doing"] != "refining the spec" || runner["ticket_id"] != float64(1) || runner["profile_version"] != "" ||
+		runner["display_name"] != "Ray" || runner["family"] != "codex" {
 		t.Fatalf("runner = %v", runner)
 	}
 

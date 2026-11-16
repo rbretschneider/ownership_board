@@ -97,6 +97,7 @@ func (s *server) routes(rt *router) {
 	s.buildHostRoutes(rt)
 	s.buildJobRoutes(rt)
 	s.verdictRoutes(rt)
+	s.runnerNameRoutes(rt)
 	s.statsRoutes(rt)
 	rt.human("GET /api/v1/account-usage", s.accountUsage)
 	rt.human("GET /api/v1/runners", s.windowsRunners)

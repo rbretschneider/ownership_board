@@ -36,8 +36,12 @@ var runnerStateOrder = map[RunnerState]int{RunnerWorking: 0, RunnerWaiting: 1, R
 // TeamRunner is one agent seen recently: holding a lease, waiting on a build
 // host for a ticket it released, or idle after recent work.
 type TeamRunner struct {
-	Name  string
-	State RunnerState
+	Name string
+	// DisplayName is the runner's friendly name from its family's pool, and
+	// Family that pool; both are empty for a runner without one.
+	DisplayName string
+	Family      string
+	State       RunnerState
 	// Model and Signal split the ticket's work model "model · signal".
 	Model  string
 	Signal string
@@ -109,7 +113,12 @@ func (s *BoardService) Team(ctx context.Context) (Team, error) {
 		if err != nil {
 			return err
 		}
+		names, err := repos.RunnerNames().Assigned(ctx)
+		if err != nil {
+			return err
+		}
 		team.Runners, team.Tickets = TeamRoster(board.Tickets, signals, now)
+		nameRunners(team.Runners, domain.NewRunnerDirectory(names))
 		team.Hosts, team.QueuedByOS, err = loadHostRunners(ctx, repos, true)
 		return err
 	})
@@ -204,4 +213,13 @@ func leasedRunner(holder string, t domain.Ticket, lastSeen time.Time) TeamRunner
 func splitWorkModel(workModel string) (model, signal string) {
 	model, signal, _ = strings.Cut(workModel, " · ")
 	return strings.TrimSpace(model), strings.TrimSpace(signal)
+}
+
+// nameRunners gives each runner its display name and family, when it has one.
+func nameRunners(runners []TeamRunner, directory domain.RunnerDirectory) {
+	for i := range runners {
+		if name, isNamed := directory.Lookup(runners[i].Name); isNamed {
+			runners[i].DisplayName, runners[i].Family = name.Name, name.Family
+		}
+	}
 }

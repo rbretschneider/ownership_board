@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"fmt"
 	"regexp"
 	"strings"
@@ -150,6 +151,8 @@ type BriefInput struct {
 	Action domain.WorkAction
 	// Now decides repo visibility, which depends on how fresh a sync is.
 	Now time.Time
+	// LeaseHolder names the lease holder for agents, such as "Michael (claude_1)".
+	LeaseHolder string
 }
 
 // RenderBrief writes one markdown document holding everything an agent needs to
@@ -304,7 +307,7 @@ func (r *briefRenderer) facts(input BriefInput) {
 		r.b.WriteString("- Mode: **autonomous**: no checkpoints and no questions; the owner reviews the pull request\n")
 	}
 	if ticket.Lease != nil {
-		fmt.Fprintf(&r.b, "- Lease: %s until %s\n", oneLine(ticket.Lease.Holder), ticket.Lease.ExpiresAt.UTC().Format(timeLayout))
+		fmt.Fprintf(&r.b, "- Lease: %s until %s\n", oneLine(cmp.Or(input.LeaseHolder, ticket.Lease.Holder)), ticket.Lease.ExpiresAt.UTC().Format(timeLayout))
 	}
 	if input.Action != domain.ActionDeploy {
 		r.branchFact(ticket, visibility)
