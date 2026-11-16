@@ -44,8 +44,7 @@ the whole board: tickets, PRs, build queue, runners, open questions. Then it act
 did, what it costs. It shows in the Team view and in Settings, and the whole
 log is kept.
 
-> Decisions: hourly review cadence (hourly / every 2 h); daily budget
-> (today $10).
+> Decided (2026-11-16): hourly review; daily budget $10.
 
 ## 2. A pipeline of roles per ticket
 
@@ -94,8 +93,9 @@ failing suite on that platform.
 This replaces "a full run per ticket per attempt", the main cost and
 bottleneck on a board with one Windows host.
 
-> Decisions: rolling build cadence (every 2 h / 4 h); may the manager
-> auto-revert a culprit, or only open the ticket?
+> Decided (2026-11-16): rolling build every 2 h. The manager reverts the
+> culprit at once, so the default branch is green again, and opens a ticket
+> to re-land the change with its fix.
 
 ## 4. Verdicts in the board
 
@@ -135,7 +135,8 @@ An engine shooting lightning, drawn larger so it reads in the header and the
 browser tab. Three concepts are in the mockup: a V-engine block, a bolt piston
 and a jet nozzle.
 
-> Decision: which concept.
+> Decided (2026-11-16): concept A, the V-engine block with bolts from the
+> exhaust. It stays legible at 16 px.
 
 ## Order of work
 
