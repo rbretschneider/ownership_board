@@ -65,6 +65,8 @@ type User = { id: number; name: string; email: string; is_admin: boolean; sso_li
 | POST   | `/api/v1/tickets/{id}/split` | `{reason, keep_spec?, children: [{title, spec, kind?, body?, after?}]}` | 201 `{parent: TicketDetail, child_ids}`. Splits an oversized ticket into child stories in build order; see [agents.md](agents.md#splitting-oversized-work). Without `keep_spec` the parent becomes stage `epic`. |
 | POST   | `/api/v1/tickets/{id}/questions` | `AskQuestions` | `TicketDetail` (the ticket keeps its lane and stage) |
 | GET    | `/api/v1/events/stream` | | Server-sent events |
+| GET    | `/api/v1/runner-names` | | `{runners: [{worker, family, position, display_name, assigned_at}]}`: every runner given a friendly name so far; see [worker_pool.md](worker_pool.md#runner-names) |
+| PATCH  | `/api/v1/runner-names/{worker}` | `{display_name}` | People only. Renames a named runner (1 to 32 characters, not starting with `@`). A name still free in the family's pool swaps with the runner's old one; a name another runner holds is `409`. |
 | GET    | `/api/v1/team` | | `Team`, for the Team view |
 | POST   | `/api/v1/manager/usage` | `{cost_usd, model, summary, headline?}` | Manager token only. Records one session. A `headline` is stored as the summary's first `HEADLINE:` line unless the summary already has one. |
 | GET    | `/api/v1/manager/ci-flags?repo=<id>&queue_minutes=<n>` | | Manager token or a person. `{flags, notes}`: the CI sensors over every repo with an open autonomous ticket. Flags have the `manager/flags` shape with kind `ci_queued`, `ci_cancelled`, `ci_failed` or `runner_offline`; `ticket_id` is 0 for a flag about the repo itself. `notes` name what the board could not read (a refused token, runners needing admin read). `queue_minutes` is 5 to 1440, default 30. The board calls the repos' providers here, so poll it no more often than the manager loop does. |
@@ -82,7 +84,8 @@ type User = { id: number; name: string; email: string; is_admin: boolean; sso_li
   `ticket_ids`, `host` and `started_at`. A `working` report that is 3 hours
   old reads as `idle`.
 - `runners`: one per agent seen recently, derived from live leases and
-  work-model reports. Each has `name` (the lease holder), `state` (`working`,
+  work-model reports. Each has `name` (the lease holder), `display_name` and
+  `family` (its friendly name and pool, both `""` without one), `state` (`working`,
   `waiting` or `idle`), `model`, `doing` (the work-model signal),
   `ticket_id`, `last_seen` and `profile_version` (empty until runners report
   it). A worker that released a build ticket while it awaits Windows stays

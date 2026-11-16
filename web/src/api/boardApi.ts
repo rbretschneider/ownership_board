@@ -33,6 +33,7 @@ import type {
   TicketSummary,
   StatsReport,
   Team,
+  RunnerName,
   Token,
   User,
   WorkLinkInput,
@@ -113,6 +114,10 @@ export interface BoardApi {
   managerSessions(): Promise<{ sessions: ManagerSession[] }>;
   /** The Team view: manager, runners, tickets in flight and build hosts. */
   team(): Promise<Team>;
+  /** Every runner given a friendly name so far. */
+  runnerNames(): Promise<{ runners: RunnerName[] }>;
+  /** Renames a runner; people only. */
+  renameRunner(worker: string, displayName: string): Promise<RunnerName>;
   revokeToken(id: number): Promise<void>;
   settings(): Promise<BoardSettings>;
   editSettings(input: Partial<BoardSettings>): Promise<BoardSettings>;
@@ -176,6 +181,8 @@ export function createBoardApi(http: HttpClient): BoardApi {
     managerFlags: () => http.request("GET", "/manager/flags"),
     managerSessions: () => http.request("GET", "/manager/sessions"),
     team: () => http.request("GET", "/team"),
+    runnerNames: () => http.request("GET", "/runner-names"),
+    renameRunner: (worker, displayName) => http.request("PATCH", `/runner-names/${encodeURIComponent(worker)}`, { display_name: displayName }),
     revokeToken: (id) => http.request("DELETE", `/tokens/${id}`),
     settings: () => http.request("GET", "/settings"),
     editSettings: (input) => http.request("PATCH", "/settings", input),

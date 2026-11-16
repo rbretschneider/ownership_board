@@ -1816,3 +1816,21 @@ a.runners__next:hover { color: var(--text); }
 .epic-bar__part--active { background: var(--accent); }
 .epic-bar__label { flex: none; color: var(--text-muted); white-space: nowrap; }
 .epic-section__bar .epic-bar { margin: 0 0 8px; border-radius: var(--radius-sm); }
+
+/* A runner's friendly name. The family badge only appears when two families
+   have a runner of the same name; it is metadata, so it stays neutral. */
+.runner-name { display: inline-flex; align-items: baseline; gap: 0.25rem; min-width: 0; }
+.runner-name__family {
+  padding: 0 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 0.625rem;
+  font-weight: 500;
+  line-height: 1.4;
+  text-transform: capitalize;
+}
+
+.runner-name-row { margin-top: 0.75rem; }
+.runner-name-row__controls { display: flex; gap: 0.5rem; align-items: center; }
+.runner-name-row__controls .input { max-width: 16rem; }

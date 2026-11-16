@@ -28,6 +28,7 @@ import { dependenciesMetText, relationLabel } from "../../lib/relations";
 import { stageLabel } from "../../lib/stages";
 import { relativeTime } from "../../lib/relativeTime";
 import { Markdown } from "../common/Markdown";
+import { RunnerNameTag } from "../common/RunnerNameTag";
 
 const EVENT_ICONS: Record<Exclude<TimelineType, "comment">, typeof Bot> = {
   created: CirclePlus,
@@ -66,7 +67,7 @@ export function TimelineItem({ entry, lanes, stages }: { entry: TimelineEntry; l
       <li className={`comment comment--${entry.actor.kind}`}>
         <div className="comment__meta">
           <ActorIcon size={14} aria-hidden="true" />
-          <span className="comment__author">{entry.actor.name}</span>
+          <span className="comment__author"><ActorName actor={entry.actor} /></span>
           {entry.actor.kind === "agent" && <span className="visually-hidden">(AI)</span>}
           {when}
         </div>
@@ -80,7 +81,7 @@ export function TimelineItem({ entry, lanes, stages }: { entry: TimelineEntry; l
     <li className={`event event--${entry.actor.kind}`}>
       <EventIcon size={14} aria-hidden="true" />
       <span className="event__text">
-        <strong>{entry.actor.name}</strong> {describe(entry, lanes, stages)} · {when}
+        <strong><ActorName actor={entry.actor} /></strong> {describe(entry, lanes, stages)} · {when}
         {DETAIL_TYPES.has(entry.type) && entry.body !== "" && <span className="event__detail">{entry.body}</span>}
       </span>
     </li>
@@ -166,4 +167,9 @@ function describeRelation(entry: TimelineEntry): string {
   const direction = entry.data["direction"] === "incoming" ? "incoming" : "outgoing";
   const label = kind === "" ? "" : ` (${relationLabel({ kind: kind as RelationKind, direction }).toLowerCase()})`;
   return `${isRemoval(entry) ? "unlinked" : "linked"}${other}${label}`;
+}
+
+/** An actor's name; a runner reads "Michael (claude_1)" with its raw identity in the tooltip. */
+function ActorName({ actor }: { actor: TimelineEntry["actor"] }) {
+  return actor.kind === "agent" ? <RunnerNameTag identity={actor.name} /> : <>{actor.name}</>;
 }

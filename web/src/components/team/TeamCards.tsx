@@ -1,10 +1,12 @@
 import { Bot } from "lucide-react";
 import type { ReactNode } from "react";
 import type { CIRunners, ManagerActivity, TeamBuildHost, TeamManager, TeamRunner, TeamTicket } from "../../api/types";
+import { useRunnerLabel, useRunnerNames } from "../../hooks/useRunnerNames";
 import { formatElapsed } from "../../lib/buildClock";
+import { nameRunnersInText } from "../../lib/runnerNames";
 import { relativeTime } from "../../lib/relativeTime";
 import {
-  CI_SAMPLE_STALE_MS, ciRunnerLabels, ciRunnerState, clockTime, formatUSD, hostLoad, humanizeDoing, runnerModelChip, runnerPool, runnerShortName,
+  CI_SAMPLE_STALE_MS, ciRunnerLabels, ciRunnerState, clockTime, formatUSD, hostLoad, humanizeDoing, runnerModelChip, runnerPool,
   RUNNER_STATES, ticketClock, type TicketActivity,
 } from "../../lib/team";
 import { StageStepper } from "../board/StageStepper";
@@ -62,8 +64,10 @@ export interface ManagerCardProps {
 /** The board manager on top of the chart: latest decision, spend, flags. */
 export function ManagerCard({ manager, onOpen }: ManagerCardProps) {
   const latest = manager.sessions[0];
+  const { directory } = useRunnerNames();
   // Older servers send no headline: the summary's first line stands in.
-  const headline = manager.latest_headline ?? manager.latest_summary.split("\n").find((line) => line.trim() !== "")?.trim() ?? "";
+  const rawHeadline = manager.latest_headline ?? manager.latest_summary.split("\n").find((line) => line.trim() !== "")?.trim() ?? "";
+  const headline = nameRunnersInText(rawHeadline, directory);
   const activity = manager.activity;
   const isWorking = activity?.state === "working";
   return (
@@ -123,7 +127,7 @@ export interface RunnerCardProps {
 /** One runner: state, engine, what it is doing, the ticket it holds. */
 export function RunnerCard({ runner, isActive, onEnter, onLeave, onOpen }: RunnerCardProps) {
   const state = RUNNER_STATES[runner.state];
-  const name = runnerShortName(runner.name);
+  const name = useRunnerLabel(runner.name, runner);
   const ticket = runner.ticket_id === null ? "none" : `#${runner.ticket_id}`;
   const chip = runnerModelChip(runner);
   return (
@@ -136,12 +140,12 @@ export function RunnerCard({ runner, isActive, onEnter, onLeave, onOpen }: Runne
       onFocus={onEnter}
       onBlur={onLeave}
       onClick={onOpen}
-      aria-label={`${name}, ${state.label}, holds ${ticket}. Open details`}
+      aria-label={`${name.detail}, ${state.label}, holds ${ticket}. Open details`}
     >
       <span className="team-row team-row--between">
         <span className="team-row">
           <span className={`team-dot team-dot--${state.tone}${runner.state === "working" ? " team-dot--live" : ""}`} aria-hidden="true" />
-          <span className="team-runner__name">{name}</span>
+          <span className="team-runner__name" title={name.title}>{name.detail}{name.badge !== "" && <span className="runner-name__family">{name.badge}</span>}</span>
         </span>
         <span className={`team-pill team-pill--${state.tone}`}>{state.label}</span>
       </span>

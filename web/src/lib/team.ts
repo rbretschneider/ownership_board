@@ -1,11 +1,11 @@
 import type { CIRunner, RunnerState, StageId, Team, TeamBuildHost, TeamRunner, TeamTicket, TimelineEntry } from "../api/types";
 import { formatElapsed } from "./buildClock";
+import { EMPTY_RUNNER_DIRECTORY, labelRunner, workerIdOf, type RunnerDirectory } from "./runnerNames";
 import { modelFamily, parseWorkModel, type ModelFamily } from "./workModel";
 
 /** "@worker/7/codex_1" reads as "codex_1"; other names stay as they are. */
 export function runnerShortName(name: string): string {
-  const match = /^@worker\/\d+\/(.+)$/.exec(name);
-  return match?.[1] ?? name;
+  return workerIdOf(name) ?? name;
 }
 
 /** "Claude · opus-x" or "Codex · gpt-y": provider and model on one line. */
@@ -94,7 +94,7 @@ export interface TicketActivity {
  * on a build-host slot, held by a runner, a PR with CI running, in a build
  * queue, or waiting on a dependency, the owner or a runner.
  */
-export function ticketActivity(ticket: TeamTicket, hosts: TeamBuildHost[], now: number): TicketActivity {
+export function ticketActivity(ticket: TeamTicket, hosts: TeamBuildHost[], now: number, directory: RunnerDirectory = EMPTY_RUNNER_DIRECTORY): TicketActivity {
   if (ticket.blocked_reason.trim() !== "") {
     const reason = ticket.blocked_reason.split("\n").find((line) => line.trim() !== "")?.trim() ?? "";
     return { group: "blocked", text: `Blocked: ${clip(reason, 90)}`, tone: "amber" };
@@ -109,7 +109,7 @@ export function ticketActivity(ticket: TeamTicket, hosts: TeamBuildHost[], now: 
   const leased = ticket.lease !== null && Date.parse(ticket.lease.expires_at) > now;
   if (leased && ticket.holder !== "" && !isAwaiting(ticket.work_model)) {
     const signal = humanizeDoing((ticket.work_model ?? "").split(" · ").slice(1).join(" · "));
-    return { group: "active", text: `${runnerShortName(ticket.holder)}: ${signal || "working"}`, tone: "accent" };
+    return { group: "active", text: `${labelRunner(ticket.holder, directory).detail}: ${signal || "working"}`, tone: "accent" };
   }
   const pr = ticket.pr;
   if (pr && pr.checks_total > 0 && pr.checks_done < pr.checks_total && pr.verdict !== "merged" && pr.verdict !== "closed") {
@@ -133,7 +133,7 @@ export function ticketActivity(ticket: TeamTicket, hosts: TeamBuildHost[], now: 
     return { group: "waiting", text, tone: pr.verdict === "green_owner" ? "green" : "grey" };
   }
   if (ticket.needs_owner) return { group: "waiting", text: ticket.open_questions > 0 ? "Questions for the owner" : "Waiting for the owner", tone: "amber" };
-  if (ticket.holder !== "") return { group: "waiting", text: `${runnerShortName(ticket.holder)}: ${humanizeDoing((ticket.work_model ?? "").split(" · ").slice(1).join(" · ")) || "waiting"}`, tone: "amber" };
+  if (ticket.holder !== "") return { group: "waiting", text: `${labelRunner(ticket.holder, directory).detail}: ${humanizeDoing((ticket.work_model ?? "").split(" · ").slice(1).join(" · ")) || "waiting"}`, tone: "amber" };
   return { group: "waiting", text: ticket.stage === "ready" ? "Ready for a runner" : "Waiting for a runner", tone: "grey" };
 }
 

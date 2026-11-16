@@ -8,6 +8,7 @@ import { SetupForm } from "./components/auth/SetupForm";
 import { BoardScreen } from "./components/board/BoardScreen";
 import { ErrorState } from "./components/common/ErrorState";
 import { LoadingState } from "./components/common/LoadingState";
+import { RunnerNamesProvider } from "./components/common/RunnerNamesProvider";
 import { FlowPage } from "./components/flow/FlowPage";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { StatsPage } from "./components/stats/StatsPage";
@@ -53,7 +54,7 @@ export function App() {
   return (
     <ApiContext.Provider value={api}>
       <CurrentUserContext.Provider value={status?.user ?? null}>
-        {renderScreen()}
+        <RunnerNamesProvider isEnabled={status?.user != null}>{renderScreen()}</RunnerNamesProvider>
       </CurrentUserContext.Provider>
     </ApiContext.Provider>
   );

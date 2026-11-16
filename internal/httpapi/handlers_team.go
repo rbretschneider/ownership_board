@@ -60,7 +60,11 @@ type teamPRDTO struct {
 }
 
 type teamRunnerDTO struct {
-	Name           string          `json:"name"`
+	Name string `json:"name"`
+	// DisplayName is the runner's friendly name, empty when its family has no
+	// pool; Name stays the raw identity that leases and timelines match on.
+	DisplayName    string          `json:"display_name"`
+	Family         string          `json:"family"`
 	State          app.RunnerState `json:"state"`
 	Model          string          `json:"model"`
 	Doing          string          `json:"doing"`
@@ -127,7 +131,7 @@ func toTeam(team app.Team) teamDTO {
 	}
 	for _, runner := range team.Runners {
 		out.Runners = append(out.Runners, teamRunnerDTO{
-			Name: runner.Name, State: runner.State, Model: runner.Model, Doing: runnerDoing(runner),
+			Name: runner.Name, DisplayName: runner.DisplayName, Family: runner.Family, State: runner.State, Model: runner.Model, Doing: runnerDoing(runner),
 			TicketID: positiveID(&runner.TicketID), LastSeen: nonZeroTime(runner.LastSeen), ProfileVersion: runner.ProfileVersion,
 		})
 	}

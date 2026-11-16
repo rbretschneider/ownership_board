@@ -13,6 +13,8 @@ import { ticketRefs } from "../../lib/relations";
 import { modelFamily, parseWorkModel, shortTarget } from "../../lib/workModel";
 import { MiningSprite } from "./MiningSprite";
 import { useRunners } from "../../hooks/useRunners";
+import { useRunnerLabel } from "../../hooks/useRunnerNames";
+import { RunnerNameTag } from "../common/RunnerNameTag";
 import { slotStep, slotTone, ticketRun } from "../../lib/runners";
 import { usePRStatus } from "../../hooks/usePRStatus";
 import { prPill, ticketPR } from "../../lib/prStatus";
@@ -83,6 +85,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
   const miner = !pr && !activity.buildServer && ticket.stage === "build" && liveLease && activity.working ? modelFamily(model?.name) : undefined;
   // Per-platform results as icons: board Windows verification and the PR's CI checks.
   const platforms = platformStatuses(ticket, prStatus?.checks);
+  const holder = useRunnerLabel(ticket.lease?.holder ?? "");
   return (
     <>
       <div className="card__top">
@@ -92,7 +95,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
           <span className={`card__top-right${ticket.stage === "deploying" ? " card__top-right--deploying" : ""}`}>
             {showModel && (
               <span className={`card__model${escalated ? " card__model--escalated" : ""}`}
-                title={escalated ? `Escalated to ${model?.name} at high reasoning after ${model?.escalatedAfter} rejected code passes` : liveLease ? `Assigned model for ${ticket.lease?.holder}` : "Last reported model"}>
+                title={escalated ? `Escalated to ${model?.name} at high reasoning after ${model?.escalatedAfter} rejected code passes` : liveLease ? `Assigned model for ${holder.detail}` : "Last reported model"}>
                 {escalated ? <RankChevrons /> : <Bot size={12} aria-hidden="true" />}
                 <span className="card__model-name">{model?.name ?? "Agent working"}</span>
               </span>
@@ -116,7 +119,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
                 <Timer size={11} aria-hidden="true" />{buildClock.text}
               </span>
             )}
-            {ticket.stage === "deploying" && liveLease && !activity.blocked && <span className="card__lease-holder">{ticket.lease?.holder}</span>}
+            {ticket.stage === "deploying" && liveLease && !activity.blocked && <RunnerNameTag className="card__lease-holder" identity={ticket.lease?.holder ?? ""} />}
           </span>
         )}
       </div>

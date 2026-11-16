@@ -3,12 +3,14 @@ import { useApi } from "../../api/ApiContext";
 import type { Team, TeamRunner, TeamTicket, TicketDetail } from "../../api/types";
 import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 import { useEventStream } from "../../hooks/useEventStream";
+import { useRunnerNames } from "../../hooks/useRunnerNames";
 import { useTeam } from "../../hooks/useTeam";
 import { REFETCH_DEBOUNCE_MS } from "../../lib/constants";
 import { relativeTime } from "../../lib/relativeTime";
+import { labelRunner, nameRunnersInText, type RunnerDirectory } from "../../lib/runnerNames";
 import {
-  activityLines, formatTokens, formatUSD, historyEntry, humanizeDoing, linkPath, managerTargets, runnerEngine, runnerShortName, RUNNER_STATES,
-  ticketActivity, type LinkLine, type ManagerTarget,
+  activityLines, formatTokens, formatUSD, historyEntry, humanizeDoing, linkPath, managerTargets, runnerEngine, RUNNER_STATES,
+  ticketActivity, type HistoryEntry, type LinkLine, type ManagerTarget,
 } from "../../lib/team";
 import { ErrorState } from "../common/ErrorState";
 import { LoadingState } from "../common/LoadingState";
@@ -34,6 +36,7 @@ export function TeamPage() {
   const debouncedRefetch = useDebouncedCallback(refetch, REFETCH_DEBOUNCE_MS);
   useEventStream(debouncedRefetch, refetch);
   const now = useNow(CLOCK_TICK_MS);
+  const { directory } = useRunnerNames();
   const containerRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -114,12 +117,12 @@ export function TeamPage() {
 
   const panel = useMemo<PanelContent | null>(() => {
     if (team === null || selection === null) return null;
-    if (selection.kind === "manager") return managerPanel(team);
-    return selectedRunner === null ? null : runnerPanel(selectedRunner, detail?.ticketId === selectedRunner.ticket_id ? detail : null, now);
-  }, [team, selection, selectedRunner, detail, now]);
+    if (selection.kind === "manager") return managerPanel(team, directory);
+    return selectedRunner === null ? null : runnerPanel(selectedRunner, detail?.ticketId === selectedRunner.ticket_id ? detail : null, now, directory);
+  }, [team, selection, selectedRunner, detail, now, directory]);
 
   const ticketCard = (ticket: TeamTicket) => (
-    <TeamTicketCard key={ticket.id} ticket={ticket} activity={ticketActivity(ticket, team?.build_hosts ?? [], now)}
+    <TeamTicketCard key={ticket.id} ticket={ticket} activity={ticketActivity(ticket, team?.build_hosts ?? [], now, directory)}
       isLinked={highlightedTickets.has(ticket.id)} now={now} />
   );
 
@@ -191,7 +194,7 @@ export function TeamPage() {
   );
 }
 
-function managerPanel(team: Team): PanelContent {
+function managerPanel(team: Team, directory: RunnerDirectory): PanelContent {
   const m = team.manager;
   return {
     kind: "Manager",
@@ -205,12 +208,12 @@ function managerPanel(team: Team): PanelContent {
     ],
     logTitle: "History log",
     log: [],
-    history: m.sessions.map((s) => ({ at: s.at, chip: [formatUSD(s.cost_usd), s.model].filter(Boolean).join(" · "), ...historyEntry(s) })),
+    history: m.sessions.map((s) => ({ at: s.at, chip: [formatUSD(s.cost_usd), s.model].filter(Boolean).join(" · "), ...namedHistory(historyEntry(s), directory) })),
     logNote: m.sessions.length === 0 ? "No manager sessions recorded yet." : undefined,
   };
 }
 
-function runnerPanel(runner: TeamRunner, detail: { value: TicketDetail | null; failed: boolean } | null, now: number): PanelContent {
+function runnerPanel(runner: TeamRunner, detail: { value: TicketDetail | null; failed: boolean } | null, now: number, directory: RunnerDirectory): PanelContent {
   const ticket = detail?.value ?? null;
   const facts = [
     { label: "Model", value: runnerEngine(runner) },
@@ -226,7 +229,7 @@ function runnerPanel(runner: TeamRunner, detail: { value: TicketDetail | null; f
   const doing = humanizeDoing(runner.doing);
   return {
     kind: "Runner",
-    title: runnerShortName(runner.name),
+    title: labelRunner(runner.name, directory, runner).detail,
     summary: ticket === null ? doing : `${doing}${doing === "" ? "" : " · "}#${ticket.id} ${ticket.title}`,
     facts,
     logTitle: "Recent activity",
@@ -253,4 +256,9 @@ function targetSelector(target: ManagerTarget): string {
 /** CSS.escape where the browser has it; runner names are plain otherwise. */
 function cssEscape(value: string): string {
   return typeof CSS !== "undefined" && typeof CSS.escape === "function" ? CSS.escape(value) : value.replace(/["\\]/g, "\\$&");
+}
+
+/** A manager history entry with the runners it mentions named. */
+function namedHistory(entry: HistoryEntry, directory: RunnerDirectory): HistoryEntry {
+  return { ...entry, headline: nameRunnersInText(entry.headline, directory), body: nameRunnersInText(entry.body, directory) };
 }
