@@ -263,8 +263,8 @@ function managerPanel(team: Team, directory: RunnerDirectory): PanelContent {
     title: "Board manager",
     summary: "Team lead for autonomous work. Objectives in order: cost, progress, speed.",
     facts: [
-      { label: "Spend today", value: `${formatUSD(m.today.cost_usd)} of $${m.daily_budget_usd}` },
-      { label: "Remaining", value: formatUSD(Math.max(0, m.remaining_usd)) },
+      { label: "Spend today", value: m.budget_off ? `${formatUSD(m.today.cost_usd)}, no daily cap` : `${formatUSD(m.today.cost_usd)} of $${m.daily_budget_usd}` },
+      { label: "Remaining", value: m.budget_off ? "No cap" : formatUSD(Math.max(0, m.remaining_usd)) },
       { label: "Sessions today", value: String(m.today.sessions) },
       { label: "Open flags", value: String(m.open_flags) },
     ],

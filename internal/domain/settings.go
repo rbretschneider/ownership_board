@@ -26,6 +26,7 @@ const (
 	SettingManagerBuildCap       = "manager_build_cap"
 	SettingManagerStallMinutes   = "manager_stall_minutes"
 	SettingManagerDailyBudgetUSD = "manager_daily_budget_usd"
+	SettingManagerBudgetOff      = "manager_budget_off"
 )
 
 // Bounds and defaults of the manager settings.
@@ -74,6 +75,9 @@ type BoardSettings struct {
 	ManagerBuildCap       int
 	ManagerStallMinutes   int
 	ManagerDailyBudgetUSD int
+	// ManagerBudgetOff lifts the daily budget: the manager always runs its
+	// sessions and ManagerDailyBudgetUSD is ignored until it is switched back.
+	ManagerBudgetOff bool
 	// LegacyWindowsRunnerEnabled and LegacyWindowsParallelBuilds are the
 	// Windows settings stored before build hosts existed. They apply only
 	// while no Windows build host is approved, so a board whose Windows
@@ -102,6 +106,7 @@ type SettingsEdit struct {
 	ManagerBuildCap       *int
 	ManagerStallMinutes   *int
 	ManagerDailyBudgetUSD *int
+	ManagerBudgetOff      *bool
 }
 
 // DefaultBoardSettings are the settings of a new board.
@@ -188,6 +193,9 @@ func (s BoardSettings) Apply(edit SettingsEdit) (BoardSettings, error) {
 	}
 	if edit.ReviewAdversarial != nil {
 		next.ReviewAdversarial = *edit.ReviewAdversarial
+	}
+	if edit.ManagerBudgetOff != nil {
+		next.ManagerBudgetOff = *edit.ManagerBudgetOff
 	}
 	if edit.ManagerEnabled != nil {
 		next.ManagerEnabled = *edit.ManagerEnabled

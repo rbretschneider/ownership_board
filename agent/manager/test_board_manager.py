@@ -38,6 +38,15 @@ class DueFlagsTests(unittest.TestCase):
         spent = {'h': {'attempts': m.OWNER_RECHECKS, 'last': 0}}
         self.assertEqual(m.due_flags([held], spent, 10**9), [])
 
+    def test_a_switched_off_budget_always_lets_sessions_run(self):
+        self.assertTrue(m.can_spend({'remaining_usd': -12.0, 'budget_off': True, 'can_spend': True}))
+        self.assertFalse(m.can_spend({'remaining_usd': 0.0, 'budget_off': False, 'can_spend': False}))
+        # An older board sends no can_spend: fall back to the remainder.
+        self.assertTrue(m.can_spend({'remaining_usd': 3.0}))
+        self.assertFalse(m.can_spend({'remaining_usd': 0.0}))
+        self.assertIn('No daily budget', m.build_prompt(2, [], None, local_runbook=''))
+        self.assertIn('Budget left today: $5.00', m.build_prompt(2, [], 5.0, local_runbook=''))
+
     def test_a_repair_in_progress_is_checked_hourly_on_the_base_model(self):
         held = dict(self.flag('r'), kind='escalated', detail='blocked: Board manager repairing: seeding the cache')
         state = {'r': {'attempts': m.MAX_ATTEMPTS + 2, 'last': 0}}

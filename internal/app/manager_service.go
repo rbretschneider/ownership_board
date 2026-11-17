@@ -16,8 +16,14 @@ const recentJobsPerTicket = 4
 type ManagerStatus struct {
 	Settings domain.BoardSettings
 	Today    domain.ManagerUsage
-	// RemainingUSD is today's budget left; zero or less means no model sessions.
+	// RemainingUSD is today's budget left; zero or less means no model sessions,
+	// unless the owner switched the budget off (Settings.ManagerBudgetOff).
 	RemainingUSD float64
+}
+
+// CanSpend reports whether the manager may start a model session now.
+func (s ManagerStatus) CanSpend() bool {
+	return s.Settings.ManagerBudgetOff || s.RemainingUSD > 0
 }
 
 func requireManagerOrPerson(actor domain.Actor) error {

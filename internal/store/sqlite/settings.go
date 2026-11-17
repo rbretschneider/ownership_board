@@ -90,6 +90,15 @@ func (r settingsRepo) Get(ctx context.Context) (domain.BoardSettings, error) {
 			settings.ManagerEnabled = value
 		}
 	}
+	err = r.q.QueryRowContext(ctx, `SELECT value FROM board_settings WHERE key = ?`, domain.SettingManagerBudgetOff).Scan(&raw)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return domain.BoardSettings{}, fmt.Errorf("sqlite: read manager settings: %w", err)
+	}
+	if err == nil {
+		if value, parseErr := strconv.ParseBool(raw); parseErr == nil {
+			settings.ManagerBudgetOff = value
+		}
+	}
 	managerTargets := map[string]*int{
 		domain.SettingManagerBuildCap:       &settings.ManagerBuildCap,
 		domain.SettingManagerStallMinutes:   &settings.ManagerStallMinutes,
@@ -147,6 +156,7 @@ func (r settingsRepo) Save(ctx context.Context, settings domain.BoardSettings, a
 		domain.SettingManagerBuildCap:       strconv.Itoa(settings.ManagerBuildCap),
 		domain.SettingManagerStallMinutes:   strconv.Itoa(settings.ManagerStallMinutes),
 		domain.SettingManagerDailyBudgetUSD: strconv.Itoa(settings.ManagerDailyBudgetUSD),
+		domain.SettingManagerBudgetOff:      strconv.FormatBool(settings.ManagerBudgetOff),
 	} {
 		if _, err := r.q.ExecContext(ctx, `INSERT INTO board_settings (key,value,updated_by,updated_at) VALUES (?,?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_by=excluded.updated_by,updated_at=excluded.updated_at`, key, value, actor.Name, formatTime(now)); err != nil {
 			return fmt.Errorf("sqlite: save review settings: %w", err)

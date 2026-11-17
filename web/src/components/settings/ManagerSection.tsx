@@ -6,7 +6,7 @@ import { LoadingState } from "../common/LoadingState";
 import { useToast } from "../toast/ToastContext";
 
 type ManagerSettings = Pick<BoardSettings,
-  "manager_enabled" | "manager_build_cap" | "manager_stall_minutes" | "manager_daily_budget_usd">;
+  "manager_enabled" | "manager_build_cap" | "manager_stall_minutes" | "manager_daily_budget_usd" | "manager_budget_off">;
 
 const FLAG_LABELS: Record<ManagerFlag["kind"], string> = {
   escalated: "Escalated",
@@ -61,7 +61,7 @@ export function ManagerSection() {
     }
   };
 
-  const numberField = (key: keyof Omit<ManagerSettings, "manager_enabled">, label: string, hint: string, min: number, max: number) =>
+  const numberField = (key: keyof Omit<ManagerSettings, "manager_enabled" | "manager_budget_off">, label: string, hint: string, min: number, max: number) =>
     settings && (
       <div className="field">
         <label className="field__label" htmlFor={`${id}-${key}`}>{label}</label>
@@ -97,10 +97,22 @@ export function ManagerSection() {
           </div>
           {numberField("manager_build_cap", "Build cap", "Flag a ticket once it has more build passes than this.", 1, 50)}
           {numberField("manager_stall_minutes", "Stall after (minutes)", "Flag a ticket nobody has touched for this long.", 15, 2880)}
-          {numberField("manager_daily_budget_usd", "Daily budget (USD)", "Model spend allowed per UTC day. 0 means flags only, no model sessions.", 0, 500)}
+          <div className="field">
+            <label className="switch" htmlFor={`${id}-budget-off`}>
+              <input id={`${id}-budget-off`} type="checkbox" role="switch" className="switch__input" checked={!settings.manager_budget_off}
+                disabled={busy} onChange={(e) => void save({ manager_budget_off: !e.target.checked })} />
+              <span className="switch__track" aria-hidden="true" />
+              <span className="switch__label">Daily budget</span>
+            </label>
+            <p className="muted small">Off: the manager always runs its sessions, with no daily cap. Spend is still counted below.</p>
+          </div>
+          {!settings.manager_budget_off &&
+            numberField("manager_daily_budget_usd", "Daily budget (USD)", "Model spend allowed per UTC day. 0 means flags only, no model sessions.", 0, 500)}
           {status && (
             <p className="muted small">
-              {`Today: $${status.today.cost_usd.toFixed(2)} in ${status.today.sessions} session(s); $${Math.max(0, status.remaining_usd).toFixed(2)} left.`}
+              {settings.manager_budget_off
+                ? `Today: $${status.today.cost_usd.toFixed(2)} in ${status.today.sessions} session(s); no daily cap.`
+                : `Today: $${status.today.cost_usd.toFixed(2)} in ${status.today.sessions} session(s); $${Math.max(0, status.remaining_usd).toFixed(2)} left.`}
             </p>
           )}
           <h3 className="settings-section__subtitle">{flags.length === 0 ? "No tickets need the manager" : "Needs the manager now"}</h3>
@@ -137,5 +149,6 @@ function pick(s: BoardSettings): ManagerSettings {
     manager_build_cap: s.manager_build_cap,
     manager_stall_minutes: s.manager_stall_minutes,
     manager_daily_budget_usd: s.manager_daily_budget_usd,
+    manager_budget_off: s.manager_budget_off,
   };
 }

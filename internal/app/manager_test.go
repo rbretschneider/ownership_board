@@ -105,6 +105,34 @@ func TestTheManagerRecordsItsSpendAgainstTheDailyBudget(t *testing.T) {
 	}
 }
 
+func TestTheOwnerCanSwitchTheManagersDailyBudgetOff(t *testing.T) {
+	f := newFixture(t)
+	zero, off, on := 0, true, false
+	if _, err := f.board.UpdateSettings(f.ctx, owner, domain.SettingsEdit{ManagerDailyBudgetUSD: &zero}); err != nil {
+		t.Fatal(err)
+	}
+	status, err := f.board.RecordManagerUsage(f.ctx, manager, app.ManagerSessionInput{CostUSD: 3, Model: "fable"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.CanSpend() {
+		t.Fatalf("a spent budget still allows sessions: %+v", status)
+	}
+	settings, err := f.board.UpdateSettings(f.ctx, owner, domain.SettingsEdit{ManagerBudgetOff: &off})
+	if err != nil || !settings.ManagerBudgetOff {
+		t.Fatalf("switch off: %+v, %v", settings, err)
+	}
+	if status, err = f.board.ManagerStatus(f.ctx, manager); err != nil || !status.CanSpend() || status.Today.CostUSD != 3 {
+		t.Fatalf("with the budget off the manager must always run and still count spend: %+v, %v", status, err)
+	}
+	if _, err = f.board.UpdateSettings(f.ctx, owner, domain.SettingsEdit{ManagerBudgetOff: &on}); err != nil {
+		t.Fatal(err)
+	}
+	if status, err = f.board.ManagerStatus(f.ctx, manager); err != nil || status.CanSpend() {
+		t.Fatalf("switching the budget back on restores the cap: %+v, %v", status, err)
+	}
+}
+
 func TestTheOwnerReadsTheManagersSessionsNewestFirst(t *testing.T) {
 	f := newFixture(t)
 	if _, err := f.board.RecordManagerUsage(f.ctx, manager, app.ManagerSessionInput{CostUSD: 0.25, Model: "sonnet", Summary: "first"}); err != nil {
