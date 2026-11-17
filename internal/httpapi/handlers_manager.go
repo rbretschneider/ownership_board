@@ -16,6 +16,10 @@ type managerStatusDTO struct {
 	DailyBudgetUSD int                 `json:"daily_budget_usd"`
 	Today          domain.ManagerUsage `json:"today"`
 	RemainingUSD   float64             `json:"remaining_usd"`
+	// BudgetOff means the owner lifted the daily budget; RemainingUSD is then informational.
+	BudgetOff bool `json:"budget_off"`
+	// CanSpend is whether the manager may start a model session now.
+	CanSpend bool `json:"can_spend"`
 }
 
 type managerFlagsDTO struct {
@@ -48,7 +52,7 @@ func (s *server) managerExpireLinks(w http.ResponseWriter, r *http.Request, who 
 func toManagerStatus(status app.ManagerStatus) managerStatusDTO {
 	return managerStatusDTO{Enabled: status.Settings.ManagerEnabled, BuildCap: status.Settings.ManagerBuildCap,
 		StallMinutes: status.Settings.ManagerStallMinutes, DailyBudgetUSD: status.Settings.ManagerDailyBudgetUSD,
-		Today: status.Today, RemainingUSD: status.RemainingUSD}
+		Today: status.Today, RemainingUSD: status.RemainingUSD, BudgetOff: status.Settings.ManagerBudgetOff, CanSpend: status.CanSpend()}
 }
 
 func (s *server) managerStatus(w http.ResponseWriter, r *http.Request, who caller) error {

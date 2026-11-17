@@ -43,8 +43,12 @@ func (t managerFlags) Call(ctx context.Context, actor domain.Actor, raw json.Raw
 		return "", err
 	}
 	var out strings.Builder
-	fmt.Fprintf(&out, "Budget today: $%.2f of $%d spent in %d session(s); $%.2f left.\n",
-		status.Today.CostUSD, status.Settings.ManagerDailyBudgetUSD, status.Today.Sessions, status.RemainingUSD)
+	if status.Settings.ManagerBudgetOff {
+		fmt.Fprintf(&out, "Budget today: off (no daily cap); $%.2f spent in %d session(s).\n", status.Today.CostUSD, status.Today.Sessions)
+	} else {
+		fmt.Fprintf(&out, "Budget today: $%.2f of $%d spent in %d session(s); $%.2f left.\n",
+			status.Today.CostUSD, status.Settings.ManagerDailyBudgetUSD, status.Today.Sessions, status.RemainingUSD)
+	}
 	if len(flags) == 0 {
 		out.WriteString("No flags: every autonomous ticket in scope is moving.")
 		return out.String(), nil

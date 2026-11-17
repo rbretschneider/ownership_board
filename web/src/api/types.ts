@@ -504,6 +504,8 @@ export interface BoardSettings {
   manager_build_cap: number;
   manager_stall_minutes: number;
   manager_daily_budget_usd: number;
+  /** The owner lifted the manager's daily budget. */
+  manager_budget_off: boolean;
 }
 
 /** Who reviews: another model than the author (default), the author's own model, or one account. */
@@ -779,6 +781,8 @@ export interface ManagerStatus {
   daily_budget_usd: number;
   today: { day: string; sessions: number; cost_usd: number };
   remaining_usd: number;
+  budget_off?: boolean;
+  can_spend?: boolean;
 }
 
 /** One board manager model session and its own summary of what it did. */

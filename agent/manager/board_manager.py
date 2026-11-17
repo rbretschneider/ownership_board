@@ -356,6 +356,18 @@ def build_host_section(access):
             'park or move aside (quarantine) instead, and follow "Repairs".\n') % (access['user'], BUILD_HOST_SCRIPT.as_posix())
 
 
+def can_spend(status):
+    """Whether a session may start: the owner switched the daily budget off, or some is left.
+    An older board without the switch sends no can_spend, so fall back to the remainder."""
+    if 'can_spend' in status:
+        return bool(status['can_spend'])
+    return status.get('remaining_usd', 0) > 0
+
+
+def budget_text(budget_left):
+    return 'No daily budget (the owner switched it off).' if budget_left is None else f'Budget left today: ${budget_left:.2f}.'
+
+
 def build_prompt(repo_id, flags, budget_left, local_runbook=None, review=False, build_host=None, told=()):
     lines = '\n'.join(flag_line(f) for f in flags) or '- none'
     runbook = COMMAND.read_text()
@@ -364,11 +376,11 @@ def build_prompt(repo_id, flags, budget_left, local_runbook=None, review=False, 
         runbook = runbook.split('---', 2)[2].lstrip()
     if review:
         prompt = (runbook + f'\n\n## This session\n\nThe board review (every repo; see "Board review"). '
-                  f'Budget left today: ${budget_left:.2f}. Flags open right now (their own sessions '
+                  f'{budget_text(budget_left)} Flags open right now (their own sessions '
                   f'handle them; use them as context only):\n\n{lines}\n')
     else:
         scope = f'Repo id {repo_id}.' if repo_id else 'Deployment flags (no ticket; from the deployment sensors).'
-        prompt = (runbook + f'\n\n## This session\n\n{scope} Budget left today: ${budget_left:.2f}. '
+        prompt = (runbook + f'\n\n## This session\n\n{scope} {budget_text(budget_left)} '
                   f'Flags to handle:\n\n{lines}\n')
     prompt += build_host_section(build_host)
     prompt += told_section(told)
@@ -436,9 +448,10 @@ def main():
             by_repo = {}
             for flag in due:
                 by_repo.setdefault(flag.get('repo_id') or 0, []).append(flag)
-            remaining = status['remaining_usd']
+            spend = can_spend(status)
+            remaining = None if status.get('budget_off') else status['remaining_usd']
             for repo_id, repo_flags in sorted(by_repo.items()):
-                if remaining <= 0:
+                if not spend:
                     log(f'daily budget spent; {sum(len(v) for v in by_repo.values())} flag(s) wait for tomorrow')
                     break
                 for flag in repo_flags:
@@ -453,8 +466,10 @@ def main():
                     report_activity('idle')
                 summary = dedupe_owner(summary, state, time.time())
                 save_state(state)
-                remaining = api('POST', '/api/v1/manager/usage', usage_body(cost, model, summary))['remaining_usd']
-            if review_due(state, now) and remaining > 0:
+                after = api('POST', '/api/v1/manager/usage', usage_body(cost, model, summary))
+                spend = can_spend(after)
+                remaining = None if after.get('budget_off') else after['remaining_usd']
+            if review_due(state, now) and spend:
                 state[REVIEW_KEY] = {'last': now}
                 save_state(state)
                 report_activity('working', 'review')
