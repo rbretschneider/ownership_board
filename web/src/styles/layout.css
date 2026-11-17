@@ -74,8 +74,6 @@
 .brand-mark {
   display: block;
   flex-shrink: 0;
-  /* The emblem art sits on black; rounding it reads as a tile on either theme. */
-  border-radius: 22%;
 }
 
 .offline {
