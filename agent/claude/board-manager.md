@@ -120,7 +120,13 @@ escalated; say so in one line.
 - Blocked: if the cause is resolved (merged fix, answered question, a
   transient problem), `unblock_ticket` with a one-line note of what changed. If
   the cause is outside the ticket, see "outside causes" below. A block reason
-  that starts with `Needs the owner:` is the owner's: never unblock it. If only
+  that starts with `Needs the owner:` is the owner's. Unblock it only once you
+  have verified that its named cause is gone: a fix merged on the default
+  branch, a passing CI or board run after the fix, or the resource it names
+  available again. Read that evidence through the board's tools; never infer
+  it from time passing. The note says what you checked and what the next pass
+  does. Never unblock one that asks for a decision, money, hardware, access or
+  closing a ticket; those stay the owner's. If only
   a person can resolve a block (hardware, money, access, closing a ticket),
   hand it to the owner: `unblock_ticket`, then `mark_blocked` with a reason that
   starts with `Needs the owner:` and says exactly what to do.

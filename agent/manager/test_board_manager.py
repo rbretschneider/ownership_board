@@ -26,10 +26,17 @@ class DueFlagsTests(unittest.TestCase):
         self.assertEqual(m.due_flags([self.flag('cycling:64:failure:ab12:3')], state, 10**9), [])
         self.assertEqual(len(m.due_flags([self.flag('cycling:64:failure:ab12:4')], state, 10**9)), 1)
 
-    def test_a_ticket_blocked_for_the_owner_costs_nothing(self):
+    def test_a_ticket_blocked_for_the_owner_is_rechecked_rarely_and_capped(self):
         held = dict(self.flag('h'), kind='escalated', detail='blocked: Needs the owner: close it, the fix is on main')
         other = dict(self.flag('o'), kind='escalated', detail='blocked: waiting on CI')
-        self.assertEqual([f['fingerprint'] for f in m.due_flags([held, other], {}, 0)], ['o'])
+        now = m.OWNER_RECHECK_AFTER + 10
+        self.assertEqual([f['fingerprint'] for f in m.due_flags([held, other], {}, now)], ['h', 'o'])
+        recent = {'h': {'attempts': 1, 'last': now - 60}}
+        self.assertEqual([f['fingerprint'] for f in m.due_flags([held], recent, now)], [])
+        later = {'h': {'attempts': 1, 'last': 0}}
+        self.assertEqual([f['fingerprint'] for f in m.due_flags([held], later, now)], ['h'])
+        spent = {'h': {'attempts': m.OWNER_RECHECKS, 'last': 0}}
+        self.assertEqual(m.due_flags([held], spent, 10**9), [])
 
     def test_a_repair_in_progress_is_checked_hourly_on_the_base_model(self):
         held = dict(self.flag('r'), kind='escalated', detail='blocked: Board manager repairing: seeding the cache')

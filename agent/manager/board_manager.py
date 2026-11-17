@@ -50,6 +50,10 @@ TOKEN = os.environ.get('OWNERSHIP_TOKEN', '')
 INTERVAL = int(os.environ.get('MANAGER_INTERVAL', '600'))
 RETRY_AFTER = int(os.environ.get('MANAGER_RETRY_AFTER', '3600'))
 MAX_ATTEMPTS = int(os.environ.get('MANAGER_MAX_ATTEMPTS', '3'))
+# An owner block is rechecked rarely: its cause may be fixed elsewhere (a merged
+# repair), and the runbook lets the manager lift it once that is verified.
+OWNER_RECHECK_AFTER = int(os.environ.get('MANAGER_OWNER_RECHECK_AFTER', str(6 * 3600)))
+OWNER_RECHECKS = int(os.environ.get('MANAGER_OWNER_RECHECKS', '4'))
 MODEL = os.environ.get('MANAGER_MODEL', 'sonnet')
 RETRY_MODEL = os.environ.get('MANAGER_RETRY_MODEL', 'opus')
 SESSION_TIMEOUT = int(os.environ.get('MANAGER_SESSION_TIMEOUT', '1800'))
@@ -101,8 +105,9 @@ def save_state(state):
 
 
 def owner_held(flag):
-    """A ticket blocked for the owner ("Needs the owner: ...") waits for a person; a
-    session on it can only spend money, and might unblock what the owner parked."""
+    """A ticket blocked for the owner ("Needs the owner: ..."). It is rechecked at most
+    OWNER_RECHECKS times, OWNER_RECHECK_AFTER apart, in case its named cause was fixed
+    elsewhere; the runbook says when the manager may lift it."""
     return flag['kind'] == 'escalated' and flag['detail'].startswith('blocked: ' + OWNER_PREFIX)
 
 
@@ -133,10 +138,13 @@ def due_flags(flags, state, now):
     """Flags that need a session now, with the model each needs."""
     due = []
     for flag in flags:
-        if owner_held(flag):
-            continue
         entry = state.get(flag['fingerprint'], {})
         attempts = entry.get('attempts', 0)
+        if owner_held(flag):
+            if attempts >= OWNER_RECHECKS or now - entry.get('last', 0) < OWNER_RECHECK_AFTER:
+                continue
+            due.append(dict(flag, attempts=attempts))
+            continue
         if attempts >= max_attempts(flag) and not repairing(flag):
             continue
         if attempts and now - entry.get('last', 0) < RETRY_AFTER:
