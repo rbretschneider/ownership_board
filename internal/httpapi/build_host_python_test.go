@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -258,4 +259,39 @@ func TestBuildHostPythonInterop(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	t.Fatal("cancelled assignment was not released within ten seconds")
+}
+
+// A batch's completion names the members left out; the server keeps them
+// through its normalization.
+func TestBuildHostPythonInteropBatchExclusions(t *testing.T) {
+	python := os.Getenv("BUILD_HOST_PYTHON")
+	if python == "" {
+		t.Skip("set BUILD_HOST_PYTHON to run the native client integration")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	source, err := filepath.Abs("../../agent/build_host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	program := `import sys
+sys.path.insert(0, sys.argv[1])
+import build_host as host
+print(host.completion_bytes(1, [{'label': 'merge #2', 'exit_code': 0, 'log': 'ok'}], '', ['` + strings.Repeat("a", 64) + `']).decode())
+`
+	raw, err := exec.CommandContext(ctx, python, "-c", program, source).Output()
+	if err != nil {
+		t.Fatalf("Python completion generation: %v", err)
+	}
+	var completion domain.BuildJobCompletion
+	if err := json.Unmarshal(bytes.TrimSpace(raw), &completion); err != nil {
+		t.Fatal(err)
+	}
+	if err := completion.Validate(); err != nil {
+		t.Fatalf("server rejected completion: %v", err)
+	}
+	var result domain.BuildJobResult
+	if err := json.Unmarshal(completion.Result, &result); err != nil || len(result.Excluded) != 1 || result.Excluded[0] != strings.Repeat("a", 64) {
+		t.Fatalf("excluded = %v (%v)", result.Excluded, err)
+	}
 }

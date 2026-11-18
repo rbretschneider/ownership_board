@@ -85,6 +85,14 @@ closes a seam.
 | Symptom | A full run took 85 min. The build took 19 min; tests took 63, and most suites ran in both configurations. |
 | Fix | **Permanent:** quick suites run in Debug; slow suites (GUI, diagnostics, full QA) run once, in Release. The repository can still request every suite in every configuration. |
 
+### One full run per queued ticket
+
+| | |
+|---|---|
+| Symptom | About six makercad tickets waited in the Windows queue with rolling builds on. In a week the one host ran 233 failed runs (about 41 min each) against 68 passes (about 79 min each). |
+| Cause | Rolling supersede only replaces a ticket's own older commit. Different tickets' commits each needed their own full run. |
+| Fix | **Permanent, opt-in per repo:** batched verification merges up to the repo's batch size of queued commits into one run, passes each member for its exact commit, and bisects a red batch until the culprit runs alone ([amendment](amendments/batched-verification.md)). It pays only where red means a broken ticket. A new protocol field must reach only agents that understand it: an older agent would ignore `batch` and pass the lead commit alone, so the board gates batches on the agent version. |
+
 ### A watcher that only watches
 
 | | |

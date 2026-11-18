@@ -19,6 +19,8 @@ type RunnerAssignment struct {
 	Phase, Detail     string
 	StartedAt         *time.Time
 	Attempt           int
+	// Batch lists the member tickets when the assignment is a batch, lead first.
+	Batch []int64
 }
 type BuildHostRunner struct {
 	Host  domain.BuildHost
@@ -70,6 +72,11 @@ func loadHostRunners(ctx context.Context, r Repos, withQueues bool) ([]BuildHost
 	if err != nil {
 		return nil, nil, err
 	}
+	batched, err := batchRunners(ctx, r)
+	if err != nil {
+		return nil, nil, err
+	}
+	assignments = append(assignments, batched...)
 	counts, err := r.BuildJobs().QueuedCountsByOS(ctx)
 	if err != nil {
 		return nil, nil, err

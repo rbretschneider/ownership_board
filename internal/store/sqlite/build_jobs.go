@@ -12,14 +12,14 @@ import (
 
 type buildJobRepo struct{ q querier }
 
-const jobColumns = `id,ticket_id,repo,sha,preset,target,status,host_id,attempt,created_at,started_at,finished_at,assignment_released_at,phase,detail,result,bundle_bytes,bundle_sha256`
+const jobColumns = `id,ticket_id,repo,sha,preset,target,status,host_id,attempt,created_at,started_at,finished_at,assignment_released_at,phase,detail,result,bundle_bytes,bundle_sha256,COALESCE(batch_id,''),batch_solo`
 
 func scanJob(row interface{ Scan(...any) error }) (domain.BuildJob, error) {
 	var j domain.BuildJob
 	var target, created string
 	var started, finished, released, result sql.NullString
 	var host sql.NullInt64
-	err := row.Scan(&j.ID, &j.TicketID, &j.Repo, &j.SHA, &j.Preset, &target, &j.Status, &host, &j.Attempt, &created, &started, &finished, &released, &j.Phase, &j.Detail, &result, &j.BundleBytes, &j.BundleSHA256)
+	err := row.Scan(&j.ID, &j.TicketID, &j.Repo, &j.SHA, &j.Preset, &target, &j.Status, &host, &j.Attempt, &created, &started, &finished, &released, &j.Phase, &j.Detail, &result, &j.BundleBytes, &j.BundleSHA256, &j.BatchID, &j.BatchSolo)
 	if err != nil {
 		return j, notFoundOr(err, "build job not found")
 	}
@@ -136,7 +136,7 @@ func (r buildJobRepo) AssignmentCount(ctx context.Context, hostID int64) (int, e
 	return n, err
 }
 
-const eligibleQueue = ` FROM build_jobs WHERE status='queued' AND target_os=? AND NOT EXISTS (
+const eligibleQueue = ` FROM build_jobs WHERE status='queued' AND batch_id IS NULL AND target_os=? AND NOT EXISTS (
  SELECT 1 FROM json_each(build_jobs.target,'$.required_capabilities') required
  WHERE NOT EXISTS (SELECT 1 FROM json_each(?) allowed WHERE allowed.value=required.value)
  ) ORDER BY created_at,id LIMIT ?`
@@ -285,6 +285,38 @@ func (r buildJobRepo) RecentForTicket(ctx context.Context, ticketID int64, limit
 			return nil, err
 		}
 		out = append(out, job)
+	}
+	return out, rows.Err()
+}
+
+// SetBatch holds a queued job for a batch (batchID set) or frees it (batchID
+// empty); solo marks the job to be verified alone from now on.
+func (r buildJobRepo) SetBatch(ctx context.Context, jobID, batchID string, solo bool) error {
+	var batch any
+	if batchID != "" {
+		batch = batchID
+	}
+	_, err := r.q.ExecContext(ctx, `UPDATE build_jobs SET batch_id=?,batch_solo=? WHERE id=?`, batch, boolToInt(solo), jobID)
+	return err
+}
+
+// BatchCandidates returns free queued jobs that can share a batch with lead: same
+// repository, preset and target, not the lead's ticket, not marked solo, oldest first.
+func (r buildJobRepo) BatchCandidates(ctx context.Context, lead domain.BuildJob, limit int) ([]domain.BuildJob, error) {
+	rows, err := r.q.QueryContext(ctx, `SELECT `+jobColumns+` FROM build_jobs WHERE status='queued' AND batch_id IS NULL AND batch_solo=0 AND host_id IS NULL
+ AND repo=? AND preset=? AND target_os=? AND target=? AND ticket_id<>? AND id<>? ORDER BY created_at,id LIMIT ?`,
+		lead.Repo, lead.Preset, lead.Target.OS, lead.Target.Canonical(), lead.TicketID, lead.ID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.BuildJob{}
+	for rows.Next() {
+		j, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, j)
 	}
 	return out, rows.Err()
 }

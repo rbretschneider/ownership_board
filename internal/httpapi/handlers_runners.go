@@ -145,7 +145,16 @@ func toCompatibilityRunner(row app.BuildHostRunner, now time.Time) registryRunne
 		if !runnerPhases[phase] {
 			phase = "verifying"
 		}
-		snapshot.Slots = append(snapshot.Slots, runnerSlot{Slot: i + 1, TicketID: positiveID(&a.TicketID), Repo: a.Repo, SHA: a.SHA[:min(len(a.SHA), 12)], Preset: a.Preset, Phase: phase, Detail: cleanDetail(a.Detail), Since: a.StartedAt, UpdatedAt: h.LastSeenAt, Orphan: a.Status == "cancelled" || a.Status == "superseded"})
+		slot := runnerSlot{Slot: i + 1, TicketID: positiveID(&a.TicketID), Repo: a.Repo, SHA: a.SHA[:min(len(a.SHA), 12)], Preset: a.Preset, Phase: phase, Detail: cleanDetail(a.Detail), Since: a.StartedAt, UpdatedAt: h.LastSeenAt, Orphan: a.Status == "cancelled" || a.Status == "superseded"}
+		snapshot.Slots = append(snapshot.Slots, slot)
+		// A batch builds every member ticket in the one slot, so each card shows it.
+		for _, ticket := range a.Batch {
+			if ticket != a.TicketID {
+				member := slot
+				member.TicketID = positiveID(&ticket)
+				snapshot.Slots = append(snapshot.Slots, member)
+			}
+		}
 	}
 	for i, j := range row.Queue {
 		snapshot.Queue = append(snapshot.Queue, runnerQueued{Position: i + 1, TicketID: positiveID(&j.TicketID), Repo: j.Repo, SHA: j.SHA[:min(len(j.SHA), 12)], Preset: j.Preset, QueuedAt: &j.CreatedAt})

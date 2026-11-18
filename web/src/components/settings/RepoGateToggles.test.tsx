@@ -108,3 +108,20 @@ it("saves which review findings block publication in the repo", async () => {
   expect(select.value).toBe("p3");
  } finally {await v.unmount();}
 });
+
+it("turns batched build checks on with a size and off again", async () => {
+ const edit = vi.fn().mockImplementation(async (_id, patch) => ({...makeRepo(1, "app"), batch_max: 4, ...patch}));
+ const v = await mount(edit);
+ try {
+  const select = v.host.querySelectorAll("select")[2] as HTMLSelectElement;
+  expect(select.labels?.[0]?.textContent).toContain("Batch build checks");
+  expect([...select.options].map(o => o.value)).toEqual(["off", "2", "3", "4", "6", "8"]);
+  expect(select.value).toBe("off");
+  await change(select, "4");
+  expect(edit).toHaveBeenLastCalledWith(1, {batch_verify: true, batch_max: 4});
+  expect(select.value).toBe("4");
+  await change(select, "off");
+  expect(edit).toHaveBeenLastCalledWith(1, {batch_verify: false});
+  expect(select.value).toBe("off");
+ } finally {await v.unmount();}
+});

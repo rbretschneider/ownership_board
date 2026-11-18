@@ -16,7 +16,7 @@ type codeRepoRepo struct {
 
 const repoColumns = `id, provider, full_name, url, description, color, default_branch, is_private, is_archived, synced_at, created_at, missing_since, treat_as_public,
 	require_spec_approval, require_design_approval, allow_agent_merge,
-	health_check_every, health_checked_through_ticket, health_checked_at, merge_sequence, health_checked_through_merge_sequence, deploy_mode, build_targets, overlap_ignore, review_blocking`
+	health_check_every, health_checked_through_ticket, health_checked_at, merge_sequence, health_checked_through_merge_sequence, deploy_mode, build_targets, overlap_ignore, review_blocking, batch_verify, batch_max`
 
 func (r codeRepoRepo) List(ctx context.Context) ([]domain.Repo, error) {
 	return r.query(ctx, `SELECT `+repoColumns+` FROM repos ORDER BY full_name COLLATE NOCASE, provider`)
@@ -56,11 +56,11 @@ func (r codeRepoRepo) Insert(ctx context.Context, repo *domain.Repo) error {
 	repo.BuildTargets = targets
 	result, err := r.q.ExecContext(ctx,
 		`INSERT INTO repos (provider, full_name, url, description, color, default_branch, is_private, is_archived, synced_at, created_at, missing_since, treat_as_public,
-			require_spec_approval, require_design_approval, allow_agent_merge, health_check_every, deploy_mode, build_targets, overlap_ignore, review_blocking)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			require_spec_approval, require_design_approval, allow_agent_merge, health_check_every, deploy_mode, build_targets, overlap_ignore, review_blocking, batch_verify, batch_max)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		string(repo.Provider), repo.FullName, repo.URL, repo.Description, repo.Color, repo.DefaultBranch,
 		boolToInt(repo.IsPrivate), boolToInt(repo.IsArchived), formatOptionalTime(repo.SyncedAt), formatTime(repo.CreatedAt), formatOptionalTime(repo.MissingSince), boolToInt(repo.TreatAsPublic),
-		boolToInt(repo.RequireSpecApproval), boolToInt(repo.RequireDesignApproval), boolToInt(repo.AllowAgentMerge), repo.HealthCheckEvery, repo.DeployMode, string(raw), string(ignored), reviewBlockingOrDefault(repo.ReviewBlocking))
+		boolToInt(repo.RequireSpecApproval), boolToInt(repo.RequireDesignApproval), boolToInt(repo.AllowAgentMerge), repo.HealthCheckEvery, repo.DeployMode, string(raw), string(ignored), reviewBlockingOrDefault(repo.ReviewBlocking), boolToInt(repo.BatchVerify), batchMaxOrDefault(repo.BatchMax))
 	if err != nil {
 		return conflictOr(err, "repo %s is already on the board", repo.FullName)
 	}
@@ -131,12 +131,12 @@ func (r codeRepoRepo) query(ctx context.Context, query string, args ...any) ([]d
 func scanRepo(row scanner) (domain.Repo, error) {
 	var repo domain.Repo
 	var provider, created, targets, ignored, blocking string
-	var isPrivate, isArchived, treatAsPublic, requireSpec, requireDesign, allowAgentMerge int
+	var isPrivate, isArchived, treatAsPublic, requireSpec, requireDesign, allowAgentMerge, batchVerify int
 	var synced, missing, checkedAt sql.NullString
 	var checkedThrough sql.NullInt64
 	err := row.Scan(&repo.ID, &provider, &repo.FullName, &repo.URL, &repo.Description, &repo.Color, &repo.DefaultBranch,
 		&isPrivate, &isArchived, &synced, &created, &missing, &treatAsPublic, &requireSpec, &requireDesign, &allowAgentMerge,
-		&repo.HealthCheckEvery, &checkedThrough, &checkedAt, &repo.MergeSequence, &repo.HealthCheckedThroughMergeSequence, &repo.DeployMode, &targets, &ignored, &blocking)
+		&repo.HealthCheckEvery, &checkedThrough, &checkedAt, &repo.MergeSequence, &repo.HealthCheckedThroughMergeSequence, &repo.DeployMode, &targets, &ignored, &blocking, &batchVerify, &repo.BatchMax)
 	if err != nil {
 		return domain.Repo{}, err
 	}
@@ -157,6 +157,7 @@ func scanRepo(row scanner) (domain.Repo, error) {
 	}
 	repo.Provider, repo.IsPrivate, repo.IsArchived = domain.Provider(provider), isPrivate == 1, isArchived == 1
 	repo.TreatAsPublic = treatAsPublic == 1
+	repo.BatchVerify = batchVerify == 1
 	repo.RequireSpecApproval, repo.RequireDesignApproval = requireSpec == 1, requireDesign == 1
 	repo.AllowAgentMerge = allowAgentMerge == 1
 	if checkedThrough.Valid {
@@ -213,4 +214,20 @@ func reviewBlockingOrDefault(level domain.ReviewBlocking) string {
 		return string(domain.DefaultReviewBlocking)
 	}
 	return string(level)
+}
+
+// SetBatching writes the batched verification settings. Update never touches them.
+func (r codeRepoRepo) SetBatching(ctx context.Context, repo domain.Repo) error {
+	_, err := r.q.ExecContext(ctx, `UPDATE repos SET batch_verify = ?, batch_max = ? WHERE id = ?`, boolToInt(repo.BatchVerify), batchMaxOrDefault(repo.BatchMax), repo.ID)
+	if err != nil {
+		return fmt.Errorf("sqlite: set batching of repo %d: %w", repo.ID, err)
+	}
+	return nil
+}
+
+func batchMaxOrDefault(n int) int {
+	if domain.ValidBatchSize(n) {
+		return n
+	}
+	return domain.DefaultBatchSize
 }

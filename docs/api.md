@@ -642,6 +642,17 @@ failure kind (at most 64 bytes). Conflicting repeated terminal reports return
 `409`; identical reports are idempotent. Superseded/cancelled jobs keep their
 terminal status when acknowledging completion.
 
+**Batches** (agent 1.1 or later, repos with `batch_verify` on). A claimed job
+may carry `batch: {members: [{id, ticket_id, sha, bundle_bytes,
+bundle_sha256}, ...]}`, 2–8 members in merge order. The job's own `id` is the
+batch id; its `sha` and bundle fields are the first member's. Fetch each
+member's bundle at `/jobs/{member id}/bundle` (allowed while the batch runs on
+this host), check out the first member and merge the rest in order. Report
+progress and the result under the batch id. A member that does not merge
+cleanly is left out and listed in the result's optional `excluded` (member job
+ids, never the first member); only a batch may report `excluded`. See
+[the amendment](amendments/batched-verification.md).
+
 Only a signed-in administrator can call
 `POST /api/v1/build-jobs/{id}/cancel`, with the normal same-origin requirement.
 Repeated cancellation succeeds; other terminal states return `409`. Agent tokens,

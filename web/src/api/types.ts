@@ -97,6 +97,10 @@ export interface Repo {
   deploy_mode: DeployMode;
   /** The lowest review finding priority that stops publication in this repo. */
   review_blocking: ReviewBlocking;
+  /** Batched build-host verification: queued commits checked together, split when red. Off by default. */
+  batch_verify?: boolean;
+  /** The most tickets in one verification batch (2–8). */
+  batch_max?: number;
   /** Merges between architecture health checks; 0 turns the check off. */
   health_check_every: number;
   /** The last merged ticket a health check covered; null before the first check. */
@@ -134,6 +138,8 @@ export type RepoEdit = Partial<{
   allow_agent_merge: boolean;
   deploy_mode: DeployMode;
   review_blocking: ReviewBlocking;
+  batch_verify: boolean;
+  batch_max: number;
   health_check_every: number;
 }>;
 
@@ -755,6 +761,8 @@ export interface BuildHostPairingCode { code:string; expires_at:string; public_b
 export interface BuildHostEvent { id:number; event_type:string; created_at:string; data:{before?:Record<string,string>;after?:Record<string,string>} }
 export interface RegisteredRunnerJob {
  id:string;ticket_id:number;repo:string;sha:string;preset:string;status:string;phase:string;detail:string;started_at:string|null;attempt:number;
+ /** The member tickets, lead first, when the assignment is a verification batch. */
+ batch?:number[];
 }
 export interface RegisteredRunnersSnapshot {
  observed_at:string;
