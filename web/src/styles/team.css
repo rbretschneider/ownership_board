@@ -235,18 +235,39 @@ button.team-card:focus-visible,
   height: 21px;
 }
 
-/* Waiting or idle: the worker stands still, dimmed. */
+/* Waiting, idle or on standby: the worker stands still, dimmed. */
 .team-runner__figure--waiting .miner,
 .team-runner__figure--idle .miner,
+.team-runner__figure--standby .miner,
 .team-runner__figure--waiting .miner *,
-.team-runner__figure--idle .miner * {
+.team-runner__figure--idle .miner *,
+.team-runner__figure--standby .miner * {
   animation-play-state: paused;
 }
 
 .team-runner__figure--waiting,
-.team-runner__figure--idle {
+.team-runner__figure--idle,
+.team-runner__figure--standby {
   opacity: 0.45;
   filter: grayscale(0.6);
+}
+
+/* Running workers whose slot is above the count in Settings: one compact row,
+   apart from the runners that can take work. */
+.team-standby {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--t-text-3);
+}
+
+.team-standby__item {
+  padding: 2px 8px;
+  border: 1px solid var(--t-border);
+  border-radius: 999px;
 }
 
 .team-runner__name {

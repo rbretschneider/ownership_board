@@ -285,3 +285,35 @@ it("refreshes from the board's event stream", async () => {
   expect(api.team).toHaveBeenCalledTimes(2);
   expect(runner("@worker/7/codex_1")).toBeNull();
 });
+
+const refreshWith = async (next: ReturnType<typeof teamFixture>) => {
+  api.team.mockResolvedValue(next);
+  await act(async () => {
+    stream.onEvent?.({ type: "ticket_moved", ticket_id: 12 } as unknown as BoardEvent);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  });
+};
+
+it("lists standby runners in one compact row, not as cards, and a free runner shows only its pool", async () => {
+  const next = teamFixture();
+  next.runners.push({ name: "@worker/7/codex_4", state: "standby", model: "", doing: "", ticket_id: null, last_seen: null, profile_version: "" });
+  // claude_2 holds nothing; its last reported model came from another family's escalation.
+  next.runners[1]!.model = "gpt-6-astra";
+  await refreshWith(next);
+  const row = host.querySelector('[aria-label="Runners on standby"]');
+  expect(row?.querySelector('[data-runner="@worker/7/codex_4"]')?.textContent).toBe("codex_4");
+  expect(host.querySelector('.team-runner[data-runner="@worker/7/codex_4"]')).toBeNull();
+  const idle = runner("@worker/7/claude_2");
+  expect(idle.textContent).toContain("Claude runner");
+  expect(idle.textContent).not.toContain("escalated");
+  expect(idle.textContent).not.toContain("gpt-6-astra");
+});
+
+it("says there is no daily cap on the manager card when the budget is off", async () => {
+  const next = teamFixture();
+  next.manager.budget_off = true;
+  await refreshWith(next);
+  const card = host.querySelector('[aria-label="Manager"]')!;
+  expect(card.textContent).toContain("no daily cap");
+  expect(card.textContent).not.toContain("of $10");
+});
