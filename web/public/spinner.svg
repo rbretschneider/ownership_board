@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512" role="img" aria-label="Loading">
+  <title>Loading</title>
+  <!--
+    The twin-piston emblem (brand-192.png, drawn at 512) cut into parts. Each
+    piston's metal is a tight outline along its own axis; the lightning above
+    its crown and the glow beside it fade together. A piston strokes down its
+    rod into the hub and back; its lightning fires at the top of the stroke,
+    centred on the crown. Left and right are half a cycle apart.
+  -->
+  <defs>
+    <image id="emblem" href="/brand-192.png" xlink:href="/brand-192.png" width="512" height="512"/>
+    <!-- Piston crown, skirt and rod, measured along the left piston's axis; the right is its mirror. -->
+    <path id="body-left" d="M195 387L141 297L106 318L45 218L63 194L154 139L191 130L254 235L209 262L256 352Z"/>
+    <path id="body-right" d="M317 387L371 297L406 318L467 218L449 194L358 139L321 130L258 235L303 262L256 352Z"/>
+    <clipPath id="hub"><circle cx="256" cy="397" r="104"/></clipPath>
+    <clipPath id="piston-left"><use href="#body-left" xlink:href="#body-left"/></clipPath>
+    <clipPath id="piston-right"><use href="#body-right" xlink:href="#body-right"/></clipPath>
+    <!-- Lightning: beyond each crown's top edge, across the whole half. -->
+    <clipPath id="bolt-left"><path d="M0 0H256V77L0 232Z"/></clipPath>
+    <clipPath id="bolt-right"><path d="M512 0H256V77L512 232Z"/></clipPath>
+    <!-- Glow beside each piston: the rest of the half, outside the metal, crown edge and hub. -->
+    <mask id="glow-left" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <rect width="256" height="300" fill="#fff"/>
+      <use href="#body-left" xlink:href="#body-left" fill="#000"/>
+      <path d="M0 0H256V77L0 232Z" fill="#000"/>
+      <circle cx="256" cy="397" r="104" fill="#000"/>
+    </mask>
+    <mask id="glow-right" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <rect x="256" width="256" height="300" fill="#fff"/>
+      <use href="#body-right" xlink:href="#body-right" fill="#000"/>
+      <path d="M512 0H256V77L512 232Z" fill="#000"/>
+      <circle cx="256" cy="397" r="104" fill="#000"/>
+    </mask>
+  </defs>
+  <style>
+    .left { animation: stroke-left 0.8s ease-in-out infinite; }
+    .right { animation: stroke-right 0.8s ease-in-out infinite; animation-delay: -0.4s; }
+    .glow { animation: glow 0.8s linear infinite; }
+    .right .glow { animation-delay: -0.4s; }
+    /* Each burst moves outward along its crown edge so its base sits over the pin hole, on the piston centre line. */
+    .bolt { transform-box: view-box; animation: fire-left 0.8s linear infinite; transform-origin: 112px 164px; }
+    .right .bolt { animation-name: fire-right; animation-delay: -0.4s; transform-origin: 400px 164px; }
+    /* Down the rod axis toward the hub centre, 20 px. */
+    @keyframes stroke-left { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(10px, 17px); } }
+    @keyframes stroke-right { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-10px, 17px); } }
+    @keyframes glow { 0%, 14% { opacity: 1; } 28%, 86% { opacity: 0; } 100% { opacity: 1; } }
+    @keyframes fire-left {
+      0% { opacity: 1; transform: translate(-19px, 11px) scale(1); }
+      8% { opacity: 0.55; transform: translate(-19px, 11px) scale(0.92); }
+      14% { opacity: 1; transform: translate(-19px, 11px) scale(0.98); }
+      28%, 86% { opacity: 0; transform: translate(-19px, 11px) scale(0.8); }
+      100% { opacity: 1; transform: translate(-19px, 11px) scale(1); }
+    }
+    @keyframes fire-right {
+      0% { opacity: 1; transform: translate(19px, 11px) scale(1); }
+      8% { opacity: 0.55; transform: translate(19px, 11px) scale(0.92); }
+      14% { opacity: 1; transform: translate(19px, 11px) scale(0.98); }
+      28%, 86% { opacity: 0; transform: translate(19px, 11px) scale(0.8); }
+      100% { opacity: 1; transform: translate(19px, 11px) scale(1); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .left, .right, .glow, .bolt { animation-duration: 2.4s; }
+    }
+  </style>
+  <g class="left">
+    <g class="glow"><use href="#emblem" xlink:href="#emblem" mask="url(#glow-left)"/></g>
+    <use href="#emblem" xlink:href="#emblem" clip-path="url(#piston-left)"/>
+    <g class="bolt"><use href="#emblem" xlink:href="#emblem" clip-path="url(#bolt-left)"/></g>
+  </g>
+  <g class="right">
+    <g class="glow"><use href="#emblem" xlink:href="#emblem" mask="url(#glow-right)"/></g>
+    <use href="#emblem" xlink:href="#emblem" clip-path="url(#piston-right)"/>
+    <g class="bolt"><use href="#emblem" xlink:href="#emblem" clip-path="url(#bolt-right)"/></g>
+  </g>
+  <use href="#emblem" xlink:href="#emblem" clip-path="url(#hub)"/>
+</svg>
