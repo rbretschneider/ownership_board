@@ -417,15 +417,10 @@ button.team-card:focus-visible,
   overflow-wrap: anywhere;
 }
 
-/* A busy slot's build matrix, in the busy (orange) tone. */
+/* A busy slot's working mark: the engine spinner in place of its dot. */
 .team-slot__matrix {
-  color: var(--t-amber);
-  grid-template-columns: repeat(3, 4px);
-}
-
-.team-slot__matrix i {
-  width: 4px;
-  height: 4px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .team-slot--idle .team-slot__job {

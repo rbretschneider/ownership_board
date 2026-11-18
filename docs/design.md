@@ -3,7 +3,7 @@ The lane tables and workflow examples below are historical.
 
 # Design
 
-ownership_board is a private task board where an AI agent is the primary worker
+Turbine (repo `ownership_board`) is a private task board where an AI agent is the primary worker
 and a human is the product owner. The board answers one question at a glance:
 **whose move is it?**
 

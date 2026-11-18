@@ -1064,17 +1064,47 @@
 }
 
 /* ---------- Status ---------- */
+/* The generic spinner draws the engine (EngineSpinner); the old ring spin
+   keyframes stay below for anything else that rotates. */
 .spinner {
-  display: inline-block;
+  display: inline-flex;
   flex-shrink: 0;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
+  align-items: center;
+  justify-content: center;
 }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* Turbine's working spinner (EngineSpinner): each piston strokes down its rod
+   into the hub and back; its lightning fires at the top of the stroke, moved
+   outward along the crown so it sits over the pin hole. Left and right are
+   half a cycle apart. Mirrors public/spinner.svg. */
+.engine-spinner { display: inline-block; flex-shrink: 0; vertical-align: middle; overflow: visible; }
+.engine-spinner__left { animation: engine-stroke-left 0.8s ease-in-out infinite; }
+.engine-spinner__right { animation: engine-stroke-right 0.8s ease-in-out infinite; animation-delay: -0.4s; }
+.engine-spinner__glow { animation: engine-glow 0.8s linear infinite; }
+.engine-spinner__right .engine-spinner__glow { animation-delay: -0.4s; }
+.engine-spinner__bolt { transform-box: view-box; transform-origin: 112px 164px; animation: engine-fire-left 0.8s linear infinite; }
+.engine-spinner__right .engine-spinner__bolt { transform-origin: 400px 164px; animation-name: engine-fire-right; animation-delay: -0.4s; }
+@keyframes engine-stroke-left { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(10px, 17px); } }
+@keyframes engine-stroke-right { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-10px, 17px); } }
+@keyframes engine-glow { 0%, 14% { opacity: 1; } 28%, 86% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes engine-fire-left {
+  0%, 100% { opacity: 1; transform: translate(-19px, 11px) scale(1); }
+  8% { opacity: 0.55; transform: translate(-19px, 11px) scale(0.92); }
+  14% { opacity: 1; transform: translate(-19px, 11px) scale(0.98); }
+  28%, 86% { opacity: 0; transform: translate(-19px, 11px) scale(0.8); }
+}
+@keyframes engine-fire-right {
+  0%, 100% { opacity: 1; transform: translate(19px, 11px) scale(1); }
+  8% { opacity: 0.55; transform: translate(19px, 11px) scale(0.92); }
+  14% { opacity: 1; transform: translate(19px, 11px) scale(0.98); }
+  28%, 86% { opacity: 0; transform: translate(19px, 11px) scale(0.8); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .engine-spinner__left, .engine-spinner__right, .engine-spinner__glow, .engine-spinner__bolt { animation-duration: 2.4s; }
 }
 
 .loading-state,

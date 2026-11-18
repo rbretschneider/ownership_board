@@ -1,6 +1,6 @@
-# ownership_board
+# Turbine
 
-A private, self-hosted task board where an AI agent does the work and you
+Turbine (repo `ownership_board`) is a private, self-hosted task board where an AI agent does the work and you
 own the decisions. It answers one question at a glance: **whose move is it?**
 
 You drop an idea or a bug in from your phone. An agent picks it up, acts as a

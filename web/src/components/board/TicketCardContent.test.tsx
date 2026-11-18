@@ -77,19 +77,19 @@ describe("card top row", () => {
  it("places autopilot on the top row and animates only active work", () => {
   let card = dom({stage: "ready", lane: "todo", lease: null});
   expect(card.querySelector(".card__top .card__activity-label")?.textContent).toBe("Autopilot");
-  expect(card.querySelector(".pixel-loader")).toBeNull();
+  expect(card.querySelector(".engine-spinner")).toBeNull();
   card = dom({stage: "build", lane: "in_progress", work_model: "mystery-model · adversarial review"});
   expect(card.querySelector(".card__top .card__activity-label")?.textContent).toBe("Reviewing");
-  expect(card.querySelectorAll(".pixel-loader i")).toHaveLength(9);
+  expect(card.querySelectorAll(".engine-spinner")).toHaveLength(1);
   expect(card.querySelector(".miner")).toBeNull();
   card = dom({stage: "build", work_model: "gpt-6.1-sol · build-server:queued:Windows x64 · awaiting Windows"});
-  expect(card.querySelector(".pixel-loader")).toBeNull();
+  expect(card.querySelector(".engine-spinner")).toBeNull();
   expect(card.querySelector(".card__activity")?.className).toContain("badge--build-target");
  });
  it("shows a Claude crab or a Codex terminal mining while a model builds", () => {
   let card = dom({stage: "build", lane: "in_progress", work_model: "opus · preparing workspace"});
   expect(card.querySelector(".card__activity .miner")?.getAttribute("data-family")).toBe("claude");
-  expect(card.querySelector(".pixel-loader")).toBeNull();
+  expect(card.querySelector(".engine-spinner")).toBeNull();
   card = dom({stage: "build", lane: "in_progress", work_model: "gpt-6.1-sol · adversarial review"});
   expect(card.querySelector(".card__activity .miner")?.getAttribute("data-family")).toBe("codex");
   // Not while the Windows build server has it, without a live lease, or outside build.
@@ -215,13 +215,13 @@ it("shows deployment waits only for agent deployment and hides completed worker 
 it("shows deployment, animation and the live holder while suppressing stale models", () => {
  const card = dom({stage: "deploying", lane: "merged", work_model: "model · adversarial review"});
  expect(card.querySelector(".card__activity-label")?.textContent).toBe("Deploying");
- expect(card.querySelector(".pixel-loader")).not.toBeNull();
+ expect(card.querySelector(".engine-spinner")).not.toBeNull();
  expect(card.querySelector(".card__lease-holder")?.textContent).toBe("runner-2");
  expect(card.querySelector(".card__model")).toBeNull();
  for (const lease of [null, {holder: "old-worker", expires_at: "2000-01-01"}]) {
   const idle = dom({stage: "deploying", lane: "merged", lease});
   expect(idle.querySelector(".card__activity-label")?.textContent).toBe("Deploying");
-  expect(idle.querySelector(".pixel-loader")).toBeNull();
+  expect(idle.querySelector(".engine-spinner")).toBeNull();
   expect(idle.querySelector(".card__lease-holder")).toBeNull();
  }
  const blocked = dom({stage: "done", lane: "merged", blocked_reason: "Deployment failed"});

@@ -26,9 +26,9 @@ export function TopBar(props: TopBarProps) {
   const { yourMoveCount, isYourMoveOnly } = props;
   return (
     <header className="topbar">
-      <a href="#/" className="brand" aria-label="ownership board home">
+      <a href="#/" className="brand" aria-label="turbine home">
         <BrandMark />
-        <span className="brand__name">ownership board</span>
+        <span className="brand__name">turbine</span>
       </a>
       <RepoCombobox
         className="topbar__repo"

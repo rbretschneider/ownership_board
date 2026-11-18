@@ -8,7 +8,7 @@ export function AuthLayout({ title, subtitle, children }: { title: string; subti
       <div className="auth__card">
         <div className="auth__brand">
           <BrandMark size={44} />
-          <span className="brand__name">ownership board</span>
+          <span className="brand__name">turbine</span>
         </div>
         <h1 className="auth__title">{title}</h1>
         <p className="auth__subtitle">{subtitle}</p>

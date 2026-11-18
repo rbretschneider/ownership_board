@@ -88,8 +88,8 @@ it("shows one card per build host with its slots in a row, a status dot each and
   const slots = [...card.querySelectorAll(".team-slot")];
   expect(slots).toHaveLength(2);
   expect(card.querySelector<HTMLElement>(".team-slots")?.style.gridTemplateColumns).toBe("repeat(2, minmax(0, 1fr))");
-  // A building slot shows the Board's build matrix instead of a dot.
-  expect(slots[0]!.querySelectorAll(".team-slot__matrix i")).toHaveLength(9);
+  // A building slot shows the engine spinner instead of a dot.
+  expect(slots[0]!.querySelectorAll(".team-slot__matrix .engine-spinner")).toHaveLength(1);
   expect(slots[0]!.querySelector(".team-dot")).toBeNull();
   expect(slots[0]!.querySelector(".team-slot__job")?.textContent).toBe("#12 · testing · 1h 36m");
   // Slot 1 builds codex_1's ticket, so it names the runner; #17 has no runner.
