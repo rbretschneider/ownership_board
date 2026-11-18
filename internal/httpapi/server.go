@@ -89,6 +89,7 @@ func (s *server) routes(rt *router) {
 	s.authRoutes(rt)
 	s.boardRoutes(rt)
 	s.repoRoutes(rt)
+	s.quarantineRoutes(rt)
 	s.connectionRoutes(rt)
 	s.traceRoutes(rt)
 	s.splitRoutes(rt)

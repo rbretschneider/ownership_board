@@ -47,7 +47,7 @@ func (s *BuildJobService) batchAssignment(ctx context.Context, r Repos, h domain
 		}
 		return b, s.assignBatch(ctx, r, b, h, now)
 	}
-	if lead == nil || lead.BatchSolo {
+	if lead == nil || lead.BatchSolo || lead.IsFlakeCheck() {
 		return nil, nil
 	}
 	b, err := s.assemble(ctx, r, *lead, now)
@@ -266,7 +266,7 @@ func (s *BuildJobService) batchProgress(ctx context.Context, r Repos, who Authen
 }
 
 // batchComplete is Complete for a batch assignment: it settles every member.
-func (s *BuildJobService) batchComplete(ctx context.Context, r Repos, host domain.BuildHost, b domain.BuildBatch, c domain.BuildJobCompletion, now time.Time) (domain.BuildJob, error) {
+func (s *BuildJobService) batchComplete(ctx context.Context, r Repos, host domain.BuildHost, b domain.BuildBatch, c domain.BuildJobCompletion, now time.Time, out *quarantineOutcome) (domain.BuildJob, error) {
 	if b.Attempt != c.Attempt || b.HostID == nil {
 		return b.Assignment(), domain.Conflictf("stale assignment")
 	}
@@ -356,7 +356,25 @@ func (s *BuildJobService) batchComplete(ctx context.Context, r Repos, host domai
 			return b.Assignment(), err
 		}
 	}
+	if b.Status == domain.BatchPassed || b.Status == domain.BatchFailed {
+		// The run's tests count for every commit it verified (quarantine_service.go).
+		repoID, err := repoIDOf(ctx, r, verifiedLead(b, verified))
+		if err != nil {
+			return b.Assignment(), err
+		}
+		run := runRecord{ID: b.ID, Repo: b.Repo, RepoID: repoID, Members: verified, Passed: b.Status == domain.BatchPassed, Result: c.Result}
+		if err = s.recordRun(ctx, r, run, now, out); err != nil {
+			return b.Assignment(), err
+		}
+	}
 	return b.Assignment(), r.BuildBatches().Save(ctx, b)
+}
+
+func verifiedLead(b domain.BuildBatch, verified []domain.BuildBatchMember) int64 {
+	if len(verified) > 0 {
+		return verified[0].TicketID
+	}
+	return b.Lead().TicketID
 }
 
 // passMember fans a batch pass out to one member: its own job passes and the

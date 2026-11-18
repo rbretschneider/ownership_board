@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/rbretschneider/ownership_board/internal/auth"
@@ -21,6 +22,8 @@ type BuildJobService struct {
 	bundles      BundleStorage
 	logger       *slog.Logger
 	StorageLimit int64
+	// Board files fix tickets for quarantined tests; nil files none.
+	Board *BoardService
 }
 
 func NewBuildJobService(store Store, clock Clock, bundles BundleStorage, logger *slog.Logger) *BuildJobService {
@@ -264,7 +267,7 @@ func (s *BuildJobService) Claim(ctx context.Context, who AuthenticatedBuildHost)
 		if active+batches >= h.MaxParallel {
 			return nil
 		}
-		j, e := hotFirstJob(ctx, r, h)
+		j, e := hotFirstJob(ctx, r, h, domain.SupportsFlakeChecks(h.AgentVersion))
 		if e != nil {
 			return e
 		}
@@ -276,21 +279,25 @@ func (s *BuildJobService) Claim(ctx context.Context, who AuthenticatedBuildHost)
 		if b != nil {
 			a := b.Assignment()
 			out = &a
+		} else if j != nil {
+			j.Status = "running"
+			j.HostID = &h.ID
+			j.StartedAt = &now
+			j.Phase = "claimed"
+			if e = r.BuildJobs().Assign(ctx, *j); e != nil {
+				return e
+			}
+			out = j
+		} else {
 			return nil
 		}
-		if j == nil {
-			return nil
-		}
-		j.Status = "running"
-		j.HostID = &h.ID
-		j.StartedAt = &now
-		j.Phase = "claimed"
-		if e = r.BuildJobs().Assign(ctx, *j); e != nil {
+		// The repo's quarantined tests travel with the assignment (quarantine_service.go).
+		repoID, e := repoIDOf(ctx, r, out.TicketID)
+		if e != nil {
 			return e
 		}
-		out = j
-
-		return nil
+		out.Quarantine, e = quarantinedNames(ctx, r, repoID, now)
+		return e
 	})
 	return out, e
 }
@@ -315,7 +322,11 @@ func (s *BuildJobService) OpenBundle(ctx context.Context, who AuthenticatedBuild
 		if !assignedTo(j, who) && !heldByBatchOf(ctx, r, j, who) {
 			return domain.Forbiddenf("job is not assigned to this host")
 		}
-		out, e = s.bundles.Open(id)
+		bundle := id
+		if j.BundleOf != "" {
+			bundle = j.BundleOf // a flake check reuses its commit job's bundle
+		}
+		out, e = s.bundles.Open(bundle)
 		return e
 	})
 	if e != nil && out != nil {
@@ -398,6 +409,7 @@ func (s *BuildJobService) Complete(ctx context.Context, who AuthenticatedBuildHo
 	if e := c.Validate(); e != nil {
 		return j, e
 	}
+	out := &quarantineOutcome{}
 	e := s.store.Write(ctx, func(r Repos) error {
 		host, e := approvedJobHost(ctx, r, who)
 		if e != nil {
@@ -410,7 +422,7 @@ func (s *BuildJobService) Complete(ctx context.Context, who AuthenticatedBuildHo
 		if b, ok, e := isBatch(ctx, r, id); e != nil {
 			return e
 		} else if ok {
-			j, e = s.batchComplete(ctx, r, host, b, c, now)
+			j, e = s.batchComplete(ctx, r, host, b, c, now, out)
 			return e
 		}
 		if reportsExcluded(c.Result) {
@@ -450,13 +462,27 @@ func (s *BuildJobService) Complete(ctx context.Context, who AuthenticatedBuildHo
 		if e = r.BuildJobs().Save(ctx, j); e != nil {
 			return e
 		}
+		if domain.JobResultBlamesHost(j.Result) {
+			return nil
+		}
 		// The board is the one record of the commit's verdict: write it in the
 		// same transaction as the job's terminal status, so the two never disagree.
-		if v, ok := domain.VerdictForJob(j, fmt.Sprintf("build-host/%d", host.ID), now); ok {
-			return r.Verdicts().Record(ctx, v)
+		// A flake check never gives one: the commit's own job already did.
+		if v, ok := domain.VerdictForJob(j, fmt.Sprintf("build-host/%d", host.ID), now); ok && !j.IsFlakeCheck() {
+			if e = r.Verdicts().Record(ctx, v); e != nil {
+				return e
+			}
 		}
-		return nil
+		repoID, e := repoIDOf(ctx, r, j.TicketID)
+		if e != nil {
+			return e
+		}
+		return s.recordRun(ctx, r, runRecord{ID: j.ID, Repo: j.Repo, RepoID: repoID, Passed: j.Status == "passed", Result: j.Result,
+			Only: j.OnlyTests, Job: &j, Members: []domain.BuildBatchMember{{JobID: j.ID, TicketID: j.TicketID, SHA: j.SHA}}}, now, out)
 	})
+	if e == nil {
+		s.publish(ctx, out)
+	}
 	return j, e
 }
 func (s *BuildJobService) Cancel(ctx context.Context, isOwner bool, id string) (domain.BuildJob, error) {
@@ -566,10 +592,18 @@ func noVerdict(result []byte) bool { return domain.JobResultBlamesHost(result) }
 
 // hotFirstJob picks the job a host claims next: the oldest queued job of a hot ticket
 // (HotBuildAttempts or more passes at the code), otherwise the oldest queued job.
-func hotFirstJob(ctx context.Context, r Repos, h domain.BuildHost) (*domain.BuildJob, error) {
+func hotFirstJob(ctx context.Context, r Repos, h domain.BuildHost, checks bool) (*domain.BuildJob, error) {
 	jobs, e := r.BuildJobs().QueuedForHost(ctx, h, 40)
-	if e != nil || len(jobs) == 0 {
+	if e != nil {
 		return nil, e
+	}
+	// An agent before FlakeCheckAgentVersion would run a flake check's whole
+	// suite, not its few tests: it gets none.
+	if !checks {
+		jobs = slices.DeleteFunc(jobs, func(j domain.BuildJob) bool { return j.IsFlakeCheck() })
+	}
+	if len(jobs) == 0 {
+		return nil, nil
 	}
 	seen := map[int64]bool{}
 	for i := range jobs {

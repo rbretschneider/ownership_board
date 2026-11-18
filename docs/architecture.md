@@ -108,6 +108,27 @@ design: [amendment](amendments/batched-verification.md).
   record what a batch did. The runners strip shows a batch's lead ticket plus
   a count.
 
+## Flaky-test quarantine
+
+Full design: [amendment](amendments/flaky-quarantine.md).
+
+- `BuildJobService.Complete` and `batchComplete` hand every run with a
+  verdict to `recordRun`
+  ([quarantine_service.go](../internal/app/quarantine_service.go)), in the same
+  transaction. It records the failed tests (`domain.FailedTests` reads them
+  from the command logs), queues a flake check for a failure another ticket
+  shares, quarantines a test that then passes on a commit it failed, and counts
+  probation passes.
+- A flake check is a `build_jobs` row of kind `flake_check` with `only_tests`
+  and `bundle_of`. Every commit-job query (`CommitState`, `Open`,
+  `RecentForTicket`, batch candidates, the ticket-claim filter) keeps to
+  `kind='commit'`, so a check never gives a verdict, never supersedes the
+  commit's job and never holds back the ticket's worker.
+- `Claim` adds the repo's active quarantine to every assignment; the agent
+  writes it beside the bundle. Fix tickets are filed by the board itself
+  (`domain.NewBoardFiledAutonomousTicket`) through
+  `BoardService.insertAutonomousInTx`, and their events publish after commit.
+
 ## Health check after PR #9..#54 — selected changes
 
 Review date: 2026-11-08. The exact selected PRs are **#9, #10, #46, #48,

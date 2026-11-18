@@ -937,3 +937,21 @@ export interface RunnerName {
   display_name: string;
   assigned_at: string | null;
 }
+
+/** A test on a repo's flaky-test quarantine list (GET /repos/{id}/quarantine). */
+export interface QuarantinedTest {
+  repo_id: number;
+  test: string;
+  /** active: skipped by runs; probation: its fix merged, it runs again; released: off the list. */
+  status: "active" | "probation" | "released";
+  /** detected by the board, or seeded by a person or delegate (added_by). */
+  source: "detected" | "seeded";
+  added_by: string;
+  reason: string;
+  evidence: { tickets?: number[] | null; failures?: number; passed_on?: string };
+  fix_ticket_id: number | null;
+  passes: number;
+  created_at: string;
+  updated_at: string;
+  released_at: string | null;
+}

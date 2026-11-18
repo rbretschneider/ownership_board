@@ -1,5 +1,6 @@
 import type { HttpClient } from "./httpClient";
 import type {
+  QuarantinedTest,
   BuildHost, BuildHostEdit, BuildHostEvent, BuildHostPairingCode, RegisteredRunnersSnapshot,
   AccountUsage,
   Answer,
@@ -98,6 +99,8 @@ export interface BoardApi {
   repos(): Promise<Repo[]>;
   addRepo(input: ManualRepoInput): Promise<Repo>;
   editRepo(id: number, input: RepoEdit): Promise<Repo>;
+  quarantine(repoId: number): Promise<{ tests: QuarantinedTest[] }>;
+  releaseQuarantine(repoId: number, test: string): Promise<QuarantinedTest>;
   connections(): Promise<Connection[]>;
   syncConnections(): Promise<Connection[]>;
   startGitHubDevice(): Promise<DeviceFlow>;
@@ -166,6 +169,8 @@ export function createBoardApi(http: HttpClient): BoardApi {
     repos: () => http.request("GET", "/repos"),
     addRepo: (input) => http.request("POST", "/repos", input),
     editRepo: (id, input) => http.request("PATCH", `/repos/${id}`, input),
+    quarantine: (repoId) => http.request("GET", `/repos/${repoId}/quarantine`),
+    releaseQuarantine: (repoId, test) => http.request("POST", `/repos/${repoId}/quarantine/release`, { test }),
     connections: () => http.request("GET", "/connections"),
     syncConnections: () => http.request("POST", "/connections/sync"),
     startGitHubDevice: () => http.request("POST", "/connections/github/device"),

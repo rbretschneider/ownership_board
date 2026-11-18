@@ -31,8 +31,15 @@ import uuid
 from nacl.signing import SigningKey
 
 # 1.1: merges batch members (the board hands batches only to 1.1 or later).
-VERSION = '1.1'
+# 1.2: writes the quarantine and only-tests files (flake checks go to 1.2 or later).
+VERSION = '1.2'
 BATCH_LIMIT = 8
+TEST_LIST_LIMIT = 200
+TEST_NAME_BYTES = 300
+# Test lists a job carries, the file each is written to beside the bundle, and
+# the variable naming that file for the repository's verification script.
+TEST_LISTS = (('quarantine','ownership-quarantine.txt','OWNERSHIP_QUARANTINE_FILE'),
+              ('only_tests','ownership-only-tests.txt','OWNERSHIP_ONLY_TESTS_FILE'))
 API = '/api/v1/build-host'
 GIB = 1024 ** 3
 BUNDLE_LIMIT = 100 * 1024 ** 2
@@ -929,9 +936,20 @@ def validate_job(job, host_id):
         valid = False
     if valid and 'batch' in job:
         valid = valid_batch(job)
+    if valid:
+        valid = job.get('kind') in (None,'flake_check') and all(valid_test_list(job.get(key)) for key,_,_ in TEST_LISTS)
     if not valid:
         raise ValueError('malformed or foreign build assignment')
     return job
+
+
+def valid_test_list(names):
+    """An optional list of exact test names: each one line of 1 to TEST_NAME_BYTES bytes."""
+    if names is None:
+        return True
+    return (isinstance(names,list) and len(names) <= TEST_LIST_LIMIT and
+            all(isinstance(n,str) and 0 < len(n.encode()) <= TEST_NAME_BYTES and n == n.strip() and
+                not any(c in n for c in '\r\n\x00') for n in names))
 
 
 def valid_batch(job):
@@ -1170,6 +1188,7 @@ class JobRunner:
         batch = self.job.get('batch')
         # A batch's commits are fetched by their own job ids; the first is the job's commit.
         bundle = self.download_bundle(batch['members'][0] if batch else self.job)
+        self.write_test_lists()
         for name in CREATED_CACHE_VARIABLES:
             private_dir(self.env[name])
         hooks = private_dir(self.folder/'empty-hooks')
@@ -1252,6 +1271,25 @@ class JobRunner:
         actual = self.command('verify checkout SHA',git+['rev-parse','HEAD'],timeout=30,infrastructure=True).strip()
         if actual != sha:
             raise InfrastructureError('checkout SHA mismatch')
+
+    def write_test_lists(self):
+        """Writes the job's test lists beside the bundle, one exact name per line, and
+        names each file in the workload environment. The quarantine file is always
+        written (empty when nothing is quarantined); the only-tests file only for a
+        flake check, which runs just those tests. A script that ignores both runs
+        exactly as before."""
+        for key,name,variable in TEST_LISTS:
+            names = self.job.get(key)
+            self.env.pop(variable,None)
+            if names is None and key != 'quarantine':
+                continue
+            path = self.folder/name
+            atomic_private(path,''.join(n+'\n' for n in names or []).encode())
+            self.env[variable] = str(path)
+        if self.job.get('kind'):
+            self.env['OWNERSHIP_JOB_KIND'] = self.job['kind']
+        else:
+            self.env.pop('OWNERSHIP_JOB_KIND',None)
 
     def merge_members(self,members):
         """Merges each further batch commit into the checkout, in order. A commit that

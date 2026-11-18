@@ -20,6 +20,7 @@ type Store interface {
 type Repos interface {
 	BuildJobs() BuildJobRepository
 	BuildBatches() BuildBatchRepository
+	TestQuarantine() TestQuarantineRepository
 	Verdicts() VerdictRepository
 	RunnerNames() RunnerNameRepository
 	ManagerUsage() ManagerUsageRepository
