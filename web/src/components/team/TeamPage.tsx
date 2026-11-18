@@ -9,7 +9,7 @@ import { REFETCH_DEBOUNCE_MS } from "../../lib/constants";
 import { relativeTime } from "../../lib/relativeTime";
 import { labelRunner, nameRunnersInText, type RunnerDirectory } from "../../lib/runnerNames";
 import {
-  activityLines, formatTokens, formatUSD, historyEntry, humanizeDoing, linkPath, managerTargets, runnerEngine, RUNNER_STATES,
+  activityLines, formatTokens, formatUSD, historyEntry, humanizeDoing, linkPath, managerTargets, runnerEngine, runnerShortName, RUNNER_STATES,
   ticketActivity, type HistoryEntry, type LinkLine, type ManagerTarget,
 } from "../../lib/team";
 import { ErrorState } from "../common/ErrorState";
@@ -61,6 +61,7 @@ export function TeamPage() {
     }
     return out;
   }, [team]);
+  const standby = useMemo(() => (team?.runners ?? []).filter((r) => r.state === "standby"), [team]);
   const heldIds = useMemo(() => new Set([...ticketsByRunner.values()].flat().map((t) => t.id)), [ticketsByRunner]);
   const highlightedTickets = new Set((highlighted === null ? [] : ticketsByRunner.get(highlighted) ?? []).map((t) => t.id));
 
@@ -222,7 +223,7 @@ export function TeamPage() {
             <h2 className="team-heading">Runners</h2>
             <div className="team-runners">
               {team.runners.length === 0 && <p className="team-empty">No runners seen in the last few hours.</p>}
-              {team.runners.map((runner) => {
+              {team.runners.filter((runner) => runner.state !== "standby").map((runner) => {
                 const own = ticketsByRunner.get(runner.name) ?? [];
                 return (
                   <TeamBranch key={runner.name}>
@@ -238,6 +239,14 @@ export function TeamPage() {
                 );
               })}
             </div>
+            {standby.length > 0 && (
+              <p className="team-standby" aria-label="Runners on standby">
+                <span>On standby (above the runner counts in Settings, so they take no work):</span>
+                {standby.map((runner) => (
+                  <span key={runner.name} className="team-standby__item" data-runner={runner.name} title={runner.name}>{runnerShortName(runner.name)}</span>
+                ))}
+              </p>
+            )}
           </section>
           <section className="team-section" aria-label="Build hosts">
             <h2 className="team-heading">Build hosts</h2>

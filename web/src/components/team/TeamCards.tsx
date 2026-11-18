@@ -88,7 +88,7 @@ export function ManagerCard({ manager, onOpen }: ManagerCardProps) {
       <span className="team-stats">
         <span className="team-stat">
           <span className="team-stat__label">Spend today</span>
-          <span className="team-stat__value">{formatUSD(manager.today.cost_usd)} <span className="team-stat__of">of ${manager.daily_budget_usd}</span></span>
+          <span className="team-stat__value">{formatUSD(manager.today.cost_usd)} <span className="team-stat__of">{manager.budget_off ? "no daily cap" : `of $${manager.daily_budget_usd}`}</span></span>
         </span>
         <span className="team-stat">
           <span className="team-stat__label">Open flags</span>
@@ -144,7 +144,10 @@ export function RunnerCard({ runner, isActive, onEnter, onLeave, onOpen }: Runne
   const state = RUNNER_STATES[runner.state];
   const name = useRunnerLabel(runner.name, runner);
   const ticket = runner.ticket_id === null ? "none" : `#${runner.ticket_id}`;
-  const chip = runnerModelChip(runner);
+  // The model is what it last reported for a ticket. Without a ticket that is
+  // history, not what it runs now, so a free runner shows only its pool.
+  const current = runner.ticket_id === null ? { ...runner, model: "" } : runner;
+  const chip = runnerModelChip(current);
   return (
     <button
       type="button"
@@ -164,7 +167,7 @@ export function RunnerCard({ runner, isActive, onEnter, onLeave, onOpen }: Runne
         </span>
         <span className={`team-pill team-pill--${state.tone}`}>{state.label}</span>
       </span>
-      <span className="team-faint">{runnerPool(runner)}</span>
+      <span className="team-faint">{runnerPool(current)}</span>
       <span className="team-runner__doing">{humanizeDoing(runner.doing)}</span>
       {(chip !== undefined || runner.profile_version !== "") && (
         <span className="team-chips">
