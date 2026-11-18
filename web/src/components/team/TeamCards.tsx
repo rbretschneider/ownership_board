@@ -12,6 +12,7 @@ import {
 import { MiningSprite } from "../board/MiningSprite";
 import { StageStepper } from "../board/StageStepper";
 import { RankChevrons, UsageBadge } from "../board/UsageBadge";
+import { EngineSpinner } from "../common/EngineSpinner";
 
 /** Props for {@link CIRunnersCard}. */
 export interface CIRunnersCardProps {
@@ -237,9 +238,9 @@ export function StatusDot({ status }: { status: WorkStatus }) {
   return <span className={`team-dot team-dot--${status.tone}`} aria-hidden="true" />;
 }
 
-/** The Board's little 3×3 build matrix, blinking in a busy slot in place of its dot. */
+/** A busy slot's working mark in place of its dot: the engine spinner. */
 function BuildMatrix() {
-  return <span className="pixel-loader team-slot__matrix" aria-hidden="true">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</span>;
+  return <span className="team-slot__matrix"><EngineSpinner size={16} /></span>;
 }
 
 /** Props for {@link BuildHostCard}. */

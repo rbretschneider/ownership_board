@@ -22,7 +22,7 @@ it("turns expired work yellow and hides its model without a board event", async 
   expect(host.querySelector(".card__model")?.textContent).toContain("gpt-6.1-sol");
   await act(async () => { vi.advanceTimersByTime(1020); });
   expect(host.querySelector(".card--idle")).not.toBeNull();
-  expect(host.querySelector(".pixel-loader")).toBeNull();
+  expect(host.querySelector(".engine-spinner")).toBeNull();
   expect(host.querySelector(".card__model")).toBeNull();
   expect(host.querySelector(".card__activity")?.textContent).toBe("Queued");
  } finally {
@@ -71,10 +71,10 @@ it("stops deployment animation and hides the holder when the lease expires", asy
   await act(async () => root.render(<ApiContext.Provider value={{} as BoardApi}><ToastContext.Provider value={{error: vi.fn(), success: vi.fn(), info: vi.fn()}}>
    <TicketCard ticket={{...prTicket, lane: "merged", stage: "deploying", lease: {holder: "release-worker", expires_at: "2026-11-02T15:00:01Z"}}} stages={[]} repo={undefined} isDragSource={false} onPointerDown={() => {}} shouldIgnoreClick={() => false} />
   </ToastContext.Provider></ApiContext.Provider>));
-  expect(host.querySelector(".pixel-loader")).not.toBeNull();
+  expect(host.querySelector(".engine-spinner")).not.toBeNull();
   expect(host.querySelector(".card__lease-holder")?.textContent).toBe("release-worker");
   await act(async () => vi.advanceTimersByTime(1020));
-  expect(host.querySelector(".pixel-loader")).toBeNull();
+  expect(host.querySelector(".engine-spinner")).toBeNull();
   expect(host.querySelector(".card__lease-holder")).toBeNull();
   expect(host.querySelector(".card__activity-label")?.textContent).toBe("Deploying");
  } finally {await act(async () => root.unmount()); vi.useRealTimers();}

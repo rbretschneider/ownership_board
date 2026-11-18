@@ -27,6 +27,7 @@ import { StageChip } from "../common/StageChip";
 import { RepoChip } from "../repos/RepoChip";
 import { StageStepper } from "./StageStepper";
 import { RankChevrons, UsageBadge } from "./UsageBadge";
+import { EngineSpinner } from "../common/EngineSpinner";
 
 /**
  * The visual body of a card, shared by the card and its drag ghost.
@@ -109,7 +110,7 @@ export function TicketCardContent({ ticket, stages, repo, now }: { ticket: Ticke
                   : isWaiting ? <Hourglass size={12} aria-hidden="true" />
                   : ticket.is_autonomous && <Zap className="autopilot-spark" size={12} aria-hidden="true" />}
                 {miner ? <MiningSprite family={miner} />
-                  : (pr ? pr.tone === "running" : activity.working || activeBuild) && <span className="pixel-loader" aria-hidden="true">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</span>}
+                  : (pr ? pr.tone === "running" : activity.working || activeBuild) && <EngineSpinner size={14} />}
                 <span className="card__activity-label">{label}</span>
                 {!pr && activity.buildServer && activity.target && <span className="card__activity-target">{shortTarget(activity.target)}</span>}
               </span>
