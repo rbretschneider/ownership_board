@@ -74,6 +74,12 @@ export function TeamPage() {
     return out;
   }, [team, ticketsByRunner]);
   const slotTicketIds = useMemo(() => new Set((team?.build_hosts ?? []).flatMap((h) => h.running.map((j) => j.ticket_id))), [team]);
+  // Released tickets queued for a build slot: no runner holds them, and any free
+  // runner picks one up when its verdict returns.
+  const queuedTickets = useMemo(
+    () => (team?.tickets ?? []).filter((t) => t.holder === "" && !heldIds.has(t.id) && !slotTicketIds.has(t.id)),
+    [team, heldIds, slotTicketIds],
+  );
   const [pairHover, setPairHover] = useState<number | null>(null);
   const [pairPinned, setPairPinned] = useState<number | null>(null);
   const togglePair = useCallback((id: number) => setPairPinned((current) => (current === id ? null : id)), []);
@@ -247,6 +253,12 @@ export function TeamPage() {
                   ))}
                 </div>
               )}
+            {queuedTickets.length > 0 && (
+              <div className="team-queued" aria-label="Waiting for a build slot">
+                <h3 className="team-subheading">Waiting for a build slot</h3>
+                {queuedTickets.map((ticket) => ticketCard(ticket))}
+              </div>
+            )}
           </section>
           {hasCISample && team.ci_runners !== undefined && <CIRunnersCard sample={team.ci_runners} now={now} />}
           {panel !== null && <TeamPanel content={panel} onClose={close} />}

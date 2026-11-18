@@ -16,6 +16,9 @@ type BoardService struct {
 	clock    Clock
 	writer   ticketWriter
 	activity managerActivity
+	// Presence records which workers called the board recently, so the Team
+	// view lists idle and standby workers that have not reported work yet.
+	Presence *WorkerPresence
 }
 
 // MoveInput is a request to put a ticket in a lane.

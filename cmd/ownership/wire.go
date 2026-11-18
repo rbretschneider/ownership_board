@@ -65,8 +65,11 @@ func build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*applic
 		db.Close()
 		return nil, err
 	}
+	presence := app.NewWorkerPresence()
+	board := app.NewBoardService(db, systemClock, sink)
+	board.Presence = presence
 	services := mcp.Services{
-		Board:    app.NewBoardService(db, systemClock, sink),
+		Board:    board,
 		Agents:   app.NewAgentService(db, systemClock, sink, hub),
 		Repos:    app.NewRepoService(db, systemClock, catalog, logger),
 		Verdicts: app.NewVerdictService(db, systemClock),
@@ -88,6 +91,7 @@ func build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*applic
 		return nil, err
 	}
 	handler := httpapi.New(httpapi.Deps{
+		Presence:      presence,
 		UsageFile:     filepath.Join(cfg.DataDir, "account_usage.json"),
 		RunnersFile:   filepath.Join(cfg.DataDir, "windows_runners.json"),
 		PRStatusFile:  filepath.Join(cfg.DataDir, "pr_status.json"),

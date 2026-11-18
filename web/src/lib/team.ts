@@ -55,6 +55,8 @@ export const RUNNER_STATES: Record<RunnerState, { label: string; tone: "amber" |
   working: { label: "Working", tone: "amber" },
   waiting: { label: "Waiting", tone: "grey" },
   idle: { label: "Idle", tone: "grey" },
+  // Running, but its slot is above the pool's size in Settings, so it takes no tickets.
+  standby: { label: "Standby", tone: "grey" },
 };
 
 /** The role a ticket's stage plays in the team: who works it now. */

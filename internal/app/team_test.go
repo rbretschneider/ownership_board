@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -44,7 +45,8 @@ func TestTeamRosterDerivesRunnersFromLeasesAndWorkModels(t *testing.T) {
 	}{
 		{"@worker/7/codex_1", app.RunnerWorking, 1, "gpt-test"},
 		{"@worker/7/claude_1", app.RunnerWaiting, 3, "sonnet-test"},
-		{"@worker/7/claude_2", app.RunnerWaiting, 2, "opus-test"},
+		// #2 was released while it awaits Windows: its last worker is free, not waiting on it.
+		{"@worker/7/claude_2", app.RunnerIdle, 0, "opus-test"},
 		{"@worker/7/codex_2", app.RunnerIdle, 0, "gpt-test"},
 	}
 	if len(runners) != len(want) {
@@ -63,8 +65,73 @@ func TestTeamRosterDerivesRunnersFromLeasesAndWorkModels(t *testing.T) {
 	for _, ticket := range inFlight {
 		ids[ticket.Ticket.ID] = ticket.Holder
 	}
-	if len(ids) != 3 || ids[1] != "@worker/7/codex_1" || ids[2] != "@worker/7/claude_2" || ids[3] != "@worker/7/claude_1" {
+	if len(ids) != 3 || ids[1] != "@worker/7/codex_1" || ids[2] != "" || ids[3] != "@worker/7/claude_1" {
 		t.Fatalf("in flight = %v", ids)
+	}
+}
+
+func TestTeamRosterListsPresentWorkersAndStandbySlots(t *testing.T) {
+	// Workers that never reported work still appear once they call the board,
+	// and a slot above its pool's size in Settings is on standby.
+	now := time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
+	awaiting := []app.TicketSummary{
+		{Ticket: domain.Ticket{ID: 9, Lane: domain.LaneInProgress, Stage: domain.StageBuild, WorkModel: "sonnet · build-server:queued:Windows x64 · awaiting Windows"}},
+	}
+	presence := app.RosterPresence{
+		Seen: map[string]time.Time{
+			"@worker/7/codex_1":  now.Add(-20 * time.Second),
+			"@worker/7/codex_2":  now.Add(-40 * time.Second),
+			"@worker/7/codex_4":  now.Add(-10 * time.Second),
+			"@worker/7/claude_1": now.Add(-time.Hour), // stopped: outside the presence window
+			"@worker/7/helper":   now.Add(-5 * time.Second),
+		},
+		Pools: map[string]int{"codex": 3, "claude": 1},
+	}
+	runners, inFlight := app.TeamRosterWith(awaiting, nil, now, presence)
+	got := map[string]app.RunnerState{}
+	for _, runner := range runners {
+		got[runner.Name] = runner.State
+	}
+	want := map[string]app.RunnerState{
+		"@worker/7/codex_1": app.RunnerIdle,
+		"@worker/7/codex_2": app.RunnerIdle,
+		"@worker/7/codex_4": app.RunnerStandby,
+		"@worker/7/helper":  app.RunnerIdle,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("runners = %v, want %v", got, want)
+	}
+	for name, state := range want {
+		if got[name] != state {
+			t.Errorf("%s = %q, want %q", name, got[name], state)
+		}
+	}
+	if runners[len(runners)-1].Name != "@worker/7/codex_4" {
+		t.Errorf("standby runners sort last: %+v", runners)
+	}
+	if len(inFlight) != 1 || inFlight[0].Ticket.ID != 9 || inFlight[0].Holder != "" {
+		t.Fatalf("a ticket awaiting Windows stays in flight with no holder: %+v", inFlight)
+	}
+}
+
+func TestWorkerPresenceKeepsTheLatestCallAndStaysBounded(t *testing.T) {
+	presence := app.NewWorkerPresence()
+	at := time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
+	presence.Mark("@worker/7/codex_1", at)
+	presence.Mark("@worker/7/codex_1", at.Add(-time.Minute))
+	if got := presence.Snapshot()["@worker/7/codex_1"]; !got.Equal(at) {
+		t.Fatalf("an older call replaced the latest: %v", got)
+	}
+	for i := 0; i < 300; i++ {
+		presence.Mark(fmt.Sprintf("@worker/7/w_%d", i), at.Add(time.Duration(i)*time.Second))
+	}
+	if n := len(presence.Snapshot()); n > 256 {
+		t.Fatalf("registry grew to %d entries", n)
+	}
+	var none *app.WorkerPresence
+	none.Mark("@worker/7/codex_1", at)
+	if len(none.Snapshot()) != 0 {
+		t.Fatal("a nil registry recorded a call")
 	}
 }
 

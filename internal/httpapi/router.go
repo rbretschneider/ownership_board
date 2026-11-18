@@ -10,6 +10,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/rbretschneider/ownership_board/internal/app"
 	"github.com/rbretschneider/ownership_board/internal/auth"
@@ -51,6 +52,8 @@ type router struct {
 	network network
 	hosts   *app.BuildHostService
 	writes  *writeLimiter
+	// presence notes each authenticated worker identity's latest call.
+	presence *app.WorkerPresence
 }
 
 func (rt *router) public(pattern string, fn handlerFunc)    { rt.handle(pattern, accessPublic, fn) }
@@ -98,6 +101,8 @@ func (rt *router) identify(r *http.Request) (caller, error) {
 			// autonomous-filing grant or rotate its per-token filing budget.
 			actor.IsDelegate = false
 			actor.IsManager = false
+			// Standby workers only poll Settings; this is how the Team view sees them.
+			rt.presence.Mark(actor.Name, time.Now())
 		}
 		return caller{actor: actor, isBearer: true}, nil
 	}
