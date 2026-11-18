@@ -115,7 +115,27 @@ type BuildJob struct {
 	BatchSolo bool `json:"-"`
 	// Batch is set only on a batch's host assignment.
 	Batch *BuildJobBatch `json:"batch,omitempty"`
+	// Kind is empty for a commit's own job and "flake_check" for a re-run of
+	// some of its tests, which never gives a verdict.
+	Kind string `json:"kind,omitempty"`
+	// OnlyTests, on a flake check, are the only tests to run.
+	OnlyTests []string `json:"only_tests,omitempty"`
+	// BundleOf names the job whose bundle a flake check reuses.
+	BundleOf string `json:"-"`
+	// Quarantine, on a host assignment, is the repo's quarantined tests.
+	Quarantine []string `json:"quarantine,omitempty"`
 }
+
+// IsFlakeCheck reports whether the job only re-runs some tests of a commit.
+func (j BuildJob) IsFlakeCheck() bool { return j.Kind == JobKindFlakeCheck }
+
+// FlakeCheckID derives a flake check's id from the commit job and its tests.
+func FlakeCheckID(of BuildJob, tests []string) string {
+	raw, _ := json.Marshal([]any{"build-job-flake-v1", of.Repo, of.SHA, of.Preset, of.Target, tests})
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
 type BuildJobProgress struct {
 	Attempt int    `json:"attempt"`
 	Phase   string `json:"phase"`

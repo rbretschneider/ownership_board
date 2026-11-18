@@ -36,6 +36,8 @@ type BuildJobRepository interface {
 	SetBatch(ctx context.Context, jobID, batchID string, solo bool) error
 	// BatchCandidates returns free queued jobs that can share a batch with lead, oldest first.
 	BatchCandidates(ctx context.Context, lead domain.BuildJob, limit int) ([]domain.BuildJob, error)
+	// FailedVerdicts returns commit jobs that failed with a result, oldest first.
+	FailedVerdicts(ctx context.Context) ([]domain.BuildJob, error)
 }
 type BuildJobBundle struct {
 	ID     string
@@ -75,4 +77,19 @@ type BuildBatchRepository interface {
 	AssignmentCount(context.Context, int64) (int, error)
 	// ForTicket returns the batches that held any of the ticket's jobs, newest first.
 	ForTicket(ctx context.Context, ticketID int64, limit int) ([]domain.BuildBatch, error)
+}
+
+// TestQuarantineRepository persists failed-test observations and the repos'
+// quarantine lists.
+type TestQuarantineRepository interface {
+	RecordFailures(context.Context, []domain.TestFailure) error
+	// FailuresOf returns a test's failures in a repo since a time, oldest first.
+	FailuresOf(ctx context.Context, repo, test string, since time.Time) ([]domain.TestFailure, error)
+	// FailuresAt returns every failure recorded on a commit.
+	FailuresAt(ctx context.Context, repo, sha string) ([]domain.TestFailure, error)
+	CountFailures(context.Context) (int, error)
+	Get(ctx context.Context, repoID int64, test string) (domain.QuarantinedTest, error)
+	// List returns a repo's entries, released ones last.
+	List(ctx context.Context, repoID int64) ([]domain.QuarantinedTest, error)
+	Save(context.Context, domain.QuarantinedTest) error
 }

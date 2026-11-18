@@ -19,6 +19,8 @@ type Services struct {
 	Verdicts *app.VerdictService
 	// CI reads and acts on the repos' CI for the board manager.
 	CI *app.CIService
+	// Jobs reads and edits the repos' flaky-test quarantine lists.
+	Jobs *app.BuildJobService
 }
 
 // maxToolWaitSeconds keeps a long-polling claim inside typical MCP client
@@ -35,6 +37,7 @@ func BoardTools(services Services) []Tool {
 		listTickets{services}, reportPRState{services}, reportDeploy{services}, setWorkModel{services},
 		managerFlags{services}, answerQuestions{services}, unblockTicket{services},
 		getVerdicts{services}, reportCleanMerge{services}, splitTicket{services},
+		listQuarantine{services}, quarantineTest{services},
 	}, ciTools(services)...)
 }
 

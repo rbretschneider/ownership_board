@@ -398,3 +398,10 @@ func parseOptionalURL(field, raw string) (string, error) {
 	}
 	return value, nil
 }
+
+// NewBoardFiledAutonomousTicket returns an unsaved autonomous ticket the board
+// files on its own, such as the fix for a test it quarantined. The owner's
+// standing approval of that mechanism stands in for a delegate's agreed spec.
+func NewBoardFiledAutonomousTicket(draft AutonomousDraft, now time.Time) (Ticket, error) {
+	return readyAutonomous(draft, SystemActor, now)
+}

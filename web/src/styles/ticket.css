@@ -905,6 +905,12 @@
 .settings .repo-row { border: 1px solid var(--border-strong); background: var(--surface-2); padding: 10px 16px; border-radius: var(--radius); }
 .settings .repo-row__name { font-size: 1rem; font-weight: 650; white-space: normal; overflow-wrap: anywhere; }
 .repo-row__controls { display: flex; align-items: center; flex-wrap: wrap; gap: 0 18px; }
+.repo-quarantine { flex-basis: 100%; margin-top: 6px; }
+.repo-quarantine > summary { cursor: pointer; color: var(--text-muted); }
+.repo-quarantine__list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; }
+.repo-quarantine__item { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
+.repo-quarantine__name { overflow-wrap: anywhere; }
+.repo-quarantine__item--released { opacity: 0.6; }
 .settings .repo-gates, .settings .repo-visibility { padding-left: 0; gap: 0 18px; }
 .settings .repo-row__controls .switch { font-size: 0.8125rem; }
 

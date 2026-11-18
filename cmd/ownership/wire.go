@@ -82,9 +82,16 @@ func build(ctx context.Context, cfg config.Config, logger *slog.Logger) (*applic
 	}
 	jobs := app.NewBuildJobService(db, systemClock, bundles, logger)
 	jobs.StorageLimit = cfg.BuildBundleLimit
+	jobs.Board = board
+	services.Jobs = jobs
 	if err = jobs.RecoverStorage(ctx); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("recover bundle storage: %w", err)
+	}
+	// The flaky-test detector starts from the failures already on record.
+	if err = jobs.BackfillTestFailures(ctx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("backfill test failures: %w", err)
 	}
 	if err = jobs.RequeueOffline(ctx); err != nil {
 		db.Close()

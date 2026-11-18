@@ -150,3 +150,9 @@ func versionAtLeast(have, want string) bool {
 
 // ValidBatchSize reports whether n is an allowed per-repo batch size.
 func ValidBatchSize(n int) bool { return n >= MinBatchSize && n <= MaxBatchSize }
+
+// SupportsFlakeChecks reports whether a host's agent runs only a flake check's
+// listed tests and writes the quarantine file.
+func SupportsFlakeChecks(agentVersion string) bool {
+	return versionAtLeast(agentVersion, FlakeCheckAgentVersion)
+}

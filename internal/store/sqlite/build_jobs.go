@@ -12,16 +12,25 @@ import (
 
 type buildJobRepo struct{ q querier }
 
-const jobColumns = `id,ticket_id,repo,sha,preset,target,status,host_id,attempt,created_at,started_at,finished_at,assignment_released_at,phase,detail,result,bundle_bytes,bundle_sha256,COALESCE(batch_id,''),batch_solo`
+const jobColumns = `id,ticket_id,repo,sha,preset,target,status,host_id,attempt,created_at,started_at,finished_at,assignment_released_at,phase,detail,result,bundle_bytes,bundle_sha256,COALESCE(batch_id,''),batch_solo,kind,COALESCE(only_tests,''),COALESCE(bundle_of,'')`
 
 func scanJob(row interface{ Scan(...any) error }) (domain.BuildJob, error) {
 	var j domain.BuildJob
 	var target, created string
 	var started, finished, released, result sql.NullString
 	var host sql.NullInt64
-	err := row.Scan(&j.ID, &j.TicketID, &j.Repo, &j.SHA, &j.Preset, &target, &j.Status, &host, &j.Attempt, &created, &started, &finished, &released, &j.Phase, &j.Detail, &result, &j.BundleBytes, &j.BundleSHA256, &j.BatchID, &j.BatchSolo)
+	var kind, only string
+	err := row.Scan(&j.ID, &j.TicketID, &j.Repo, &j.SHA, &j.Preset, &target, &j.Status, &host, &j.Attempt, &created, &started, &finished, &released, &j.Phase, &j.Detail, &result, &j.BundleBytes, &j.BundleSHA256, &j.BatchID, &j.BatchSolo, &kind, &only, &j.BundleOf)
 	if err != nil {
 		return j, notFoundOr(err, "build job not found")
+	}
+	if kind != domain.JobKindCommit {
+		j.Kind = kind
+	}
+	if only != "" {
+		if err = json.Unmarshal([]byte(only), &j.OnlyTests); err != nil {
+			return j, err
+		}
 	}
 	if err = json.Unmarshal([]byte(target), &j.Target); err != nil {
 		return j, err
@@ -69,7 +78,19 @@ func (r buildJobRepo) ActiveAssignments(ctx context.Context) ([]domain.BuildJob,
 	return out, rows.Err()
 }
 func (r buildJobRepo) Insert(ctx context.Context, j domain.BuildJob) error {
-	_, e := r.q.ExecContext(ctx, `INSERT INTO build_jobs(id,ticket_id,repo,sha,preset,target,target_os,status,attempt,created_at,finished_at,bundle_bytes,bundle_sha256) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, j.ID, j.TicketID, j.Repo, j.SHA, j.Preset, j.Target.Canonical(), j.Target.OS, j.Status, j.Attempt, formatTime(j.CreatedAt), formatOptionalTime(j.FinishedAt), j.BundleBytes, j.BundleSHA256)
+	kind := j.Kind
+	if kind == "" {
+		kind = domain.JobKindCommit
+	}
+	var only, bundleOf any
+	if len(j.OnlyTests) > 0 {
+		raw, _ := json.Marshal(j.OnlyTests)
+		only = string(raw)
+	}
+	if j.BundleOf != "" {
+		bundleOf = j.BundleOf
+	}
+	_, e := r.q.ExecContext(ctx, `INSERT INTO build_jobs(id,ticket_id,repo,sha,preset,target,target_os,status,attempt,created_at,finished_at,bundle_bytes,bundle_sha256,kind,only_tests,bundle_of) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, j.ID, j.TicketID, j.Repo, j.SHA, j.Preset, j.Target.Canonical(), j.Target.OS, j.Status, j.Attempt, formatTime(j.CreatedAt), formatOptionalTime(j.FinishedAt), j.BundleBytes, j.BundleSHA256, kind, only, bundleOf)
 	return conflictOr(e, "build job already exists")
 }
 func jobArgs(j domain.BuildJob) []any {
@@ -178,13 +199,13 @@ func (r buildJobRepo) Candidate(ctx context.Context, h domain.BuildHost) (*domai
 // CommitState returns publication order without loading retained job bodies.
 func (r buildJobRepo) CommitState(ctx context.Context, ticketID int64, target domain.BuildJobTarget, sha string) (known bool, latest string, err error) {
 	err = r.q.QueryRowContext(ctx, `SELECT
- EXISTS(SELECT 1 FROM build_jobs WHERE ticket_id=? AND target=? AND sha=?),
- COALESCE((SELECT sha FROM build_jobs WHERE ticket_id=? AND target=? GROUP BY sha ORDER BY min(rowid) DESC LIMIT 1),'')`,
+ EXISTS(SELECT 1 FROM build_jobs WHERE kind='commit' AND ticket_id=? AND target=? AND sha=?),
+ COALESCE((SELECT sha FROM build_jobs WHERE kind='commit' AND ticket_id=? AND target=? GROUP BY sha ORDER BY min(rowid) DESC LIMIT 1),'')`,
 		ticketID, target.Canonical(), sha, ticketID, target.Canonical()).Scan(&known, &latest)
 	return
 }
 func (r buildJobRepo) Supersede(ctx context.Context, ticketID int64, target domain.BuildJobTarget, sha string, now time.Time) error {
-	_, err := r.q.ExecContext(ctx, `UPDATE build_jobs SET status='superseded',finished_at=? WHERE ticket_id=? AND target_os=? AND target=? AND sha<>? AND status IN ('queued','running')`, formatTime(now), ticketID, target.OS, target.Canonical(), sha)
+	_, err := r.q.ExecContext(ctx, `UPDATE build_jobs SET status='superseded',finished_at=? WHERE kind='commit' AND ticket_id=? AND target_os=? AND target=? AND sha<>? AND status IN ('queued','running')`, formatTime(now), ticketID, target.OS, target.Canonical(), sha)
 	return err
 }
 
@@ -195,7 +216,7 @@ func (r buildJobRepo) SupersedeCompleted(ctx context.Context, now time.Time) err
 	return err
 }
 func (r buildJobRepo) Bundles(ctx context.Context) ([]app.BuildJobBundle, error) {
-	rows, err := r.q.QueryContext(ctx, `SELECT id,bundle_bytes,bundle_sha256 FROM build_jobs`)
+	rows, err := r.q.QueryContext(ctx, `SELECT id,bundle_bytes,bundle_sha256 FROM build_jobs WHERE bundle_of IS NULL`)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +276,7 @@ func (r buildJobRepo) QueuedCountsByOS(ctx context.Context) (map[domain.BuildHos
 
 // Open implements app.BuildJobRepository: every queued or running job.
 func (r buildJobRepo) Open(ctx context.Context) ([]domain.BuildJob, error) {
-	rows, err := r.q.QueryContext(ctx, `SELECT `+jobColumns+` FROM build_jobs WHERE status IN ('queued','running') ORDER BY created_at, id`)
+	rows, err := r.q.QueryContext(ctx, `SELECT `+jobColumns+` FROM build_jobs WHERE kind='commit' AND status IN ('queued','running') ORDER BY created_at, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +294,7 @@ func (r buildJobRepo) Open(ctx context.Context) ([]domain.BuildJob, error) {
 
 // RecentForTicket implements app.BuildJobRepository: the ticket's newest jobs first.
 func (r buildJobRepo) RecentForTicket(ctx context.Context, ticketID int64, limit int) ([]domain.BuildJob, error) {
-	rows, err := r.q.QueryContext(ctx, `SELECT `+jobColumns+` FROM build_jobs WHERE ticket_id=? ORDER BY created_at DESC, id DESC LIMIT ?`, ticketID, limit)
+	rows, err := r.q.QueryContext(ctx, `SELECT `+jobColumns+` FROM build_jobs WHERE kind='commit' AND ticket_id=? ORDER BY created_at DESC, id DESC LIMIT ?`, ticketID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -303,9 +324,27 @@ func (r buildJobRepo) SetBatch(ctx context.Context, jobID, batchID string, solo 
 // BatchCandidates returns free queued jobs that can share a batch with lead: same
 // repository, preset and target, not the lead's ticket, not marked solo, oldest first.
 func (r buildJobRepo) BatchCandidates(ctx context.Context, lead domain.BuildJob, limit int) ([]domain.BuildJob, error) {
-	rows, err := r.q.QueryContext(ctx, `SELECT `+jobColumns+` FROM build_jobs WHERE status='queued' AND batch_id IS NULL AND batch_solo=0 AND host_id IS NULL
+	rows, err := r.q.QueryContext(ctx, `SELECT `+jobColumns+` FROM build_jobs WHERE status='queued' AND batch_id IS NULL AND batch_solo=0 AND host_id IS NULL AND kind='commit'
  AND repo=? AND preset=? AND target_os=? AND target=? AND ticket_id<>? AND id<>? ORDER BY created_at,id LIMIT ?`,
 		lead.Repo, lead.Preset, lead.Target.OS, lead.Target.Canonical(), lead.TicketID, lead.ID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.BuildJob{}
+	for rows.Next() {
+		j, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, j)
+	}
+	return out, rows.Err()
+}
+
+// FailedVerdicts returns commit jobs that failed with a result, oldest first.
+func (r buildJobRepo) FailedVerdicts(ctx context.Context) ([]domain.BuildJob, error) {
+	rows, err := r.q.QueryContext(ctx, `SELECT `+jobColumns+` FROM build_jobs WHERE kind='commit' AND status='failed' AND result IS NOT NULL ORDER BY finished_at,id`)
 	if err != nil {
 		return nil, err
 	}

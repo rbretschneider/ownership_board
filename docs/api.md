@@ -653,6 +653,25 @@ cleanly is left out and listed in the result's optional `excluded` (member job
 ids, never the first member); only a batch may report `excluded`. See
 [the amendment](amendments/batched-verification.md).
 
+**Test lists** (agent 1.2 or later). An assignment may carry `quarantine`, the
+repo's quarantined tests, and, on a flake check (`kind: "flake_check"`),
+`only_tests`, the only tests to run. Each is at most 200 exact names of 1–300
+bytes, one line each. The agent writes them beside the bundle as
+`ownership-quarantine.txt` (always written, empty when nothing is quarantined)
+and `ownership-only-tests.txt`, one name per line, and sets
+`OWNERSHIP_QUARANTINE_FILE`, `OWNERSHIP_ONLY_TESTS_FILE` and
+`OWNERSHIP_JOB_KIND` for the verification commands. **The contract for a
+repo's script:** it may skip the quarantined tests and, on a flake check, run
+only the listed ones; it must never skip a test the ticket requires. A script
+that ignores the files behaves exactly as before. To report failed tests in a
+form the board reads, print `ownership-test-failed: <name>` lines (CTest's
+summary is read too). See [the amendment](amendments/flaky-quarantine.md).
+
+Quarantine lists: `GET /api/v1/repos/{id}/quarantine` (`{tests: [...]}`,
+anyone signed in); `POST /api/v1/repos/{id}/quarantine`
+`{test, reason?, fix_ticket_id?}` and `POST .../quarantine/release` `{test}`
+(a person, or a delegate or manager token).
+
 Only a signed-in administrator can call
 `POST /api/v1/build-jobs/{id}/cancel`, with the normal same-origin requirement.
 Repeated cancellation succeeds; other terminal states return `409`. Agent tokens,
