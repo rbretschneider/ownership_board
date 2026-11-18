@@ -37,7 +37,7 @@
     .right { animation: stroke-right 0.8s ease-in-out infinite; animation-delay: -0.4s; }
     .glow { animation: glow 0.8s linear infinite; }
     .right .glow { animation-delay: -0.4s; }
-    /* Each burst sits centred on its crown. */
+    /* Each burst moves outward along its crown edge so its base sits over the pin hole, on the piston centre line. */
     .bolt { transform-box: view-box; animation: fire-left 0.8s linear infinite; transform-origin: 112px 164px; }
     .right .bolt { animation-name: fire-right; animation-delay: -0.4s; transform-origin: 400px 164px; }
     /* Down the rod axis toward the hub centre, 20 px. */
@@ -45,18 +45,18 @@
     @keyframes stroke-right { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-10px, 17px); } }
     @keyframes glow { 0%, 14% { opacity: 1; } 28%, 86% { opacity: 0; } 100% { opacity: 1; } }
     @keyframes fire-left {
-      0% { opacity: 1; transform: translate(22px, 6px) scale(1); }
-      8% { opacity: 0.55; transform: translate(22px, 6px) scale(0.92); }
-      14% { opacity: 1; transform: translate(22px, 6px) scale(0.98); }
-      28%, 86% { opacity: 0; transform: translate(22px, 6px) scale(0.8); }
-      100% { opacity: 1; transform: translate(22px, 6px) scale(1); }
+      0% { opacity: 1; transform: translate(-19px, 11px) scale(1); }
+      8% { opacity: 0.55; transform: translate(-19px, 11px) scale(0.92); }
+      14% { opacity: 1; transform: translate(-19px, 11px) scale(0.98); }
+      28%, 86% { opacity: 0; transform: translate(-19px, 11px) scale(0.8); }
+      100% { opacity: 1; transform: translate(-19px, 11px) scale(1); }
     }
     @keyframes fire-right {
-      0% { opacity: 1; transform: translate(-22px, 6px) scale(1); }
-      8% { opacity: 0.55; transform: translate(-22px, 6px) scale(0.92); }
-      14% { opacity: 1; transform: translate(-22px, 6px) scale(0.98); }
-      28%, 86% { opacity: 0; transform: translate(-22px, 6px) scale(0.8); }
-      100% { opacity: 1; transform: translate(-22px, 6px) scale(1); }
+      0% { opacity: 1; transform: translate(19px, 11px) scale(1); }
+      8% { opacity: 0.55; transform: translate(19px, 11px) scale(0.92); }
+      14% { opacity: 1; transform: translate(19px, 11px) scale(0.98); }
+      28%, 86% { opacity: 0; transform: translate(19px, 11px) scale(0.8); }
+      100% { opacity: 1; transform: translate(19px, 11px) scale(1); }
     }
     @media (prefers-reduced-motion: reduce) {
       .left, .right, .glow, .bolt { animation-duration: 2.4s; }
