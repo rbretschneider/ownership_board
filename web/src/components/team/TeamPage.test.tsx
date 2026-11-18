@@ -89,7 +89,7 @@ it("shows one card per build host with its slots in a row, a status dot each and
   expect(slots).toHaveLength(2);
   expect(card.querySelector<HTMLElement>(".team-slots")?.style.gridTemplateColumns).toBe("repeat(2, minmax(0, 1fr))");
   // A building slot shows the engine spinner instead of a dot.
-  expect(slots[0]!.querySelectorAll(".team-slot__matrix .engine-spinner")).toHaveLength(1);
+  expect(slots[0]!.querySelector(".team-slot__matrix .engine-spinner")?.getAttribute("width")).toBe("22");
   expect(slots[0]!.querySelector(".team-dot")).toBeNull();
   expect(slots[0]!.querySelector(".team-slot__job")?.textContent).toBe("#12 · testing · 1h 36m");
   // Slot 1 builds codex_1's ticket, so it names the runner; #17 has no runner.
@@ -145,7 +145,10 @@ it("draws the manager's lines only while it works, to each ticket, its runner an
   });
   const targets = [...host.querySelectorAll('[data-testid="manager-lines"] [data-target]')].map((g) => g.getAttribute("data-target"));
   expect(targets).toEqual(["ticket:12", "runner:@worker/7/codex_1", "host:builder-1"]);
-  expect(host.querySelector('[aria-label="Board manager: open history"]')?.textContent).toContain("Working on #12, builder-1");
+  const manager = host.querySelector('[aria-label="Board manager: open history"]')!;
+  expect(manager.textContent).toContain("Working on #12, builder-1");
+  // A working manager leads its activity with a 28 px engine spinner.
+  expect(manager.querySelector(".team-manager__now .engine-spinner")?.getAttribute("width")).toBe("28");
 
   api.team.mockResolvedValue(teamFixture());
   await act(async () => {
@@ -153,6 +156,7 @@ it("draws the manager's lines only while it works, to each ticket, its runner an
     await new Promise((resolve) => setTimeout(resolve, 400));
   });
   expect(host.querySelector('[data-testid="manager-lines"]')).toBeNull();
+  expect(host.querySelector('[aria-label="Board manager: open history"] .engine-spinner')).toBeNull();
 });
 
 it("lists CI runners compactly last: a dot and name, details in the tooltip", async () => {
