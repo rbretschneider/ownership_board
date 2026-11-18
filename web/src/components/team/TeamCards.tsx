@@ -84,7 +84,7 @@ export function ManagerCard({ manager, onOpen }: ManagerCardProps) {
           : <><span className="team-manager__when">{clockTime(manager.latest_at)}</span> {headline}</>}
       </span>
       {isWorking && activity && (
-        <span className="team-manager__now" role="status">{managerNow(activity)}</span>
+        <span className="team-manager__now" role="status"><EngineSpinner size={28} />{managerNow(activity)}</span>
       )}
       <span className="team-stats">
         <span className="team-stat">
@@ -240,7 +240,7 @@ export function StatusDot({ status }: { status: WorkStatus }) {
 
 /** A busy slot's working mark in place of its dot: the engine spinner. */
 function BuildMatrix() {
-  return <span className="team-slot__matrix"><EngineSpinner size={16} /></span>;
+  return <span className="team-slot__matrix"><EngineSpinner size={22} /></span>;
 }
 
 /** Props for {@link BuildHostCard}. */

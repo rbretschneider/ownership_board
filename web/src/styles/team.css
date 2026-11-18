@@ -771,7 +771,11 @@ button.team-card:focus-visible,
   color: var(--t-text-3);
 }
 
+/* What the manager is doing now, led by the engine spinner while it works. */
 .team-manager__now {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
   color: var(--t-text-2);
 }
