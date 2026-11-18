@@ -22,9 +22,9 @@ export function PageShell({ page, title, actions, isWide = false, children }: Pa
   return (
     <div className="page">
       <header className="topbar">
-        <a href="#/" className="brand" aria-label="ownership board home">
+        <a href="#/" className="brand" aria-label="turbine home">
           <BrandMark />
-          <span className="brand__name">ownership board</span>
+          <span className="brand__name">turbine</span>
         </a>
         <span className="topbar__spacer" />
         <AppNav current={page} />

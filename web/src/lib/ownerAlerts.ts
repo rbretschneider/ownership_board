@@ -1,9 +1,9 @@
 import type { Stage, TicketSummary } from "../api/types";
 import { preferences, STORAGE_KEYS } from "./storage";
 
-const APP_TITLE = "ownership board";
+const APP_TITLE = "turbine";
 
-/** The tab title: "(3) ownership board" while three tickets wait for the owner. */
+/** The tab title: "(3) turbine" while three tickets wait for the owner. */
 export function titleFor(waiting: number): string {
   return waiting > 0 ? `(${waiting}) ${APP_TITLE}` : APP_TITLE;
 }

@@ -13,7 +13,7 @@ import {
 import { ticketHash } from "../lib/hashRoute";
 
 /**
- * Keeps the tab title at "(n) ownership board" and, when a ticket newly needs the
+ * Keeps the tab title at "(n) turbine" and, when a ticket newly needs the
  * owner (a live update brought it in), plays a chime and, while the tab is in
  * the background, shows a system notification if the owner turned them on.
  * `tickets` is null until the board has loaded.
