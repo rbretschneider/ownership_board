@@ -14,6 +14,11 @@ import (
 // to appear as an idle runner on the Team view.
 const teamRunnerWindow = 6 * time.Hour
 
+// teamPresenceWindow is how recently a worker must have called the board to
+// appear on the Team view without having reported work. Workers poll every
+// 15 to 60 seconds, so a few minutes covers a slow loop.
+const teamPresenceWindow = 3 * time.Minute
+
 // teamManagerSessions bounds the manager history the Team view carries.
 const teamManagerSessions = 20
 
@@ -29,9 +34,20 @@ const (
 	RunnerWorking RunnerState = "working"
 	RunnerWaiting RunnerState = "waiting"
 	RunnerIdle    RunnerState = "idle"
+	// RunnerStandby is a running worker whose slot is above its pool's size in
+	// Settings, so it takes no tickets.
+	RunnerStandby RunnerState = "standby"
 )
 
-var runnerStateOrder = map[RunnerState]int{RunnerWorking: 0, RunnerWaiting: 1, RunnerIdle: 2}
+var runnerStateOrder = map[RunnerState]int{RunnerWorking: 0, RunnerWaiting: 1, RunnerIdle: 2, RunnerStandby: 3}
+
+// RosterPresence is what the board knows about workers beyond their tickets:
+// when each identity last called the board, and each pool's size in Settings
+// ("codex" and "claude" worker counts).
+type RosterPresence struct {
+	Seen  map[string]time.Time
+	Pools map[string]int
+}
 
 // TeamRunner is one agent seen recently: holding a lease, waiting on a build
 // host for a ticket it released, or idle after recent work.
@@ -117,7 +133,11 @@ func (s *BoardService) Team(ctx context.Context) (Team, error) {
 		if err != nil {
 			return err
 		}
-		team.Runners, team.Tickets = TeamRoster(board.Tickets, signals, now)
+		presence := RosterPresence{
+			Seen:  s.Presence.Snapshot(),
+			Pools: map[string]int{"codex": settings.CodexWorkers, "claude": settings.ClaudeWorkers},
+		}
+		team.Runners, team.Tickets = TeamRosterWith(board.Tickets, signals, now, presence)
 		nameRunners(team.Runners, domain.NewRunnerDirectory(names))
 		team.Hosts, team.QueuedByOS, err = loadHostRunners(ctx, repos, true)
 		return err
@@ -130,25 +150,31 @@ func (s *BoardService) Team(ctx context.Context) (Team, error) {
 //
 //   - A live lease makes its holder a runner on that ticket: working, or
 //     waiting when its work model says it awaits something.
-//   - A build ticket released while awaiting Windows keeps the agent that last
-//     reported its work model as a waiting runner.
+//   - A build ticket released while awaiting Windows has no holder: any free
+//     worker picks it up when its verdict returns, so it is not shown under
+//     the worker that last touched it.
 //   - Any other agent that reported a work model within teamRunnerWindow is idle.
 //
-// Tickets in flight are the ones being worked: open tickets a runner holds or
-// waits on, or a build job serves. The board shows every other ticket.
+// Tickets in flight are the ones being worked: open tickets a runner holds,
+// tickets awaiting Windows, or tickets a build job serves.
 func TeamRoster(tickets []TicketSummary, signals []domain.TimelineEntry, now time.Time) ([]TeamRunner, []TeamTicket) {
+	return TeamRosterWith(tickets, signals, now, RosterPresence{})
+}
+
+// TeamRosterWith is TeamRoster plus presence: a worker that called the board
+// within teamPresenceWindow appears even if it never reported work, and a
+// worker whose slot is above its pool's size in Settings is on standby.
+func TeamRosterWith(tickets []TicketSummary, signals []domain.TimelineEntry, now time.Time, presence RosterPresence) ([]TeamRunner, []TeamTicket) {
 	type seen struct {
 		model string
 		at    time.Time
 	}
 	lastSeen := map[string]seen{}
-	lastReporter := map[int64]string{}
 	for _, entry := range signals {
 		model, ok := entry.Data["model"].(string)
 		if entry.Type != domain.TimelineEdited || !ok || !entry.Actor.IsAgent() {
 			continue
 		}
-		lastReporter[entry.TicketID] = entry.Actor.Name
 		if previous, ok := lastSeen[entry.Actor.Name]; !ok || entry.At.After(previous.at) {
 			lastSeen[entry.Actor.Name] = seen{model: model, at: entry.At}
 		}
@@ -161,20 +187,14 @@ func TeamRoster(tickets []TicketSummary, signals []domain.TimelineEntry, now tim
 			continue
 		}
 		holder := ""
-		switch {
-		case t.IsLeased(now):
+		if t.IsLeased(now) {
 			holder = t.Lease.Holder
 			if _, taken := runners[holder]; !taken {
 				runners[holder] = leasedRunner(holder, t, lastSeen[holder].at)
 			}
-		case t.Stage == domain.StageBuild && strings.HasSuffix(t.WorkModel, awaitingWindowsSuffix) && lastReporter[t.ID] != "":
-			holder = lastReporter[t.ID]
-			if existing, taken := runners[holder]; !taken || existing.State == RunnerIdle {
-				model, signal := splitWorkModel(t.WorkModel)
-				runners[holder] = TeamRunner{Name: holder, State: RunnerWaiting, Model: model, Signal: signal, TicketID: t.ID, LastSeen: lastSeen[holder].at}
-			}
 		}
-		if holder != "" || summary.Build != nil {
+		awaitingWindows := t.Stage == domain.StageBuild && strings.HasSuffix(t.WorkModel, awaitingWindowsSuffix)
+		if holder != "" || awaitingWindows || summary.Build != nil {
 			inFlight = append(inFlight, TeamTicket{TicketSummary: summary, Holder: holder})
 		}
 	}
@@ -184,6 +204,25 @@ func TeamRoster(tickets []TicketSummary, signals []domain.TimelineEntry, now tim
 		}
 		model, _ := splitWorkModel(last.model)
 		runners[name] = TeamRunner{Name: name, State: RunnerIdle, Model: model, LastSeen: last.at}
+	}
+	for name, at := range presence.Seen {
+		if now.Sub(at) > teamPresenceWindow {
+			continue
+		}
+		runner, taken := runners[name]
+		if !taken {
+			runner = TeamRunner{Name: name, State: RunnerIdle}
+		}
+		if at.After(runner.LastSeen) {
+			runner.LastSeen = at
+		}
+		runners[name] = runner
+	}
+	for name, runner := range runners {
+		if runner.State == RunnerIdle && aboveItsPool(name, presence.Pools) {
+			runner.State = RunnerStandby
+			runners[name] = runner
+		}
 	}
 	out := make([]TeamRunner, 0, len(runners))
 	for _, runner := range runners {
@@ -196,6 +235,19 @@ func TeamRoster(tickets []TicketSummary, signals []domain.TimelineEntry, now tim
 		inFlight = []TeamTicket{}
 	}
 	return out, inFlight
+}
+
+// aboveItsPool reports whether a worker identity's slot ("codex_3" is slot 3
+// of the codex pool) is above that pool's size in Settings. Identities outside
+// a known pool are never on standby.
+func aboveItsPool(name string, pools map[string]int) bool {
+	workerID, ok := domain.WorkerIDOf(name)
+	if !ok {
+		return false
+	}
+	family, slot := domain.WorkerFamily(workerID)
+	size, known := pools[family]
+	return known && slot > size
 }
 
 // leasedRunner is the runner holding a live lease on t. A worker that holds

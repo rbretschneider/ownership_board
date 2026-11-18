@@ -802,7 +802,7 @@ export interface ManagerSession {
 }
 
 /** What a runner on the Team view is doing right now. */
-export type RunnerState = "working" | "waiting" | "idle";
+export type RunnerState = "working" | "waiting" | "idle" | "standby";
 
 /** One agent seen recently: holding a lease, waiting on a build host, or idle. */
 export interface TeamRunner {

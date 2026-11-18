@@ -65,9 +65,11 @@ it("nests each ticket under the runner working it, and a ticket no runner holds 
   expect(runner("@worker/7/claude_2").closest(".team-branch")!.querySelector("[data-ticket]")).toBeNull();
   const slot = host.querySelector('[data-host="builder-1"] [data-ticket="17"]');
   expect(slot?.closest(".team-host__tickets")).not.toBeNull();
-  // Each ticket appears once: #12 under its runner, not again in its slot; #13 is only queued.
+  // Each ticket appears once: #12 under its runner, not again in its slot; #13 has no
+  // runner and no slot yet, so it waits in the build queue list under the hosts.
   expect(host.querySelectorAll('[data-ticket="12"]')).toHaveLength(1);
-  expect(host.querySelector('[data-ticket="13"]')).toBeNull();
+  expect(host.querySelectorAll('[data-ticket="13"]')).toHaveLength(1);
+  expect(host.querySelector('[data-ticket="13"]')?.closest(".team-queued")).not.toBeNull();
 });
 
 it("draws each runner as its family's worker sprite, swinging only while it works", () => {

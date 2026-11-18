@@ -29,6 +29,8 @@ type MCPHandler interface {
 
 // Deps is everything the HTTP layer needs.
 type Deps struct {
+	// Presence records each worker identity's last call, for the Team view. Optional.
+	Presence *app.WorkerPresence
 	// UsageFile contains sanitized, externally sampled account usage; never credentials.
 	UsageFile string
 	// RunnersFile is the Windows build host's sanitized live state, written by the build queue.
@@ -73,7 +75,7 @@ func New(deps Deps) http.Handler {
 	net := network{trustedHops: deps.TrustedHops}
 	s := &server{deps: deps, cookies: cookieJar{network: net}, network: net, pairLimiter: newBuildHostPairLimiter(time.Now)}
 	mux := http.NewServeMux()
-	rt := &router{mux: mux, hosts: deps.BuildHosts, auth: deps.Auth, origin: deps.PublicBaseURL, logger: deps.Logger, network: net, writes: newWriteLimiter(time.Now)}
+	rt := &router{mux: mux, presence: deps.Presence, hosts: deps.BuildHosts, auth: deps.Auth, origin: deps.PublicBaseURL, logger: deps.Logger, network: net, writes: newWriteLimiter(time.Now)}
 	s.routes(rt)
 	mux.Handle("/api/", http.HandlerFunc(apiNotFound))
 	mux.Handle("/", readOnly(newSPA(deps.Frontend)))

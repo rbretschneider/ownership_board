@@ -51,6 +51,22 @@
   letter-spacing: 0.06em;
 }
 
+/* Released tickets queued for a build slot, under the hosts. */
+.team-queued {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.team-subheading {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t-text-3);
+}
+
 .team-faint {
   font-size: 12px;
   color: var(--t-text-3);
