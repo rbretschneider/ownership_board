@@ -39,7 +39,7 @@ export function AlertsSection() {
   return (
     <section className="settings-section" aria-labelledby="alerts-title">
       <h2 id="alerts-title" className="settings-section__title">Alerts</h2>
-      <p className="muted small">The tab title shows how many tickets wait for you, for example "(2) ownership board".</p>
+      <p className="muted small">The tab title shows how many tickets wait for you, for example "(2) turbine".</p>
       <label className="switch" htmlFor="alert-sound">
         <input
           id="alert-sound"
