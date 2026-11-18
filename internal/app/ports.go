@@ -19,6 +19,7 @@ type Store interface {
 // here is the persistence pattern; code repositories are Repo.)
 type Repos interface {
 	BuildJobs() BuildJobRepository
+	BuildBatches() BuildBatchRepository
 	Verdicts() VerdictRepository
 	RunnerNames() RunnerNameRepository
 	ManagerUsage() ManagerUsageRepository
@@ -142,6 +143,8 @@ type RepoRepository interface {
 	SetGates(ctx context.Context, repo domain.Repo) error
 	SetBuildTargets(ctx context.Context, repo domain.Repo) error
 	SetOverlapIgnore(ctx context.Context, repo domain.Repo) error
+	// SetBatching writes the batched verification settings.
+	SetBatching(ctx context.Context, repo domain.Repo) error
 	// SetHealthCheck writes the health check interval.
 	SetHealthCheck(ctx context.Context, repo domain.Repo) error
 	// NextMergeSequence allocates the next repository-local completion position.

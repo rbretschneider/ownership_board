@@ -41,6 +41,11 @@ type Repo struct {
 	// ReviewBlocking is the lowest review finding priority that stops a
 	// publication in this repo; lower findings become PR follow-ups.
 	ReviewBlocking ReviewBlocking
+	// BatchVerify turns on batched build-host verification for this repo: several
+	// tickets' queued commits merged and verified in one run, bisected when red.
+	// Off by default; BatchMax is the most tickets in one batch.
+	BatchVerify bool
+	BatchMax    int
 	// Merge sequences order ordinary completions independently of ticket IDs.
 	MergeSequence                     int64
 	HealthCheckedThroughMergeSequence int64
@@ -118,6 +123,9 @@ type RepoStyle struct {
 	ReviewBlocking *ReviewBlocking
 	// HealthCheckEvery changes the architecture check interval (0 = off).
 	HealthCheckEvery *int
+	// BatchVerify and BatchMax change batched verification.
+	BatchVerify *bool
+	BatchMax    *int
 }
 
 // Repo field limits.
@@ -147,7 +155,7 @@ func NewManualRepo(draft ManualRepoDraft, now time.Time) (Repo, error) {
 
 // NewSyncedRepo validates a provider listing as a new repo.
 func NewSyncedRepo(listing RepoListing, now time.Time) (Repo, error) {
-	repo := Repo{OverlapIgnore: []string{}, BuildTargets: []RepoBuildTarget{}, DeployMode: DeployModeOff, ReviewBlocking: DefaultReviewBlocking, Provider: listing.Provider, CreatedAt: now, RequireSpecApproval: true, HealthCheckEvery: DefaultHealthCheckEvery}
+	repo := Repo{OverlapIgnore: []string{}, BuildTargets: []RepoBuildTarget{}, DeployMode: DeployModeOff, ReviewBlocking: DefaultReviewBlocking, BatchMax: DefaultBatchSize, Provider: listing.Provider, CreatedAt: now, RequireSpecApproval: true, HealthCheckEvery: DefaultHealthCheckEvery}
 	if err := repo.Refresh(listing, now); err != nil {
 		return Repo{}, err
 	}
@@ -257,6 +265,15 @@ func (r *Repo) Restyle(style RepoStyle) error {
 		}
 		r.ReviewBlocking = level
 	}
+	if style.BatchMax != nil {
+		if !ValidBatchSize(*style.BatchMax) {
+			return Invalidf("batch_max must be between %d and %d", MinBatchSize, MaxBatchSize)
+		}
+		r.BatchMax = *style.BatchMax
+	}
+	if style.BatchVerify != nil {
+		r.BatchVerify = *style.BatchVerify
+	}
 	return nil
 }
 
@@ -316,4 +333,9 @@ func ParseDeployMode(raw string) (DeployMode, error) {
 	default:
 		return "", Invalidf("deploy_mode must be off or agent")
 	}
+}
+
+// ChangesBatching reports whether style changes batched verification.
+func (style RepoStyle) ChangesBatching() bool {
+	return style.BatchVerify != nil || style.BatchMax != nil
 }

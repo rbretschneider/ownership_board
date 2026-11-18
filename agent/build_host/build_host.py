@@ -30,7 +30,9 @@ import uuid
 
 from nacl.signing import SigningKey
 
-VERSION = '1.0'
+# 1.1: merges batch members (the board hands batches only to 1.1 or later).
+VERSION = '1.1'
+BATCH_LIMIT = 8
 API = '/api/v1/build-host'
 GIB = 1024 ** 3
 BUNDLE_LIMIT = 100 * 1024 ** 2
@@ -925,12 +927,29 @@ def validate_job(job, host_id):
                  all(isinstance(c,str) and re.fullmatch('[a-z][a-z0-9_-]{0,31}',c) for c in job['target']['required_capabilities']))
     except (KeyError, TypeError):
         valid = False
+    if valid and 'batch' in job:
+        valid = valid_batch(job)
     if not valid:
         raise ValueError('malformed or foreign build assignment')
     return job
 
 
-def completion_bytes(attempt, commands, failure_kind=''):
+def valid_batch(job):
+    """A batch lists 2 to BATCH_LIMIT distinct commits to merge in order; the first is the job's own."""
+    try:
+        members = job['batch']['members']
+        return (isinstance(members,list) and 2 <= len(members) <= BATCH_LIMIT and
+                len({m['id'] for m in members}) == len(members) and
+                members[0]['sha'] == job['sha'] and members[0]['bundle_sha256'] == job['bundle_sha256'] and
+                all(re.fullmatch('[a-f0-9]{64}',m['id']) and type(m['ticket_id']) is int and m['ticket_id'] > 0 and
+                    isinstance(m['sha'],str) and re.fullmatch('[a-f0-9]{%d}' % len(job['sha']),m['sha']) and
+                    re.fullmatch('[a-f0-9]{64}',m['bundle_sha256']) and
+                    type(m['bundle_bytes']) is int and 0 < m['bundle_bytes'] <= BUNDLE_LIMIT for m in members))
+    except (KeyError, TypeError):
+        return False
+
+
+def completion_bytes(attempt, commands, failure_kind='', excluded=()):
     def encoded(value):
         # The board normalizes results with Go encoding/json. Match its HTML
         # and JavaScript separator escaping when budgeting and sending reports.
@@ -945,6 +964,8 @@ def completion_bytes(attempt, commands, failure_kind=''):
     result = {'commands':commands}
     if failure_kind:
         result['failure_kind'] = failure_kind
+    if excluded:
+        result['excluded'] = list(excluded)
     payload = {'attempt':attempt, 'status':'failed' if failure_kind or any(c['exit_code'] != 0 for c in commands) else 'passed', 'result':result}
     if not commands and not failure_kind:
         raise ValueError('no commands executed')
@@ -1098,6 +1119,8 @@ class JobRunner:
         self.slot = None
         self.slot_lock = None
         self.git = None
+        # Batch members that did not merge cleanly: the board verifies them alone.
+        self.excluded = []
 
     def check_cancel(self):
         if self.assignment.cancel.is_set():
@@ -1144,7 +1167,9 @@ class JobRunner:
         self.folder = Path(tempfile.mkdtemp(prefix=f"{self.job['id']}-{self.job['attempt']}-",dir=build_root))
         if os.name == 'nt':
             windows_protect(self.folder)
-        bundle = self.download_bundle()
+        batch = self.job.get('batch')
+        # A batch's commits are fetched by their own job ids; the first is the job's commit.
+        bundle = self.download_bundle(batch['members'][0] if batch else self.job)
         for name in CREATED_CACHE_VARIABLES:
             private_dir(self.env[name])
         hooks = private_dir(self.folder/'empty-hooks')
@@ -1156,26 +1181,28 @@ class JobRunner:
         # A damaged checkout must fail, never fall through to a repository above the build root.
         self.env['GIT_CEILING_DIRECTORIES'] = str(self.slot)
         self.sync_checkout(bundle)
+        if batch:
+            self.merge_members(batch['members'][1:])
         attrs = self.checkout/'.gitattributes'
         if self.job['preset'] != 'script' and attrs.exists() and 'filter=lfs' in attrs.read_text(errors='replace'):
             raise InfrastructureError('LFS material requires an explicit verification script')
 
-    def download_bundle(self):
-        bundle = self.folder/'source.bundle'
+    def download_bundle(self,source,name='source.bundle'):
+        bundle = self.folder/name
         count = 0
         digest = hashlib.sha256()
-        with self.client.open('GET', API + '/jobs/' + self.job['id'] + '/bundle') as source, bundle.open('xb') as target:
+        with self.client.open('GET', API + '/jobs/' + source['id'] + '/bundle') as stream, bundle.open('xb') as target:
             while True:
                 self.check_cancel()
-                raw = (source.read1 if hasattr(source,'read1') else source.read)(64*1024)
+                raw = (stream.read1 if hasattr(stream,'read1') else stream.read)(64*1024)
                 if not raw:
                     break
                 count += len(raw)
-                if count > self.job['bundle_bytes'] or count > BUNDLE_LIMIT:
+                if count > source['bundle_bytes'] or count > BUNDLE_LIMIT:
                     raise InfrastructureError('bundle exceeds declared size')
                 digest.update(raw)
                 target.write(raw)
-        if count != self.job['bundle_bytes'] or digest.hexdigest() != self.job['bundle_sha256']:
+        if count != source['bundle_bytes'] or digest.hexdigest() != source['bundle_sha256']:
             raise InfrastructureError('bundle length or SHA-256 mismatch')
         return bundle
 
@@ -1225,6 +1252,34 @@ class JobRunner:
         actual = self.command('verify checkout SHA',git+['rev-parse','HEAD'],timeout=30,infrastructure=True).strip()
         if actual != sha:
             raise InfrastructureError('checkout SHA mismatch')
+
+    def merge_members(self,members):
+        """Merges each further batch commit into the checkout, in order. A commit that
+        does not merge cleanly is left out and reported, and the board verifies it alone."""
+        git = self.git+['-c','protocol.file.allow=always','-c','user.name=ownership board','-c','user.email=board@localhost',
+                        '-c','commit.gpgsign=false','-c','merge.ff=false']
+        for index, member in enumerate(members, start=1):
+            label = f"#{member['ticket_id']} {member['sha'][:12]}"
+            bundle = self.download_bundle(member, f'member{index}.bundle')
+            self.command('verify bundle '+label,git+['bundle','verify',str(bundle)],timeout=60,infrastructure=True)
+            self.command('fetch '+label,git+['fetch','--no-tags',str(bundle),member['sha']],timeout=600,infrastructure=True)
+            merge = git+['merge','--no-edit','-m',f"Batch: merge {label}",member['sha']]
+            self.check_cancel()
+            self.log_count += 1
+            try:
+                code,log = self.assignment.tree.run(merge,self.checkout,self.env,self.folder/f'{self.log_count:03d}.log',timeout=600)
+            except CommandTimeout as exc:
+                raise InfrastructureError(f'merge {label} {exc}') from exc
+            except OSError as exc:
+                raise InfrastructureError('cannot start git merge') from exc
+            if code == 0:
+                self.commands.append({'label':'merge '+label,'exit_code':0,'log':log})
+                continue
+            # A conflict is not a verification failure: undo it and leave the commit out.
+            self.command('undo merge of '+label,git+['reset','--merge'],timeout=120,infrastructure=True)
+            self.command('clean after '+label,git+['clean','-ffd'],timeout=600,infrastructure=True)
+            self.excluded.append(member['id'])
+        self.command('batch candidate',git+['log','--oneline','-n',str(len(members)+1)],timeout=30,infrastructure=True)
 
     def park_checkout(self,cause):
         # A checkout that cannot be updated is set aside, never deleted.
@@ -1341,7 +1396,7 @@ class JobRunner:
                 self.slot_lock.close()
         if self.assignment.cancel.is_set() and not failure:
             failure = self.assignment.failure_kind or 'cancelled'
-        return completion_bytes(self.job['attempt'],self.commands,failure)
+        return completion_bytes(self.job['attempt'],self.commands,failure,self.excluded)
 
 
 def free_bytes(config):

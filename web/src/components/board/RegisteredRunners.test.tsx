@@ -102,3 +102,15 @@ it("suppresses the legacy row for registry snapshots and retains file fallback",
  expect(render(true)).not.toContain('aria-label="Windows build slots"');
  expect(render(false)).toContain('aria-label="Windows build slots"');
 });
+it("shows a verification batch as its lead ticket plus the others it holds", () => {
+  const batch = { ...hosts.hosts[1]!.jobs[1]!, id: "c", ticket_id: 198, batch: [198, 199, 201] };
+  const d = document.createElement("div");
+  d.innerHTML = renderToStaticMarkup(
+    <RegisteredRunnersContext value={{ snapshot: { ...hosts, hosts: [{ ...hosts.hosts[1]!, jobs: [batch] }] }, stale: false, error: null, refresh: () => {} }}>
+      <RunnersStrip />
+    </RegisteredRunnersContext>,
+  );
+  const chip = d.querySelector('a[href="#/t/198"]')!;
+  expect(chip.textContent).toContain("#198 +2");
+  expect(chip.getAttribute("title")).toContain("batch of #198, #199, #201");
+});

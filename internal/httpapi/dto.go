@@ -51,6 +51,8 @@ type repoDTO struct {
 	DeployMode      domain.DeployMode        `json:"deploy_mode"`
 	ReviewBlocking  domain.ReviewBlocking    `json:"review_blocking"`
 	AllowAgentMerge bool                     `json:"allow_agent_merge"`
+	BatchVerify     bool                     `json:"batch_verify"`
+	BatchMax        int                      `json:"batch_max"`
 	Visibility      domain.Visibility        `json:"visibility"`
 
 	HealthCheckEvery           int        `json:"health_check_every"`
@@ -204,9 +206,10 @@ func toRepo(repo domain.Repo) repoDTO {
 		IsPrivate: repo.IsPrivate, IsArchived: repo.IsArchived, SyncedAt: repo.SyncedAt, MissingSince: repo.MissingSince,
 		TreatAsPublic: repo.TreatAsPublic, Visibility: repo.Visibility(time.Now()),
 		RequireSpec: repo.RequireSpecApproval, RequireDesign: repo.RequireDesignApproval,
-		AllowAgentMerge:  repo.AllowAgentMerge,
-		DeployMode:       repo.DeployMode,
-		ReviewBlocking:   repo.ReviewBlocking,
+		AllowAgentMerge: repo.AllowAgentMerge,
+		DeployMode:      repo.DeployMode,
+		ReviewBlocking:  repo.ReviewBlocking,
+		BatchVerify:     repo.BatchVerify, BatchMax: repo.BatchMax,
 		HealthCheckEvery: repo.HealthCheckEvery, HealthCheckedThroughTicket: repo.HealthCheckedThroughTicket,
 		HealthCheckedAt: repo.HealthCheckedAt,
 	}

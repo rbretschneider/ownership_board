@@ -74,12 +74,39 @@ and wiring, rather than a separately enforced package policy.
   `BundleStorage` is the application seam; the server does not unpack bundles.
 - SQLite `eligibleQueue` serves both `Candidate` and `QueuedForHost`, keeping
   capability matching and `(created_at,id)` ordering together. Queue rows are
-  eligible candidates, not promises of exclusive assignment to a host.
+  eligible candidates, not promises of exclusive assignment to a host. A job
+  held by a batch (`batch_id` set) is not in that queue.
 - `useVisiblePolling` serializes reads, pauses hidden-page polling and discards
   obsolete responses after mutations. Host settings and registered-runner
   presentation share it. Go and Python signing share deterministic vectors in
   `internal/auth/testdata/host_signature_vectors.json`; preserve that protocol
   contract when either implementation changes.
+
+## Batched verification
+
+A repo can opt in to batched build-host verification (Settings, repo row,
+"Batch build checks"; `batch_verify` and `batch_max`, off by default). Full
+design: [amendment](amendments/batched-verification.md).
+
+- `BuildJobService.Claim` asks `batchAssignment`
+  ([build_batch_service.go](../internal/app/build_batch_service.go)) before
+  running a job alone. It offers a queued bisection half first, then builds a
+  new batch around the job the host would have claimed, from free queued jobs
+  of other tickets in the same repo, preset and target. Only hosts whose
+  agent is 1.1 or later get batches.
+- A batch is a `build_batches` row that holds member jobs through
+  `build_jobs.batch_id`. Each ticket's own job stays the record that workers
+  submit and poll. The host-facing protocol (claim, bundle, progress,
+  complete, the reaper) routes a batch id to the batch, and the host fetches
+  each member's bundle by its job id.
+- `batchComplete` settles every member in the completion's transaction: a
+  pass becomes each live member's own `passed` job and verdict for its exact
+  commit; a red batch is split into halves (two or more: a queued batch; one:
+  verified alone); a member the host could not merge (`excluded`) and a
+  superseded member never get the batch's verdict.
+- `build_batch_members.outcome` and a board comment on each ticket's timeline
+  record what a batch did. The runners strip shows a batch's lead ticket plus
+  a count.
 
 ## Health check after PR #9..#54 — selected changes
 

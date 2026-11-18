@@ -60,6 +60,8 @@ func (s *server) restyleRepo(w http.ResponseWriter, r *http.Request, who caller)
 		HealthCheckEvery *int                   `json:"health_check_every"`
 		DeployMode       *domain.DeployMode     `json:"deploy_mode"`
 		ReviewBlocking   *domain.ReviewBlocking `json:"review_blocking"`
+		BatchVerify      *bool                  `json:"batch_verify"`
+		BatchMax         *int                   `json:"batch_max"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
@@ -115,6 +117,7 @@ func (s *server) restyleRepo(w http.ResponseWriter, r *http.Request, who caller)
 		Color: body.Color, Description: body.Description, TreatAsPublic: body.TreatAsPublic, DeployMode: body.DeployMode,
 		RequireSpecApproval: body.RequireSpec, RequireDesignApproval: body.RequireDesign,
 		AllowAgentMerge: body.AllowAgentMerge, HealthCheckEvery: body.HealthCheckEvery, ReviewBlocking: body.ReviewBlocking,
+		BatchVerify: body.BatchVerify, BatchMax: body.BatchMax,
 	}
 	repo, err := s.deps.Repos.Restyle(r.Context(), who.actor, id, style)
 	if err != nil {

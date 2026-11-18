@@ -1402,6 +1402,7 @@ a.runner:hover { border-color: var(--border-strong); }
 }
 .runner__ticket { font-weight: 650; }
 .runner__step { color: var(--text-muted); }
+.runner__batch { color: var(--text-muted); font-weight: 400; }
 .runner__time { color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .runner--building { border-color: color-mix(in srgb, var(--build) 45%, var(--border)); background: color-mix(in srgb, var(--build) 10%, transparent); }
 .runner--building > svg { color: var(--build); }

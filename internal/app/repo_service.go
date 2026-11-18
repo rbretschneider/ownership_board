@@ -98,6 +98,11 @@ func (s *RepoService) Restyle(ctx context.Context, actor domain.Actor, id int64,
 				return err
 			}
 		}
+		if style.ChangesBatching() {
+			if err := repos.CodeRepos().SetBatching(ctx, repo); err != nil {
+				return err
+			}
+		}
 		if style.ChangesHealthCheck() {
 			return repos.CodeRepos().SetHealthCheck(ctx, repo)
 		}
@@ -106,6 +111,10 @@ func (s *RepoService) Restyle(ctx context.Context, actor domain.Actor, id int64,
 	if err == nil && style.ChangesHealthCheck() {
 		s.logger.Info("repo health check interval changed", "repo", repo.FullName, "by", actor.Name,
 			"health_check_every", repo.HealthCheckEvery)
+	}
+	if err == nil && style.ChangesBatching() {
+		s.logger.Info("repo batched verification changed", "repo", repo.FullName, "by", actor.Name,
+			"batch_verify", repo.BatchVerify, "batch_max", repo.BatchMax)
 	}
 	if err == nil && style.ChangesGates() {
 		s.logger.Info("repo checkpoints changed", "repo", repo.FullName, "by", actor.Name,

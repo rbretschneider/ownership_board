@@ -59,7 +59,7 @@ func (s *BuildJobService) recover(ctx context.Context, r Repos, now time.Time) e
 			return e
 		}
 	}
-	return nil
+	return s.recoverBatches(ctx, r, now)
 }
 func (s *BuildJobService) RequeueOffline(ctx context.Context) error {
 	return s.store.Write(ctx, func(r Repos) error { return s.recover(ctx, r, s.now()) })

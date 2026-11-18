@@ -49,14 +49,16 @@ export function RunnersStrip() {
                   {host.jobs.map((job) => {
                     const stopping = job.status === "cancelled" || job.status === "superseded";
                     const label = stopping ? "stopping" : job.detail || job.phase || job.status;
+                    const batch = job.batch && job.batch.length > 1 ? job.batch : null;
+                    const batchWords = batch ? ` · batch of ${batch.map((t) => `#${t}`).join(", ")}` : "";
                     return (
                       <a
                         key={job.id}
                         className={`runner${stopping ? " runner--orphan" : ""}`}
                         href={ticketHash(job.ticket_id)}
-                        title={`${job.repo} @ ${job.sha} (${job.preset}) · ${label} · attempt ${job.attempt}`}
+                        title={`${job.repo} @ ${job.sha} (${job.preset})${batchWords} · ${label} · attempt ${job.attempt}`}
                       >
-                        <span>#{job.ticket_id}</span>
+                        <span>#{job.ticket_id}{batch && <span className="runner__batch"> +{batch.length - 1}</span>}</span>
                         <span className="runner__step">{label}</span>
                       </a>
                     );

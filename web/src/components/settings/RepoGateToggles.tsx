@@ -11,6 +11,9 @@ const GATES: readonly { field: Gate; label: string }[] = [
   { field: "allow_agent_merge", label: "Auto-merge green PRs" },
 ];
 
+/** Batch sizes offered for batched build-host verification. */
+export const BATCH_SIZES: readonly number[] = [2, 3, 4, 6, 8];
+
 /** Which review findings stop a publication in the repo. */
 export const BLOCKING: readonly { value: ReviewBlocking; label: string }[] = [
   { value: "p0", label: "Critical only (P0)" },
@@ -28,9 +31,9 @@ export function RepoGateToggles({ repo, onUpdated }: { repo: Repo; onUpdated: (r
   const api = useApi();
   const toast = useToast();
   const id = useId();
-  const [busy, setBusy] = useState<Gate | "deploy_mode" | "review_blocking" | null>(null);
+  const [busy, setBusy] = useState<Gate | "deploy_mode" | "review_blocking" | "batch" | null>(null);
 
-  const save = async (field: Gate | "deploy_mode" | "review_blocking", label: string, patch: RepoEdit) => {
+  const save = async (field: Gate | "deploy_mode" | "review_blocking" | "batch", label: string, patch: RepoEdit) => {
     setBusy(field);
     onUpdated({ ...repo, ...patch });
     try {
@@ -79,6 +82,18 @@ export function RepoGateToggles({ repo, onUpdated }: { repo: Repo; onUpdated: (r
           {BLOCKING.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
         </select>
         <span className="field__hint" id={`${id}-blocking-hint`}>Lower findings are listed in the PR as follow-ups.</span>
+      </div>
+      <div className="repo-deploys">
+        <label htmlFor={`${id}-batch`}>Batch build checks</label>
+        <select className="input select" id={`${id}-batch`} value={repo.batch_verify ? String(repo.batch_max ?? 4) : "off"} disabled={busy !== null}
+          aria-describedby={`${id}-batch-hint`}
+          onChange={e => void save("batch", "Batch build checks", e.target.value === "off"
+            ? { batch_verify: false }
+            : { batch_verify: true, batch_max: Number(e.target.value) })}>
+          <option value="off">Off (one run per commit)</option>
+          {BATCH_SIZES.map(n => <option key={n} value={String(n)}>Up to {n} tickets</option>)}
+        </select>
+        <span className="field__hint" id={`${id}-batch-hint`}>One build-host run checks several tickets merged together; a red batch is split until the cause runs alone. Use it only where red means a broken ticket, not a flaky test.</span>
       </div>
       <span id={`${id}-hint`} className="visually-hidden">Enabled approval checkpoints wait for you; auto-merge applies only to green PRs.</span>
     </div>

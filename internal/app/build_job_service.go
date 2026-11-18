@@ -205,7 +205,19 @@ func (s *BuildJobService) Get(ctx context.Context, id string) (domain.BuildJob, 
 	if !domain.ValidBuildJobID(id) {
 		return j, domain.Invalidf("invalid job id")
 	}
-	e := s.store.Read(ctx, func(r Repos) error { var e error; j, e = r.BuildJobs().Get(ctx, id); return e })
+	e := s.store.Read(ctx, func(r Repos) error {
+		var e error
+		if j, e = r.BuildJobs().Get(ctx, id); domain.KindOf(e) == domain.KindNotFound {
+			// A batch reads as its host assignment.
+			b, be := r.BuildBatches().Get(ctx, id)
+			if be != nil {
+				return e
+			}
+			j = b.Assignment()
+			return nil
+		}
+		return e
+	})
 	return j, e
 }
 func approvedJobHost(ctx context.Context, r Repos, who AuthenticatedBuildHost) (domain.BuildHost, error) {
@@ -245,12 +257,29 @@ func (s *BuildJobService) Claim(ctx context.Context, who AuthenticatedBuildHost)
 		if e != nil {
 			return e
 		}
-		if active >= h.MaxParallel {
+		batches, e := r.BuildBatches().AssignmentCount(ctx, h.ID)
+		if e != nil {
+			return e
+		}
+		if active+batches >= h.MaxParallel {
 			return nil
 		}
 		j, e := hotFirstJob(ctx, r, h)
-		if e != nil || j == nil {
+		if e != nil {
 			return e
+		}
+		// A repo that opts in verifies queued commits together (build_batch_service.go).
+		b, e := s.batchAssignment(ctx, r, h, j, now)
+		if e != nil {
+			return e
+		}
+		if b != nil {
+			a := b.Assignment()
+			out = &a
+			return nil
+		}
+		if j == nil {
+			return nil
 		}
 		j.Status = "running"
 		j.HostID = &h.ID
@@ -283,7 +312,7 @@ func (s *BuildJobService) OpenBundle(ctx context.Context, who AuthenticatedBuild
 		if e != nil {
 			return e
 		}
-		if j.Status != "running" || j.HostID == nil || *j.HostID != who.ID || j.AssignmentReleasedAt != nil {
+		if !assignedTo(j, who) && !heldByBatchOf(ctx, r, j, who) {
 			return domain.Forbiddenf("job is not assigned to this host")
 		}
 		out, e = s.bundles.Open(id)
@@ -322,6 +351,12 @@ func (s *BuildJobService) Progress(ctx context.Context, who AuthenticatedBuildHo
 		// report instead of when the host next asks for work. A busy host only asks once a
 		// slot frees (2026-11-15: #166 merged and its job held an idaho slot for an hour).
 		if e := r.BuildJobs().SupersedeCompleted(ctx, now); e != nil {
+			return e
+		}
+		if b, ok, e := isBatch(ctx, r, id); e != nil {
+			return e
+		} else if ok {
+			reply, e = s.batchProgress(ctx, r, who, b, p, now)
 			return e
 		}
 		j, e := r.BuildJobs().Get(ctx, id)
@@ -371,6 +406,15 @@ func (s *BuildJobService) Complete(ctx context.Context, who AuthenticatedBuildHo
 		now := s.now()
 		if e := s.recover(ctx, r, now); e != nil {
 			return e
+		}
+		if b, ok, e := isBatch(ctx, r, id); e != nil {
+			return e
+		} else if ok {
+			j, e = s.batchComplete(ctx, r, host, b, c, now)
+			return e
+		}
+		if reportsExcluded(c.Result) {
+			return domain.Invalidf("only a batch reports excluded members")
 		}
 		j, e = r.BuildJobs().Get(ctx, id)
 		if e != nil {
@@ -425,6 +469,12 @@ func (s *BuildJobService) Cancel(ctx context.Context, isOwner bool, id string) (
 	}
 	e := s.store.Write(ctx, func(r Repos) error {
 		var e error
+		if b, ok, e := isBatch(ctx, r, id); e != nil {
+			return e
+		} else if ok {
+			j, e = s.cancelBatch(ctx, r, b, s.now())
+			return e
+		}
 		j, e = r.BuildJobs().Get(ctx, id)
 		if e != nil {
 			return e

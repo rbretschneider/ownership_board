@@ -289,6 +289,7 @@ func (s *server) buildHostRunners(w http.ResponseWriter, r *http.Request, who ca
 		Detail    string     `json:"detail"`
 		StartedAt *time.Time `json:"started_at"`
 		Attempt   int        `json:"attempt"`
+		Batch     []int64    `json:"batch,omitempty"`
 	}
 	type host struct {
 		ID          int64              `json:"id"`
@@ -305,7 +306,7 @@ func (s *server) buildHostRunners(w http.ResponseWriter, r *http.Request, who ca
 		h := row.Host
 		jobs := []job{}
 		for _, a := range row.Jobs {
-			jobs = append(jobs, job{a.ID, a.TicketID, a.Repo, a.SHA, a.Preset, a.Status, a.Phase, a.Detail, a.StartedAt, a.Attempt})
+			jobs = append(jobs, job{a.ID, a.TicketID, a.Repo, a.SHA, a.Preset, a.Status, a.Phase, a.Detail, a.StartedAt, a.Attempt, a.Batch})
 		}
 		hosts = append(hosts, host{h.ID, h.Name, h.OS, h.Enabled, h.MaxParallel, h.Online(snapshot.ObservedAt), h.LastSeenAt, jobs})
 	}

@@ -109,6 +109,12 @@ type BuildJob struct {
 	Result               json.RawMessage `json:"result"`
 	BundleBytes          int64           `json:"bundle_bytes"`
 	BundleSHA256         string          `json:"bundle_sha256"`
+	// BatchID is the open batch holding this queued job, if any.
+	BatchID string `json:"batch_id,omitempty"`
+	// BatchSolo means the job is verified alone from now on.
+	BatchSolo bool `json:"-"`
+	// Batch is set only on a batch's host assignment.
+	Batch *BuildJobBatch `json:"batch,omitempty"`
 }
 type BuildJobProgress struct {
 	Attempt int    `json:"attempt"`
@@ -131,14 +137,22 @@ type BuildJobCommand struct {
 type BuildJobResult struct {
 	Commands    []BuildJobCommand `json:"commands"`
 	FailureKind string            `json:"failure_kind,omitempty"`
+	// Excluded lists the batch members (job ids) that did not merge cleanly
+	// into the batch candidate, so the batch did not verify them.
+	Excluded []string `json:"excluded,omitempty"`
 }
 
 func (r BuildJobResult) Validate(status string) error {
 	if status != "passed" && status != "failed" {
 		return Invalidf("invalid result status")
 	}
-	if len(r.Commands) > 128 || len(r.FailureKind) > 64 || !utf8.ValidString(r.FailureKind) {
+	if len(r.Commands) > 128 || len(r.FailureKind) > 64 || !utf8.ValidString(r.FailureKind) || len(r.Excluded) > MaxBatchSize {
 		return Invalidf("invalid result")
+	}
+	for _, id := range r.Excluded {
+		if !ValidBuildJobID(id) {
+			return Invalidf("invalid excluded member")
+		}
 	}
 	failed := r.FailureKind != ""
 	for _, c := range r.Commands {

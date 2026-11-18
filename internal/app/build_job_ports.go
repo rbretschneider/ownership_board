@@ -31,6 +31,11 @@ type BuildJobRepository interface {
 	RecentForTicket(ctx context.Context, ticketID int64, limit int) ([]domain.BuildJob, error)
 	// Open returns every queued or running job.
 	Open(ctx context.Context) ([]domain.BuildJob, error)
+	// SetBatch holds a queued job for a batch (batchID set) or frees it (empty);
+	// solo marks it to be verified alone from now on.
+	SetBatch(ctx context.Context, jobID, batchID string, solo bool) error
+	// BatchCandidates returns free queued jobs that can share a batch with lead, oldest first.
+	BatchCandidates(ctx context.Context, lead domain.BuildJob, limit int) ([]domain.BuildJob, error)
 }
 type BuildJobBundle struct {
 	ID     string
@@ -55,4 +60,19 @@ type BundleStorage interface {
 	Promote(token string, metadata domain.BuildJobSubmission) error
 	Open(id string) (io.ReadCloser, error)
 	Verify(id string, size int64, digest string) error
+}
+
+// BuildBatchRepository persists batched verification runs.
+type BuildBatchRepository interface {
+	Get(context.Context, string) (domain.BuildBatch, error)
+	// Insert stores the batch and holds every member job for it.
+	Insert(context.Context, domain.BuildBatch) error
+	// Save writes the run state and each member's outcome.
+	Save(context.Context, domain.BuildBatch) error
+	// QueuedForHost returns queued batches (bisection halves) the host can run, oldest first.
+	QueuedForHost(context.Context, domain.BuildHost) ([]domain.BuildBatch, error)
+	ActiveAssignments(context.Context) ([]domain.BuildBatch, error)
+	AssignmentCount(context.Context, int64) (int, error)
+	// ForTicket returns the batches that held any of the ticket's jobs, newest first.
+	ForTicket(ctx context.Context, ticketID int64, limit int) ([]domain.BuildBatch, error)
 }
