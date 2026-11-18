@@ -93,6 +93,14 @@ closes a seam.
 | Cause | Rolling supersede only replaces a ticket's own older commit. Different tickets' commits each needed their own full run. |
 | Fix | **Permanent, opt-in per repo:** batched verification merges up to the repo's batch size of queued commits into one run, passes each member for its exact commit, and bisects a red batch until the culprit runs alone ([amendment](amendments/batched-verification.md)). It pays only where red means a broken ticket. A new protocol field must reach only agents that understand it: an older agent would ignore `batch` and pass the lead commit alone, so the board gates batches on the agent version. |
 
+### A flake check is only as fast as the commit's script
+
+| | |
+|---|---|
+| Symptom | The first flake check (2026-11-18, #200) ran the full makercad suite, about an hour, instead of just the suspect test. |
+| Cause | A flake check runs the ticket commit's own verification script. A branch cut before the script learned `OWNERSHIP_ONLY_TESTS_FILE` ignores the list. |
+| Fix | **Mitigated:** the fast path arrives per branch as workers merge the default branch after the script change (makercad PR 151). A pass from a full run is still valid flake evidence, so the check is not cancelled. |
+
 ### A watcher that only watches
 
 | | |
