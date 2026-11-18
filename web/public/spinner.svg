@@ -1,50 +1,74 @@
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512" role="img" aria-label="Loading">
   <title>Loading</title>
   <!--
-    The twin-piston emblem (brand-192.png, drawn at 512) cut into parts with
-    clip paths. Each piston and its lightning slide down the rod's axis into the
-    hub and back; the lightning flashes as its piston reaches the top. Left and
-    right are half a cycle apart.
+    The twin-piston emblem (brand-192.png, drawn at 512) cut into parts. Each
+    piston's metal is a tight outline along its own axis; the lightning above
+    its crown and the glow beside it fade together. A piston strokes down its
+    rod into the hub and back; its lightning fires at the top of the stroke,
+    centred on the crown. Left and right are half a cycle apart.
   -->
   <defs>
     <image id="emblem" href="/brand-192.png" xlink:href="/brand-192.png" width="512" height="512"/>
-    <!-- The hub: static, drawn last so the rods slide under it. -->
+    <!-- Piston crown, skirt and rod, measured along the left piston's axis; the right is its mirror. -->
+    <path id="body-left" d="M195 387L141 297L106 318L45 218L63 194L154 139L191 130L254 235L209 262L256 352Z"/>
+    <path id="body-right" d="M317 387L371 297L406 318L467 218L449 194L358 139L321 130L258 235L303 262L256 352Z"/>
     <clipPath id="hub"><circle cx="256" cy="397" r="104"/></clipPath>
-    <!-- Lightning: everything above each crown's top edge. -->
-    <clipPath id="bolt-left"><path d="M0 0H256V104L215 110L40 190L0 204Z"/></clipPath>
-    <clipPath id="bolt-right"><path d="M512 0H256V104L297 110L472 190L512 204Z"/></clipPath>
-    <!-- Piston, ring lands and rod: below the crown edge, outside the hub. -->
-    <clipPath id="piston-left"><path clip-rule="evenodd" d="M0 204L40 190L215 110L256 104V512H0Z M152 397a104 104 0 1 0 208 0a104 104 0 1 0 -208 0Z"/></clipPath>
-    <clipPath id="piston-right"><path clip-rule="evenodd" d="M512 204L472 190L297 110L256 104V512H512Z M152 397a104 104 0 1 0 208 0a104 104 0 1 0 -208 0Z"/></clipPath>
+    <clipPath id="piston-left"><use href="#body-left" xlink:href="#body-left"/></clipPath>
+    <clipPath id="piston-right"><use href="#body-right" xlink:href="#body-right"/></clipPath>
+    <!-- Lightning: beyond each crown's top edge, across the whole half. -->
+    <clipPath id="bolt-left"><path d="M0 0H256V77L0 232Z"/></clipPath>
+    <clipPath id="bolt-right"><path d="M512 0H256V77L512 232Z"/></clipPath>
+    <!-- Glow beside each piston: the rest of the half, outside the metal, crown edge and hub. -->
+    <mask id="glow-left" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <rect width="256" height="300" fill="#fff"/>
+      <use href="#body-left" xlink:href="#body-left" fill="#000"/>
+      <path d="M0 0H256V77L0 232Z" fill="#000"/>
+      <circle cx="256" cy="397" r="104" fill="#000"/>
+    </mask>
+    <mask id="glow-right" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <rect x="256" width="256" height="300" fill="#fff"/>
+      <use href="#body-right" xlink:href="#body-right" fill="#000"/>
+      <path d="M512 0H256V77L512 232Z" fill="#000"/>
+      <circle cx="256" cy="397" r="104" fill="#000"/>
+    </mask>
   </defs>
   <style>
-    /* One stroke: top (lightning fires), down the rod into the hub, back up. */
     .left { animation: stroke-left 0.8s ease-in-out infinite; }
     .right { animation: stroke-right 0.8s ease-in-out infinite; animation-delay: -0.4s; }
-    /* The flash grows out of each crown, so scale from the crown's centre. */
-    .left .bolt, .right .bolt { animation: fire 0.8s linear infinite; transform-box: view-box; }
-    .left .bolt { transform-origin: 140px 160px; }
-    .right .bolt { transform-origin: 372px 160px; animation-delay: -0.4s; }
-    /* Down the rod axis toward the hub centre: (+-0.52, 0.86) x 20 px. */
+    .glow { animation: glow 0.8s linear infinite; }
+    .right .glow { animation-delay: -0.4s; }
+    /* Each burst sits centred on its crown. */
+    .bolt { transform-box: view-box; animation: fire-left 0.8s linear infinite; transform-origin: 112px 164px; }
+    .right .bolt { animation-name: fire-right; animation-delay: -0.4s; transform-origin: 400px 164px; }
+    /* Down the rod axis toward the hub centre, 20 px. */
     @keyframes stroke-left { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(10px, 17px); } }
     @keyframes stroke-right { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-10px, 17px); } }
-    @keyframes fire {
-      0% { opacity: 1; transform: scale(1.08); }
-      8% { opacity: 0.55; transform: scale(0.97); }
-      14% { opacity: 1; transform: scale(1.04); }
-      28% { opacity: 0; transform: scale(0.85); }
-      86% { opacity: 0; transform: scale(0.85); }
-      100% { opacity: 1; transform: scale(1.08); }
+    @keyframes glow { 0%, 14% { opacity: 1; } 28%, 86% { opacity: 0; } 100% { opacity: 1; } }
+    @keyframes fire-left {
+      0% { opacity: 1; transform: translate(22px, 6px) scale(1); }
+      8% { opacity: 0.55; transform: translate(22px, 6px) scale(0.92); }
+      14% { opacity: 1; transform: translate(22px, 6px) scale(0.98); }
+      28%, 86% { opacity: 0; transform: translate(22px, 6px) scale(0.8); }
+      100% { opacity: 1; transform: translate(22px, 6px) scale(1); }
+    }
+    @keyframes fire-right {
+      0% { opacity: 1; transform: translate(-22px, 6px) scale(1); }
+      8% { opacity: 0.55; transform: translate(-22px, 6px) scale(0.92); }
+      14% { opacity: 1; transform: translate(-22px, 6px) scale(0.98); }
+      28%, 86% { opacity: 0; transform: translate(-22px, 6px) scale(0.8); }
+      100% { opacity: 1; transform: translate(-22px, 6px) scale(1); }
     }
     @media (prefers-reduced-motion: reduce) {
-      .left, .right, .left .bolt, .right .bolt { animation-duration: 2.4s; }
+      .left, .right, .glow, .bolt { animation-duration: 2.4s; }
     }
   </style>
   <g class="left">
+    <g class="glow"><use href="#emblem" xlink:href="#emblem" mask="url(#glow-left)"/></g>
     <use href="#emblem" xlink:href="#emblem" clip-path="url(#piston-left)"/>
     <g class="bolt"><use href="#emblem" xlink:href="#emblem" clip-path="url(#bolt-left)"/></g>
   </g>
   <g class="right">
+    <g class="glow"><use href="#emblem" xlink:href="#emblem" mask="url(#glow-right)"/></g>
     <use href="#emblem" xlink:href="#emblem" clip-path="url(#piston-right)"/>
     <g class="bolt"><use href="#emblem" xlink:href="#emblem" clip-path="url(#bolt-right)"/></g>
   </g>
