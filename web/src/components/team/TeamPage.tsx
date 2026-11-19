@@ -16,7 +16,7 @@ import {
 import { ErrorState } from "../common/ErrorState";
 import { LoadingState } from "../common/LoadingState";
 import { PageShell } from "../common/PageShell";
-import { BuildHostCard, CIRunnersCard, ManagerCard, RunnerCard, TeamBranch, TeamTicketCard } from "./TeamCards";
+import { BuildHostCard, CancelJobButton, CIRunnersCard, ManagerCard, RunnerCard, TeamBranch, TeamTicketCard, type CancelState } from "./TeamCards";
 import { TeamPanel, type PanelContent } from "./TeamPanel";
 
 const CLOCK_TICK_MS = 30_000;
@@ -39,15 +39,30 @@ export function TeamPage() {
   const now = useNow(CLOCK_TICK_MS);
   const { directory } = useRunnerNames();
   const isAdmin = useCurrentUser()?.is_admin === true;
+  // Cancels the owner started, by job id: a spinner while the request runs, then
+  // "Cancelled" (a queued run drops out) until the refresh no longer lists the job.
+  const [cancels, setCancels] = useState<ReadonlyMap<string, CancelState>>(new Map());
+  const setCancel = useCallback((id: string, state: CancelState | null) => setCancels((prev) => {
+    const next = new Map(prev);
+    if (state === null) next.delete(id); else next.set(id, state);
+    return next;
+  }), []);
+  const cancelState = useCallback((id: string) => cancels.get(id), [cancels]);
   const cancelJob = useCallback((job: TeamHostJob | TeamQueuedJob) => {
-    if (job.id === undefined) return;
+    const id = job.id;
+    if (id === undefined || cancels.has(id)) return;
     const commit = job.sha ? ` (${job.sha.slice(0, 8)})` : "";
     if (!window.confirm(`Cancel the build for #${job.ticket_id}${commit}? Its worker treats it as no verdict and checks a newer commit on its next pass.`)) return;
-    api.cancelBuildJob(job.id).then(refetch, (e: unknown) => {
+    setCancel(id, "cancelling");
+    api.cancelBuildJob(id).then(() => {
+      setCancel(id, "cancelled");
+      refetch();
+    }, (e: unknown) => {
+      setCancel(id, null);
       window.alert(`Could not cancel: ${e instanceof Error ? e.message : String(e)}`);
       refetch();
     });
-  }, [api, refetch]);
+  }, [api, refetch, cancels, setCancel]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -273,7 +288,7 @@ export function TeamPage() {
                       const ticket = ticketsById.get(id);
                       return ticket !== undefined && !heldIds.has(id) ? ticketCard(ticket) : null;
                     }} slotOwner={slotOwner} pairedTicket={pairedOnView} pinnedTicket={pairPinned} onPairHover={setPairHover} onPairToggle={togglePair}
-                      onCancel={isAdmin ? cancelJob : undefined} />
+                      onCancel={isAdmin ? cancelJob : undefined} cancelState={cancelState} />
                   ))}
                 </div>
               )}
@@ -285,10 +300,9 @@ export function TeamPage() {
                   return job === undefined ? ticketCard(ticket) : (
                     <div key={ticket.id} className="team-queued__item">
                       {ticketCard(ticket)}
-                      <button type="button" className="team-cancel" aria-label={`Cancel the queued run for #${ticket.id}`}
-                        onClick={() => cancelJob(job)}>
-                        Cancel queued run{job.sha ? ` (${job.sha.slice(0, 8)})` : ""}
-                      </button>
+                      <CancelJobButton job={job} label={`Cancel the queued run for #${ticket.id}`} onCancel={cancelJob}
+                        state={job.id === undefined ? undefined : cancelState(job.id)}
+                        text={`Cancel queued run${job.sha ? ` (${job.sha.slice(0, 8)})` : ""}`} />
                     </div>
                   );
                 })}
