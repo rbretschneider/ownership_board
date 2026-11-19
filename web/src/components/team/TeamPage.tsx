@@ -85,6 +85,9 @@ export function TeamPage() {
     }
     return out;
   }, [team, ticketsByRunner]);
+  /** Each waiting ticket's queued job, so its card under "Waiting for a build slot" can offer Cancel. */
+  const queuedJobs = useMemo(() => new Map((team?.build_hosts ?? []).flatMap((h) => h.queued)
+    .filter((j) => j.id !== undefined).map((j) => [j.ticket_id, j] as const)), [team]);
   const slotTicketIds = useMemo(() => new Set((team?.build_hosts ?? []).flatMap((h) => h.running.map((j) => j.ticket_id))), [team]);
   // Released tickets queued for a build slot: no runner holds them, and any free
   // runner picks one up when its verdict returns.
@@ -277,7 +280,18 @@ export function TeamPage() {
             {queuedTickets.length > 0 && (
               <div className="team-queued" aria-label="Waiting for a build slot">
                 <h3 className="team-subheading">Waiting for a build slot</h3>
-                {queuedTickets.map((ticket) => ticketCard(ticket))}
+                {queuedTickets.map((ticket) => {
+                  const job = isAdmin ? queuedJobs.get(ticket.id) : undefined;
+                  return job === undefined ? ticketCard(ticket) : (
+                    <div key={ticket.id} className="team-queued__item">
+                      {ticketCard(ticket)}
+                      <button type="button" className="team-cancel" aria-label={`Cancel the queued run for #${ticket.id}`}
+                        onClick={() => cancelJob(job)}>
+                        Cancel queued run{job.sha ? ` (${job.sha.slice(0, 8)})` : ""}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>

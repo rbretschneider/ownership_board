@@ -411,6 +411,12 @@ button.team-card:focus-visible,
   margin-top: 6px;
 }
 
+.team-queued__item {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
 /* All of a host's slots side by side in one row; the column count is set inline. */
 .team-slots {
   display: grid;

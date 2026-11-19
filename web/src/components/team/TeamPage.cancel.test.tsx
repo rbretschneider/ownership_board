@@ -59,7 +59,10 @@ it("gives an administrator a Cancel on each running slot and each queued run", a
     "Cancel the run for #12 in slot 1",
     "Cancel the run for #17 in slot 2",
     "Cancel the queued run for #13",
+    "Cancel the queued run for #13",
   ]);
+  // The waiting ticket's own card under "Waiting for a build slot" offers it too.
+  expect(host.querySelector('[aria-label="Waiting for a build slot"] button.team-cancel')?.textContent).toBe("Cancel queued run (cf04ccdc)");
   expect(host.textContent).toContain("#13 waiting 1h 06m");
   expect(host.textContent).toContain("cf04ccdc");
 });
