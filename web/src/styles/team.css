@@ -389,6 +389,11 @@ button.team-card:focus-visible,
   gap: 4px;
 }
 
+/* The Cancel sits right after the run it cancels, not across the card. */
+.team-host__queue-item {
+  gap: 10px;
+}
+
 /* A quiet text button: neutral until hovered, then the danger tone. */
 .team-cancel {
   font: inherit;
@@ -450,14 +455,35 @@ button.team-card:focus-visible,
   border-style: dashed;
 }
 
-.team-slot .team-cancel {
-  margin-top: 6px;
-}
-
 .team-queued__item {
   display: grid;
   gap: 6px;
-  justify-items: start;
+  padding: 8px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+}
+
+/* A slot's or waiting ticket's status bar: label and status on the left, owner and Cancel on the right. */
+.team-slot__head {
+  gap: 10px;
+}
+
+.team-slot__head .team-slot__label {
+  gap: 8px;
+  min-width: 0;
+}
+
+.team-slot__head .team-slot__job {
+  margin-top: 0;
+}
+
+.team-slot__actions {
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.team-slot > .team-card {
+  margin-top: 8px;
 }
 
 /* All of a host's slots side by side in one row; the column count is set inline. */

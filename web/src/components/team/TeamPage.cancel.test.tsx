@@ -25,14 +25,14 @@ function withJobIds(): Team {
   return team;
 }
 
-async function mount(isAdmin: boolean) {
+async function mount(isAdmin: boolean, team: Team = withJobIds()) {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(TEAM_NOW);
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
   const api = {
-    team: vi.fn().mockResolvedValue(withJobIds()),
+    team: vi.fn().mockResolvedValue(team),
     ticket: vi.fn().mockResolvedValue(ticketDetailFixture()),
     cancelBuildJob: vi.fn().mockResolvedValue(undefined),
   };
@@ -59,12 +59,23 @@ it("gives an administrator a Cancel on each running slot and each queued run", a
     "Cancel the run for #12 in slot 1",
     "Cancel the run for #17 in slot 2",
     "Cancel the queued run for #13",
-    "Cancel the queued run for #13",
   ]);
-  // The waiting ticket's own card under "Waiting for a build slot" offers it too.
-  expect(host.querySelector('[aria-label="Waiting for a build slot"] button.team-cancel')?.textContent).toBe("Cancel queued run (cf04ccdc)");
-  expect(host.textContent).toContain("#13 waiting 1h 06m");
-  expect(host.textContent).toContain("cf04ccdc");
+  // #13 shows once: its own card under "Waiting for a build slot", not again in the host's queue line.
+  const waiting = host.querySelector('[aria-label="Waiting for a build slot"] .team-queued__item')!;
+  expect(waiting.querySelector(".team-slot__head")?.textContent).toContain("Queued");
+  expect(waiting.querySelector(".team-slot__head")?.textContent).toContain("cf04ccdc");
+  expect(waiting.querySelector(".team-slot__head button.team-cancel")?.textContent).toBe("Cancel");
+  expect(host.querySelector('[aria-label="builder-1 queue"]')).toBeNull();
+});
+
+it("keeps a queued run in the host's queue when no waiting card shows its ticket", async () => {
+  const team = withJobIds();
+  team.build_hosts[0]!.queued.push({ id: "8".repeat(64), sha: "0123456789ab", ticket_id: 99, repo: "acme/app", queued_at: team.build_hosts[0]!.queued[0]!.queued_at });
+  await mount(true, team);
+  const queue = host.querySelector('[aria-label="builder-1 queue"]')!;
+  expect(queue.textContent).toContain("#99 waiting");
+  expect(queue.textContent).not.toContain("#13");
+  expect(queue.querySelector("button.team-cancel")?.getAttribute("aria-label")).toBe("Cancel the queued run for #99");
 });
 
 it("cancels the queued run after the owner confirms, then refreshes the team", async () => {
@@ -87,11 +98,8 @@ it("shows Cancelling… with a spinner while the request runs, then Cancelled an
   expect(busy.disabled).toBe(true);
   expect(busy.textContent).toContain("Cancelling…");
   expect(busy.querySelector("svg, img, span")).not.toBeNull();
-  // The host queue's own button for the same run shows the same state.
-  expect(host.querySelector('[aria-label="builder-1 queue"] button.team-cancel--busy')).not.toBeNull();
   await act(async () => finish());
   expect(waiting().textContent).toContain("Cancelled");
-  expect(host.querySelector('[aria-label="builder-1 queue"]')).toBeNull();
 });
 
 it("clears the spinner and says so when the cancel fails", async () => {
@@ -115,5 +123,5 @@ it("does nothing when the owner declines the confirmation", async () => {
 it("shows no Cancel to someone who is not an administrator", async () => {
   await mount(false);
   expect(cancelButtons()).toHaveLength(0);
-  expect(host.textContent).toContain("Queue: #13 waiting 1h 06m");
+  expect(host.querySelector('[aria-label="Waiting for a build slot"] [data-ticket="13"]')).not.toBeNull();
 });

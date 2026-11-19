@@ -3,6 +3,7 @@ import { useApi } from "../../api/ApiContext";
 import type { Team, TeamHostJob, TeamQueuedJob, TeamRunner, TeamTicket, TicketDetail } from "../../api/types";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
 import { useNow } from "../../hooks/useNow";
+import { formatElapsed } from "../../lib/buildClock";
 import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 import { useEventStream } from "../../hooks/useEventStream";
 import { useRunnerNames } from "../../hooks/useRunnerNames";
@@ -122,6 +123,7 @@ export function TeamPage() {
     () => (team?.tickets ?? []).filter((t) => t.holder === "" && !heldIds.has(t.id) && !slotTicketIds.has(t.id)),
     [team, heldIds, slotTicketIds],
   );
+  const waitingIds = useMemo(() => new Set(queuedTickets.map((t) => t.id)), [queuedTickets]);
   const [pairHover, setPairHover] = useState<number | null>(null);
   const [pairPinned, setPairPinned] = useState<number | null>(null);
   const togglePair = useCallback((id: number) => setPairPinned((current) => (current === id ? null : id)), []);
@@ -301,7 +303,7 @@ export function TeamPage() {
                       const ticket = ticketsById.get(id);
                       return ticket !== undefined && !heldIds.has(id) ? ticketCard(ticket) : null;
                     }} slotOwner={slotOwner} pairedTicket={pairedOnView} pinnedTicket={pairPinned} onPairHover={setPairHover} onPairToggle={togglePair}
-                      onCancel={isAdmin ? cancelJob : undefined} cancelState={cancelState} />
+                      onCancel={isAdmin ? cancelJob : undefined} cancelState={cancelState} shownElsewhere={waitingIds} />
                   ))}
                 </div>
               )}
@@ -309,13 +311,22 @@ export function TeamPage() {
               <div className="team-queued" aria-label="Waiting for a build slot">
                 <h3 className="team-subheading">Waiting for a build slot</h3>
                 {queuedTickets.map((ticket) => {
-                  const job = isAdmin ? queuedJobs.get(ticket.id) : undefined;
+                  // One card per waiting ticket, with a bar on top: queued, how long, the commit, and Cancel.
+                  const job = queuedJobs.get(ticket.id);
                   return job === undefined ? ticketCard(ticket) : (
                     <div key={ticket.id} className="team-queued__item">
+                      <div className="team-row team-row--between team-slot__head">
+                        <span className="team-row team-slot__label">
+                          <span>Queued</span>
+                          <span className="team-slot__job">waiting {formatElapsed(now - Date.parse(job.queued_at))}</span>
+                          {job.sha && <span className="team-faint">{job.sha.slice(0, 8)}</span>}
+                        </span>
+                        {isAdmin && (
+                          <CancelJobButton job={job} label={`Cancel the queued run for #${ticket.id}`} onCancel={cancelJob}
+                            state={job.id === undefined ? undefined : cancelState(job.id)} />
+                        )}
+                      </div>
                       {ticketCard(ticket)}
-                      <CancelJobButton job={job} label={`Cancel the queued run for #${ticket.id}`} onCancel={cancelJob}
-                        state={job.id === undefined ? undefined : cancelState(job.id)}
-                        text={`Cancel queued run${job.sha ? ` (${job.sha.slice(0, 8)})` : ""}`} />
                     </div>
                   );
                 })}
