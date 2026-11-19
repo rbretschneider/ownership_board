@@ -13,6 +13,7 @@ export const REVIEWERS: readonly { value: ReviewBy; label: string }[] = [
   { value: "same_model", label: "Same model as the engineer" },
   { value: "claude", label: "Claude account" },
   { value: "codex", label: "Codex account" },
+  { value: "codex_only", label: "Codex only (never Claude)" },
 ];
 
 /**

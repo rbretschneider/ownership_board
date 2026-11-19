@@ -515,7 +515,7 @@ export interface BoardSettings {
 }
 
 /** Who reviews: another model than the author (default), the author's own model, or one account. */
-export type ReviewBy = "other_model" | "same_model" | "claude" | "codex";
+export type ReviewBy = "other_model" | "same_model" | "claude" | "codex" | "codex_only";
 
 /** Lowest review finding priority that blocks publication: p0 critical only up to p3 nits too. */
 export type ReviewBlocking = "p0" | "p1" | "p2" | "p3";
