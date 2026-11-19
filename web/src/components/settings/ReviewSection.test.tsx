@@ -22,7 +22,7 @@ it("offers the two standing reviewer choices first, then the accounts, and saves
  const v = await mount({settings: vi.fn().mockResolvedValue(base), editSettings});
  try {
   const select = v.host.querySelector("select")!;
-  expect([...select.options].map(o => o.text)).toEqual(["Any model except the engineer's", "Same model as the engineer", "Claude account", "Codex account"]);
+  expect([...select.options].map(o => o.text)).toEqual(["Any model except the engineer's", "Same model as the engineer", "Claude account", "Codex account", "Codex only (never Claude)"]);
   expect(select.value).toBe("other_model");
   await act(async () => {select.value = "same_model"; select.dispatchEvent(new Event("change", {bubbles: true}));});
   expect(editSettings).toHaveBeenLastCalledWith({review_by: "same_model"});

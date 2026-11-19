@@ -16,10 +16,13 @@ const (
 	// ReviewByClaude and ReviewByCodex pin the review to one account.
 	ReviewByClaude ReviewBy = "claude"
 	ReviewByCodex  ReviewBy = "codex"
+	// ReviewByCodexOnly keeps Claude out of reviews and triage entirely,
+	// even when the Codex account is close to its weekly ceiling.
+	ReviewByCodexOnly ReviewBy = "codex_only"
 )
 
 // ReviewByChoices lists the options in the order Settings shows them.
-var ReviewByChoices = []ReviewBy{ReviewByOtherModel, ReviewBySameModel, ReviewByClaude, ReviewByCodex}
+var ReviewByChoices = []ReviewBy{ReviewByOtherModel, ReviewBySameModel, ReviewByClaude, ReviewByCodex, ReviewByCodexOnly}
 
 // ParseReviewBy reads a stored or submitted reviewer choice.
 func ParseReviewBy(raw string) (ReviewBy, error) {
@@ -29,7 +32,7 @@ func ParseReviewBy(raw string) (ReviewBy, error) {
 			return value, nil
 		}
 	}
-	return "", Invalidf("review_by must be one of other_model, same_model, claude or codex")
+	return "", Invalidf("review_by must be one of other_model, same_model, claude, codex or codex_only")
 }
 
 // ReviewBlocking is the lowest review finding priority that stops a

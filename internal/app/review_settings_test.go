@@ -28,6 +28,14 @@ func TestReviewSettingsDefaultToAFreshAdversarialReviewByAnotherModel(t *testing
 		t.Fatalf("after edit %q fresh %v adversarial %v", settings.ReviewBy, settings.ReviewFreshContext, settings.ReviewAdversarial)
 	}
 
+	codexOnly := domain.ReviewByCodexOnly
+	if _, err := f.board.UpdateSettings(f.ctx, owner, domain.SettingsEdit{ReviewBy: &codexOnly}); err != nil {
+		t.Fatalf("codex_only: %v", err)
+	}
+	if settings, err = f.board.Settings(f.ctx); err != nil || settings.ReviewBy != domain.ReviewByCodexOnly {
+		t.Fatalf("codex_only stored as %q, err %v", settings.ReviewBy, err)
+	}
+
 	bad := domain.ReviewBy("gemini")
 	_, err = f.board.UpdateSettings(f.ctx, owner, domain.SettingsEdit{ReviewBy: &bad})
 	requireErrorKind(t, err, domain.KindInvalid)
