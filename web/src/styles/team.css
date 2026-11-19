@@ -381,6 +381,36 @@ button.team-card:focus-visible,
   overflow-wrap: anywhere;
 }
 
+.team-host__queue--list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+/* A quiet text button: neutral until hovered, then the danger tone. */
+.team-cancel {
+  font: inherit;
+  font-size: 12px;
+  padding: 1px 8px;
+  border: 1px solid var(--t-border, currentColor);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--t-text-2);
+  cursor: pointer;
+}
+
+.team-cancel:hover,
+.team-cancel:focus-visible {
+  color: var(--t-danger, #c0392b);
+  border-color: currentColor;
+}
+
+.team-slot .team-cancel {
+  margin-top: 6px;
+}
+
 /* All of a host's slots side by side in one row; the column count is set inline. */
 .team-slots {
   display: grid;

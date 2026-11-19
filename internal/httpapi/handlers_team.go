@@ -92,6 +92,9 @@ type teamBuildHostDTO struct {
 }
 
 type teamHostJobDTO struct {
+	// ID is the build job (or batch) id the owner's Cancel button posts to.
+	ID        string     `json:"id"`
+	SHA       string     `json:"sha"`
 	TicketID  int64      `json:"ticket_id"`
 	Repo      string     `json:"repo"`
 	Status    string     `json:"status"`
@@ -102,6 +105,8 @@ type teamHostJobDTO struct {
 }
 
 type teamQueuedJobDTO struct {
+	ID       string    `json:"id"`
+	SHA      string    `json:"sha"`
 	TicketID int64     `json:"ticket_id"`
 	Repo     string    `json:"repo"`
 	QueuedAt time.Time `json:"queued_at"`
@@ -169,12 +174,12 @@ func toTeamBuildHost(row app.BuildHostRunner, now time.Time) teamBuildHostDTO {
 	}
 	for _, job := range row.Jobs {
 		out.Running = append(out.Running, teamHostJobDTO{
-			TicketID: job.TicketID, Repo: job.Repo, Status: job.Status, Phase: job.Phase,
+			ID: job.ID, SHA: job.SHA, TicketID: job.TicketID, Repo: job.Repo, Status: job.Status, Phase: job.Phase,
 			Detail: cleanDetail(job.Detail), StartedAt: job.StartedAt, Attempt: job.Attempt,
 		})
 	}
 	for _, job := range row.Queue {
-		out.Queued = append(out.Queued, teamQueuedJobDTO{TicketID: job.TicketID, Repo: job.Repo, QueuedAt: job.CreatedAt})
+		out.Queued = append(out.Queued, teamQueuedJobDTO{ID: job.ID, SHA: job.SHA, TicketID: job.TicketID, Repo: job.Repo, QueuedAt: job.CreatedAt})
 	}
 	return out
 }

@@ -852,6 +852,9 @@ export interface ManagerActivity {
 
 /** A build job running on a host. */
 export interface TeamHostJob {
+  /** The build job (or batch) id; the owner cancels it by this. Absent from older servers. */
+  id?: string;
+  sha?: string;
   ticket_id: number;
   repo: string;
   status: string;
@@ -863,6 +866,9 @@ export interface TeamHostJob {
 
 /** A build job waiting for a host. */
 export interface TeamQueuedJob {
+  /** The build job id; the owner cancels it by this. Absent from older servers. */
+  id?: string;
+  sha?: string;
   ticket_id: number;
   repo: string;
   queued_at: string;
