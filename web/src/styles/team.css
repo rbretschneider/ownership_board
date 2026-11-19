@@ -407,6 +407,37 @@ button.team-card:focus-visible,
   border-color: currentColor;
 }
 
+/* An idle runner's countdown to its next claim. */
+.team-poll {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--t-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.team-poll__ring circle {
+  fill: none;
+  stroke-width: 2;
+}
+
+.team-poll__track {
+  stroke: var(--t-border);
+}
+
+.team-poll__arc {
+  stroke: var(--t-text-2);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear;
+}
+
+/* Why the idle runner's claims come back empty. */
+.team-poll__blocked {
+  font-size: 12px;
+  color: var(--t-text-2);
+}
+
 .team-cancel--busy {
   display: inline-flex;
   align-items: center;

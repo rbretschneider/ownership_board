@@ -103,6 +103,9 @@ func TestTeamShowsRunnersTicketsHostsAndManager(t *testing.T) {
 	if job := running[0].(map[string]any); job["ticket_id"] != float64(1) || job["phase"] != "testing" || job["started_at"] == nil {
 		t.Fatalf("running job = %v", job)
 	}
+	if claims, ok := team["claims"].(map[string]any); !ok || claims["cap"] == nil || claims["in_flight"] == nil || team["idle_poll_seconds"] != float64(30) {
+		t.Fatalf("claims = %v, idle_poll_seconds = %v", team["claims"], team["idle_poll_seconds"])
+	}
 	if job := running[0].(map[string]any); job["id"] != strings.Repeat("1", 64) || job["sha"] != strings.Repeat("a", 40) {
 		t.Fatalf("running job id/sha = %v", job)
 	}

@@ -1,6 +1,7 @@
 import { Bot } from "lucide-react";
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import type { CIRunners, ManagerActivity, TeamBuildHost, TeamHostJob, TeamManager, TeamQueuedJob, TeamRunner, TeamTicket } from "../../api/types";
+import { useNow } from "../../hooks/useNow";
 import { useRunnerLabel, useRunnerNames } from "../../hooks/useRunnerNames";
 import { formatElapsed } from "../../lib/buildClock";
 import { nameRunnersInText } from "../../lib/runnerNames";
@@ -138,10 +139,44 @@ export interface RunnerCardProps {
   onEnter: () => void;
   onLeave: () => void;
   onOpen: () => void;
+  /** Set for an idle runner: its countdown to the next claim and what blocks it. */
+  poll?: IdlePoll;
 }
 
 /** One runner: state, engine, what it is doing, the ticket it holds. */
-export function RunnerCard({ runner, isActive, onEnter, onLeave, onOpen }: RunnerCardProps) {
+/** An idle runner's claim cadence: seconds between claims, and why its claims come back empty ("" when nothing blocks them). */
+export interface IdlePoll {
+  seconds: number;
+  blocked: string;
+}
+
+const RING_R = 7;
+const RING_C = 2 * Math.PI * RING_R;
+
+/**
+ * A stopwatch ring counting down to the idle runner's next claim, from its
+ * last call to the board. Past zero it reads "checking…" until the next team
+ * refresh brings a newer last call and the ring starts over.
+ */
+export function PollCountdown({ lastSeen, seconds }: { lastSeen: string | null; seconds: number }) {
+  const now = useNow(1000);
+  if (lastSeen === null) return null;
+  const left = Math.ceil(seconds - (now - Date.parse(lastSeen)) / 1000);
+  const fraction = Math.min(1, Math.max(0, left / seconds));
+  const label = left > 0 ? `next check in ${left}s` : "checking…";
+  return (
+    <span className="team-poll" role="timer" aria-label={`Idle: ${label}`}>
+      <svg className="team-poll__ring" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+        <circle cx="9" cy="9" r={RING_R} className="team-poll__track" />
+        <circle cx="9" cy="9" r={RING_R} className="team-poll__arc"
+          strokeDasharray={RING_C} strokeDashoffset={RING_C * (1 - fraction)} transform="rotate(-90 9 9)" />
+      </svg>
+      <span>{label}</span>
+    </span>
+  );
+}
+
+export function RunnerCard({ runner, isActive, onEnter, onLeave, onOpen, poll }: RunnerCardProps) {
   const state = RUNNER_STATES[runner.state];
   const name = useRunnerLabel(runner.name, runner);
   const ticket = runner.ticket_id === null ? "none" : `#${runner.ticket_id}`;
@@ -170,6 +205,8 @@ export function RunnerCard({ runner, isActive, onEnter, onLeave, onOpen }: Runne
       </span>
       <span className="team-faint">{runnerPool(current)}</span>
       <span className="team-runner__doing">{humanizeDoing(runner.doing)}</span>
+      {poll !== undefined && <PollCountdown lastSeen={runner.last_seen} seconds={poll.seconds} />}
+      {poll !== undefined && poll.blocked !== "" && <span className="team-poll__blocked">{poll.blocked}</span>}
       {(chip !== undefined || runner.profile_version !== "") && (
         <span className="team-chips">
           {chip !== undefined && (

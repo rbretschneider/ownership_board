@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useApi } from "../../api/ApiContext";
 import type { Team, TeamHostJob, TeamQueuedJob, TeamRunner, TeamTicket, TicketDetail } from "../../api/types";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
+import { useNow } from "../../hooks/useNow";
 import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 import { useEventStream } from "../../hooks/useEventStream";
 import { useRunnerNames } from "../../hooks/useRunnerNames";
@@ -100,6 +101,17 @@ export function TeamPage() {
     }
     return out;
   }, [team, ticketsByRunner]);
+  // An idle runner counts down to its next claim and, when the autonomous
+  // in-flight cap is full, says that is why it takes nothing from Ready.
+  const idlePoll = useMemo(() => {
+    if (team?.idle_poll_seconds === undefined) return undefined;
+    const claims = team.claims;
+    const capFull = claims !== undefined && claims.cap > 0 && claims.in_flight >= claims.cap;
+    return {
+      seconds: team.idle_poll_seconds,
+      blocked: capFull ? `In-flight cap full: ${claims.in_flight} of ${claims.cap} tickets being worked` : "",
+    };
+  }, [team]);
   /** Each waiting ticket's queued job, so its card under "Waiting for a build slot" can offer Cancel. */
   const queuedJobs = useMemo(() => new Map((team?.build_hosts ?? []).flatMap((h) => h.queued)
     .filter((j) => j.id !== undefined).map((j) => [j.ticket_id, j] as const)), [team]);
@@ -262,6 +274,7 @@ export function TeamPage() {
                       onEnter={() => setHovered(runner.name)}
                       onLeave={() => setHovered((current) => (current === runner.name ? null : current))}
                       onOpen={() => setSelection({ kind: "runner", name: runner.name })}
+                      poll={runner.state === "idle" ? idlePoll : undefined}
                     />
                     {own.map((ticket) => ticketCard(ticket, true))}
                   </TeamBranch>
@@ -359,16 +372,6 @@ function runnerPanel(runner: TeamRunner, detail: { value: TicketDetail | null; f
     log: ticket === null ? [] : activityLines(ticket.timeline, ticket.id),
     logNote,
   };
-}
-
-/** The current time, refreshed every `intervalMs` so clocks keep moving. */
-function useNow(intervalMs: number): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), intervalMs);
-    return () => window.clearInterval(timer);
-  }, [intervalMs]);
-  return now;
 }
 
 function targetSelector(target: ManagerTarget): string {

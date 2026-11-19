@@ -93,7 +93,21 @@ type Team struct {
 	Tickets    []TeamTicket
 	Hosts      []BuildHostRunner
 	QueuedByOS map[domain.BuildHostOS]int
+	// Claims is how full the autonomous in-flight cap is: when InFlight
+	// reaches Cap, idle runners poll and get nothing from Ready.
+	Claims TeamClaims
 }
+
+// TeamClaims is the autonomous in-flight count against its cap.
+type TeamClaims struct {
+	InFlight int
+	Cap      int
+}
+
+// WorkerIdlePoll is how long an idle worker waits between claims: the
+// agent_runner worker loop sleeps 30 s after a claim returns no work. The Team
+// view counts each idle runner down from its last call by this much.
+const WorkerIdlePoll = 30 * time.Second
 
 // Team reads the whole team in one snapshot. People and agent tokens may read
 // it, like the board.
@@ -139,6 +153,11 @@ func (s *BoardService) Team(ctx context.Context) (Team, error) {
 		}
 		team.Runners, team.Tickets = TeamRosterWith(board.Tickets, signals, now, presence)
 		nameRunners(team.Runners, domain.NewRunnerDirectory(names))
+		inFlight, err := repos.Tickets().CountInFlightAutonomous(ctx)
+		if err != nil {
+			return err
+		}
+		team.Claims = TeamClaims{InFlight: inFlight, Cap: settings.AutonomousInFlightCap}
 		team.Hosts, team.QueuedByOS, err = loadHostRunners(ctx, repos, true)
 		return err
 	})
