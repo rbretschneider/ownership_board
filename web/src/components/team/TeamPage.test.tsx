@@ -50,7 +50,9 @@ it("draws the org chart: manager, runners with their tickets, and build hosts", 
   expect(runner("@worker/7/claude_2").textContent).toContain("Idle");
   expect(host.querySelector('[data-ticket="12"]')?.textContent).toContain("Testing on builder-1 slot 1");
   expect(host.textContent).toContain("2 of 2 building");
-  expect(host.textContent).toContain("Queue: #13 waiting 1h 06m");
+  // #13 waits for a slot: it shows once, as its own card, not again in the host's queue line.
+  expect(host.querySelector('[aria-label="Waiting for a build slot"] [data-ticket="13"]')).not.toBeNull();
+  expect(host.textContent).not.toContain("Queue: #13");
 });
 
 it("nests each ticket under the runner working it, and a ticket no runner holds in its host slot", () => {
@@ -64,7 +66,8 @@ it("nests each ticket under the runner working it, and a ticket no runner holds 
   expect(child.querySelector(".badge--usage")?.textContent).toContain("1.9M tok");
   expect(runner("@worker/7/claude_2").closest(".team-branch")!.querySelector("[data-ticket]")).toBeNull();
   const slot = host.querySelector('[data-host="builder-1"] [data-ticket="17"]');
-  expect(slot?.closest(".team-host__tickets")).not.toBeNull();
+  // One card per ticket: #17 (no runner) is drawn inside its own slot, under the slot's head.
+  expect(slot?.closest('.team-slot[data-slot="2"]')).not.toBeNull();
   // Each ticket appears once: #12 under its runner, not again in its slot; #13 has no
   // runner and no slot yet, so it waits in the build queue list under the hosts.
   expect(host.querySelectorAll('[data-ticket="12"]')).toHaveLength(1);

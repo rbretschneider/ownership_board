@@ -299,6 +299,8 @@ export interface BuildHostCardProps {
   onCancel?: (job: TeamHostJob | TeamQueuedJob) => void;
   /** Where a cancel the owner started stands, by job id; undefined when none is under way. */
   cancelState?: (jobId: string) => CancelState | undefined;
+  /** Tickets the page already shows as cards under "Waiting for a build slot"; the queue line leaves them out so nothing shows twice. */
+  shownElsewhere?: ReadonlySet<number>;
 }
 
 /** A cancel the owner started: the request is in flight, or it went through. */
@@ -339,16 +341,18 @@ const OS_LABELS: Record<TeamBuildHost["os"], string> = { windows: "Windows", lin
 
 /**
  * One build server: a status dot and the build count in its header, then all
- * of its slots side by side, each with a dot and "#175 · building · 7m". A
- * slot whose ticket a runner holds pairs with that ticket's card; a ticket
- * no runner holds shows under the row. The queue line shows only when jobs wait.
+ * of its slots side by side, each with a bar "Slot 1 #175 · building · 7m" and
+ * its Cancel. A slot whose ticket a runner holds pairs with that ticket's card
+ * under the runner; a ticket no runner holds is drawn inside its slot, under
+ * the bar. The queue line shows only runs no waiting card already shows.
  */
-export function BuildHostCard({ host, now, renderSlotTicket, slotOwner, pairedTicket = null, pinnedTicket = null, onPairHover, onPairToggle, onCancel, cancelState }: BuildHostCardProps) {
-  // A queued run the owner cancelled leaves the list at once, before the refresh lands.
-  const queued = host.queued.filter((job) => job.id === undefined || cancelState?.(job.id) !== "cancelled");
+export function BuildHostCard({ host, now, renderSlotTicket, slotOwner, pairedTicket = null, pinnedTicket = null, onPairHover, onPairToggle, onCancel, cancelState, shownElsewhere }: BuildHostCardProps) {
+  // A queued run the owner cancelled leaves the list at once, before the refresh
+  // lands; one whose ticket already has its own waiting card is not repeated here.
+  const queued = host.queued.filter((job) => (job.id === undefined || cancelState?.(job.id) !== "cancelled")
+    && !(shownElsewhere?.has(job.ticket_id) ?? false));
   const status = hostStatus(host, now);
   const slots = Math.max(host.max_parallel, host.running.length);
-  const unheld = host.running.map((job) => renderSlotTicket?.(job.ticket_id) ?? null).filter((node) => node !== null);
   return (
     <article className={`team-card team-host team-host--${status.tone}`} data-host={host.name}
       style={{ flexGrow: Math.max(1, slots), flexBasis: `${Math.max(300, slots * 170)}px` }}>
@@ -385,24 +389,31 @@ export function BuildHostCard({ host, now, renderSlotTicket, slotOwner, pairedTi
                 }
               },
             } : {};
+            // A ticket no runner holds is drawn inside its slot, under the slot's
+            // status bar: one card per ticket, with the slot and Cancel on top.
+            const card = job === undefined ? null : renderSlotTicket?.(job.ticket_id) ?? null;
             return (
               <div key={i} className={`team-slot team-slot--${slot.tone}${isPaired ? " team-card--linked" : ""}${isPairable ? " team-slot--pairable" : ""}`}
                 data-slot={i + 1} {...pairProps}>
-                <div className="team-row team-row--between">
-                  <span className="team-row team-slot__label">{slot.tone === "busy" ? <BuildMatrix /> : <StatusDot status={slot} />}Slot {i + 1}</span>
-                  {owner !== "" && <span className="team-faint team-slot__owner">{owner}</span>}
+                <div className="team-row team-row--between team-slot__head">
+                  <span className="team-row team-slot__label">
+                    {slot.tone === "busy" ? <BuildMatrix /> : <StatusDot status={slot} />}
+                    <span>Slot {i + 1}</span>
+                    <span className="team-slot__job">{slot.text}</span>
+                  </span>
+                  <span className="team-row team-slot__actions">
+                    {owner !== "" && <span className="team-faint team-slot__owner">{owner}</span>}
+                    {job?.id && onCancel !== undefined && (
+                      <CancelJobButton job={job} label={`Cancel the run for #${job.ticket_id} in slot ${i + 1}`} onCancel={onCancel} state={cancelState?.(job.id)} />
+                    )}
+                  </span>
                 </div>
-                <div className="team-slot__job">{slot.text}</div>
-                {job?.id && onCancel !== undefined && (
-                  <CancelJobButton job={job} label={`Cancel the run for #${job.ticket_id} in slot ${i + 1}`} onCancel={onCancel} state={cancelState?.(job.id)} />
-                )}
+                {card}
               </div>
             );
           })}
         </div>
       )}
-      {/* Tickets no runner holds sit under the slot row at full width, so a narrow slot stays readable. */}
-      {unheld.length > 0 && <div className="team-host__tickets">{unheld}</div>}
       {queued.length > 0 && onCancel === undefined && (
         <div className="team-host__queue">
           Queue: {queued.map((job) => `#${job.ticket_id} waiting ${formatElapsed(now - Date.parse(job.queued_at))}`).join(" · ")}
@@ -412,7 +423,7 @@ export function BuildHostCard({ host, now, renderSlotTicket, slotOwner, pairedTi
       {queued.length > 0 && onCancel !== undefined && (
         <ul className="team-host__queue team-host__queue--list" aria-label={`${host.name} queue`}>
           {queued.map((job) => (
-            <li key={job.id ?? job.ticket_id} className="team-row team-row--between">
+            <li key={job.id ?? job.ticket_id} className="team-row team-host__queue-item">
               <span>#{job.ticket_id} waiting {formatElapsed(now - Date.parse(job.queued_at))}{job.sha ? <span className="team-faint"> · {job.sha.slice(0, 8)}</span> : null}</span>
               {job.id && <CancelJobButton job={job} label={`Cancel the queued run for #${job.ticket_id}`} onCancel={onCancel} state={cancelState?.(job.id)} />}
             </li>
