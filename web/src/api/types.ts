@@ -916,6 +916,10 @@ export interface Team {
   queued_by_os: Partial<Record<BuildHostOS, number>>;
   /** The repos' GitHub Actions runners as the merge sweep last sampled them; absent from older servers. */
   ci_runners?: CIRunners;
+  /** Autonomous tickets in design or build against the cap; at the cap, idle runners get nothing from Ready. Absent from older servers. */
+  claims?: { in_flight: number; cap: number };
+  /** How long an idle runner waits between claims. Absent from older servers. */
+  idle_poll_seconds?: number;
 }
 
 /** A GitHub Actions runner of one repo. */

@@ -19,6 +19,15 @@ type teamDTO struct {
 	BuildHosts []teamBuildHostDTO         `json:"build_hosts"`
 	QueuedByOS map[domain.BuildHostOS]int `json:"queued_by_os"`
 	CIRunners  ciRunnersSnapshot          `json:"ci_runners"`
+	// Claims and IdlePollSeconds let the view show why idle runners take
+	// nothing (the in-flight cap) and count down to each one's next claim.
+	Claims          teamClaimsDTO `json:"claims"`
+	IdlePollSeconds int           `json:"idle_poll_seconds"`
+}
+
+type teamClaimsDTO struct {
+	InFlight int `json:"in_flight"`
+	Cap      int `json:"cap"`
 }
 
 type teamManagerDTO struct {
@@ -133,6 +142,8 @@ func toTeam(team app.Team) teamDTO {
 		ObservedAt: team.ObservedAt, Manager: toTeamManager(team.Manager),
 		Runners: make([]teamRunnerDTO, 0, len(team.Runners)), Tickets: make([]teamTicketDTO, 0, len(team.Tickets)),
 		BuildHosts: make([]teamBuildHostDTO, 0, len(team.Hosts)), QueuedByOS: team.QueuedByOS,
+		Claims:          teamClaimsDTO{InFlight: team.Claims.InFlight, Cap: team.Claims.Cap},
+		IdlePollSeconds: int(app.WorkerIdlePoll / time.Second),
 	}
 	for _, runner := range team.Runners {
 		out.Runners = append(out.Runners, teamRunnerDTO{

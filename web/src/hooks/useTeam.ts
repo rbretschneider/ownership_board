@@ -3,7 +3,9 @@ import { useApi } from "../api/ApiContext";
 import type { Team } from "../api/types";
 
 /** Build hosts report phases without ticket events, so the view also polls. */
-export const TEAM_POLL_MS = 30_000;
+// Short enough that an idle runner's countdown ring restarts soon after its
+// 30 s claim lands, rather than sitting at "checking…" for a whole poll.
+export const TEAM_POLL_MS = 10_000;
 
 /** Team data for the Team view; refetch keeps what is on screen. */
 export interface TeamState {
