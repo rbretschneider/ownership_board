@@ -76,6 +76,35 @@ it("cancels the queued run after the owner confirms, then refreshes the team", a
   expect(api.team).toHaveBeenCalledTimes(2);
 });
 
+it("shows Cancelling… with a spinner while the request runs, then Cancelled and drops the queued run", async () => {
+  const api = await mount(true);
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  let finish: () => void = () => {};
+  api.cancelBuildJob.mockReturnValue(new Promise<void>((resolve) => { finish = resolve; }));
+  const waiting = () => host.querySelector('[aria-label="Waiting for a build slot"]')!;
+  await act(async () => waiting().querySelector<HTMLButtonElement>("button.team-cancel")!.click());
+  const busy = waiting().querySelector<HTMLButtonElement>("button.team-cancel--busy")!;
+  expect(busy.disabled).toBe(true);
+  expect(busy.textContent).toContain("Cancelling…");
+  expect(busy.querySelector("svg, img, span")).not.toBeNull();
+  // The host queue's own button for the same run shows the same state.
+  expect(host.querySelector('[aria-label="builder-1 queue"] button.team-cancel--busy')).not.toBeNull();
+  await act(async () => finish());
+  expect(waiting().textContent).toContain("Cancelled");
+  expect(host.querySelector('[aria-label="builder-1 queue"]')).toBeNull();
+});
+
+it("clears the spinner and says so when the cancel fails", async () => {
+  const api = await mount(true);
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
+  api.cancelBuildJob.mockRejectedValue(new Error("job is already terminal"));
+  await act(async () => cancelButtons()[0]!.click());
+  expect(alert).toHaveBeenCalledWith("Could not cancel: job is already terminal");
+  expect(host.querySelector("button.team-cancel--busy")).toBeNull();
+  expect(cancelButtons()[0]!.textContent).toBe("Cancel");
+});
+
 it("does nothing when the owner declines the confirmation", async () => {
   const api = await mount(true);
   vi.spyOn(window, "confirm").mockReturnValue(false);

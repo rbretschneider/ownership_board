@@ -260,15 +260,40 @@ export interface BuildHostCardProps {
   onPairToggle?: (ticketId: number) => void;
   /** Cancels a running or queued job; given only to administrators, who alone may cancel. */
   onCancel?: (job: TeamHostJob | TeamQueuedJob) => void;
+  /** Where a cancel the owner started stands, by job id; undefined when none is under way. */
+  cancelState?: (jobId: string) => CancelState | undefined;
 }
 
-/** A small Cancel control that never toggles the slot it sits in. */
-function CancelJobButton({ job, label, onCancel }: { job: TeamHostJob | TeamQueuedJob; label: string; onCancel: (job: TeamHostJob | TeamQueuedJob) => void }) {
+/** A cancel the owner started: the request is in flight, or it went through. */
+export type CancelState = "cancelling" | "cancelled";
+
+/**
+ * A small Cancel control that never toggles the slot it sits in. While the
+ * request runs it shows the engine spinner and "Cancelling…"; once it went
+ * through it reads "Cancelled" until the next refresh drops the job.
+ */
+export function CancelJobButton({ job, label, onCancel, state, text = "Cancel" }: {
+  job: TeamHostJob | TeamQueuedJob;
+  label: string;
+  onCancel: (job: TeamHostJob | TeamQueuedJob) => void;
+  state?: CancelState;
+  text?: string;
+}) {
+  if (state === "cancelled") {
+    return <span className="team-cancel team-cancel--done" role="status">Cancelled</span>;
+  }
+  if (state === "cancelling") {
+    return (
+      <button type="button" className="team-cancel team-cancel--busy" disabled aria-busy="true" aria-label={`Cancelling the run for #${job.ticket_id}`}>
+        <EngineSpinner size={12} /> Cancelling…
+      </button>
+    );
+  }
   return (
     <button type="button" className="team-cancel" aria-label={label} title={label}
       onClick={(e: MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); onCancel(job); }}
       onKeyDown={(e: KeyboardEvent<HTMLButtonElement>) => e.stopPropagation()}>
-      Cancel
+      {text}
     </button>
   );
 }
@@ -281,7 +306,9 @@ const OS_LABELS: Record<TeamBuildHost["os"], string> = { windows: "Windows", lin
  * slot whose ticket a runner holds pairs with that ticket's card; a ticket
  * no runner holds shows under the row. The queue line shows only when jobs wait.
  */
-export function BuildHostCard({ host, now, renderSlotTicket, slotOwner, pairedTicket = null, pinnedTicket = null, onPairHover, onPairToggle, onCancel }: BuildHostCardProps) {
+export function BuildHostCard({ host, now, renderSlotTicket, slotOwner, pairedTicket = null, pinnedTicket = null, onPairHover, onPairToggle, onCancel, cancelState }: BuildHostCardProps) {
+  // A queued run the owner cancelled leaves the list at once, before the refresh lands.
+  const queued = host.queued.filter((job) => job.id === undefined || cancelState?.(job.id) !== "cancelled");
   const status = hostStatus(host, now);
   const slots = Math.max(host.max_parallel, host.running.length);
   const unheld = host.running.map((job) => renderSlotTicket?.(job.ticket_id) ?? null).filter((node) => node !== null);
@@ -330,7 +357,7 @@ export function BuildHostCard({ host, now, renderSlotTicket, slotOwner, pairedTi
                 </div>
                 <div className="team-slot__job">{slot.text}</div>
                 {job?.id && onCancel !== undefined && (
-                  <CancelJobButton job={job} label={`Cancel the run for #${job.ticket_id} in slot ${i + 1}`} onCancel={onCancel} />
+                  <CancelJobButton job={job} label={`Cancel the run for #${job.ticket_id} in slot ${i + 1}`} onCancel={onCancel} state={cancelState?.(job.id)} />
                 )}
               </div>
             );
@@ -339,18 +366,18 @@ export function BuildHostCard({ host, now, renderSlotTicket, slotOwner, pairedTi
       )}
       {/* Tickets no runner holds sit under the slot row at full width, so a narrow slot stays readable. */}
       {unheld.length > 0 && <div className="team-host__tickets">{unheld}</div>}
-      {host.queued.length > 0 && onCancel === undefined && (
+      {queued.length > 0 && onCancel === undefined && (
         <div className="team-host__queue">
-          Queue: {host.queued.map((job) => `#${job.ticket_id} waiting ${formatElapsed(now - Date.parse(job.queued_at))}`).join(" · ")}
+          Queue: {queued.map((job) => `#${job.ticket_id} waiting ${formatElapsed(now - Date.parse(job.queued_at))}`).join(" · ")}
         </div>
       )}
       {/* Administrators see the queue as a list, each waiting run with its own Cancel. */}
-      {host.queued.length > 0 && onCancel !== undefined && (
+      {queued.length > 0 && onCancel !== undefined && (
         <ul className="team-host__queue team-host__queue--list" aria-label={`${host.name} queue`}>
-          {host.queued.map((job) => (
+          {queued.map((job) => (
             <li key={job.id ?? job.ticket_id} className="team-row team-row--between">
               <span>#{job.ticket_id} waiting {formatElapsed(now - Date.parse(job.queued_at))}{job.sha ? <span className="team-faint"> · {job.sha.slice(0, 8)}</span> : null}</span>
-              {job.id && <CancelJobButton job={job} label={`Cancel the queued run for #${job.ticket_id}`} onCancel={onCancel} />}
+              {job.id && <CancelJobButton job={job} label={`Cancel the queued run for #${job.ticket_id}`} onCancel={onCancel} state={cancelState?.(job.id)} />}
             </li>
           ))}
         </ul>

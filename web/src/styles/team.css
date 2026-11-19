@@ -407,6 +407,18 @@ button.team-card:focus-visible,
   border-color: currentColor;
 }
 
+.team-cancel--busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: progress;
+}
+
+.team-cancel--done {
+  display: inline-block;
+  border-style: dashed;
+}
+
 .team-slot .team-cancel {
   margin-top: 6px;
 }
