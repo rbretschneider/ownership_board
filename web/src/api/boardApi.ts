@@ -117,6 +117,8 @@ export interface BoardApi {
   managerSessions(): Promise<{ sessions: ManagerSession[] }>;
   /** The Team view: manager, runners, tickets in flight and build hosts. */
   team(): Promise<Team>;
+  /** Cancels a queued or running build job or batch; administrators only. */
+  cancelBuildJob(id: string): Promise<void>;
   /** Every runner given a friendly name so far. */
   runnerNames(): Promise<{ runners: RunnerName[] }>;
   /** Renames a runner; people only. */
@@ -186,6 +188,7 @@ export function createBoardApi(http: HttpClient): BoardApi {
     managerFlags: () => http.request("GET", "/manager/flags"),
     managerSessions: () => http.request("GET", "/manager/sessions"),
     team: () => http.request("GET", "/team"),
+    cancelBuildJob: async (id) => { await http.request("POST", `/build-jobs/${encodeURIComponent(id)}/cancel`); },
     runnerNames: () => http.request("GET", "/runner-names"),
     renameRunner: (worker, displayName) => http.request("PATCH", `/runner-names/${encodeURIComponent(worker)}`, { display_name: displayName }),
     revokeToken: (id) => http.request("DELETE", `/tokens/${id}`),

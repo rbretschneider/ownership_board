@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useApi } from "../../api/ApiContext";
-import type { Team, TeamRunner, TeamTicket, TicketDetail } from "../../api/types";
+import type { Team, TeamHostJob, TeamQueuedJob, TeamRunner, TeamTicket, TicketDetail } from "../../api/types";
+import { useCurrentUser } from "../../hooks/useCurrentUser";
 import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 import { useEventStream } from "../../hooks/useEventStream";
 import { useRunnerNames } from "../../hooks/useRunnerNames";
@@ -37,6 +38,16 @@ export function TeamPage() {
   useEventStream(debouncedRefetch, refetch);
   const now = useNow(CLOCK_TICK_MS);
   const { directory } = useRunnerNames();
+  const isAdmin = useCurrentUser()?.is_admin === true;
+  const cancelJob = useCallback((job: TeamHostJob | TeamQueuedJob) => {
+    if (job.id === undefined) return;
+    const commit = job.sha ? ` (${job.sha.slice(0, 8)})` : "";
+    if (!window.confirm(`Cancel the build for #${job.ticket_id}${commit}? Its worker treats it as no verdict and checks a newer commit on its next pass.`)) return;
+    api.cancelBuildJob(job.id).then(refetch, (e: unknown) => {
+      window.alert(`Could not cancel: ${e instanceof Error ? e.message : String(e)}`);
+      refetch();
+    });
+  }, [api, refetch]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -258,7 +269,8 @@ export function TeamPage() {
                     <BuildHostCard key={host.id} host={host} now={now} renderSlotTicket={(id) => {
                       const ticket = ticketsById.get(id);
                       return ticket !== undefined && !heldIds.has(id) ? ticketCard(ticket) : null;
-                    }} slotOwner={slotOwner} pairedTicket={pairedOnView} pinnedTicket={pairPinned} onPairHover={setPairHover} onPairToggle={togglePair} />
+                    }} slotOwner={slotOwner} pairedTicket={pairedOnView} pinnedTicket={pairPinned} onPairHover={setPairHover} onPairToggle={togglePair}
+                      onCancel={isAdmin ? cancelJob : undefined} />
                   ))}
                 </div>
               )}
