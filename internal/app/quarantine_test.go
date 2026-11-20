@@ -93,6 +93,38 @@ func TestAFailureAnotherTicketHadGetsAFlakeCheckOfOnlyThatTest(t *testing.T) {
 	}
 }
 
+// 2026-11-20: makercad #253 was filed for the F-09 perf test while #250, which
+// names that test in its spec, was already fixing it.
+func TestAnOpenTicketNamingTheTestBecomesItsFixInsteadOfANewTicket(t *testing.T) {
+	r := quarantineRig(t, 2)
+	if _, err := r.f.store.SQL().Exec(`UPDATE tickets SET spec = spec || ? WHERE id=2`, "\nFails: `"+flaky+"`."); err != nil {
+		t.Fatal(err)
+	}
+	var before int
+	if err := r.f.store.SQL().QueryRow(`SELECT count(*) FROM tickets`).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	r.runAlone("failed", failing(flaky))
+	r.runAlone("failed", failing(flaky))
+	check := r.claim()
+	if check == nil || !check.IsFlakeCheck() {
+		t.Fatalf("want a flake check, got %+v", check)
+	}
+	r.complete(check.ID, 1, "passed", passed)
+	list := r.quarantine()
+	if len(list) != 1 || list[0].FixTicketID == nil || *list[0].FixTicketID != 2 {
+		t.Fatalf("quarantine = %+v, want #2 as the fix", list)
+	}
+	var after int
+	if err := r.f.store.SQL().QueryRow(`SELECT count(*) FROM tickets`).Scan(&after); err != nil || after != before {
+		t.Fatalf("tickets %d -> %d (%v), want no new ticket", before, after, err)
+	}
+	var notes int
+	if err := r.f.store.SQL().QueryRow(`SELECT count(*) FROM timeline WHERE ticket_id=2 AND type='comment' AND body LIKE '%already names that test%'`).Scan(&notes); err != nil || notes != 1 {
+		t.Fatalf("notes on #2 = %d (%v), want 1", notes, err)
+	}
+}
+
 func TestAFailureOnlyOneTicketHasIsNotChecked(t *testing.T) {
 	r := quarantineRig(t, 1)
 	first := r.runAlone("failed", failing(flaky))

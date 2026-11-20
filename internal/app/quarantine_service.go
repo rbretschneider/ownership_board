@@ -278,6 +278,21 @@ func (s *BuildJobService) fileFix(ctx context.Context, r Repos, q *domain.Quaran
 	if q.FixTicketID != nil || s.Board == nil {
 		return nil
 	}
+	// An open ticket that already names the test is its fix: a second ticket
+	// would edit the same test in parallel (2026-11-20: makercad #253 was filed
+	// for F-09 while #250, the F-09 fix, was in Windows verification).
+	existing, isFound, err := openTicketNaming(ctx, r, q.RepoID, q.Test)
+	if err != nil {
+		return err
+	}
+	if isFound {
+		q.FixTicketID = &existing
+		note := domain.NewEntry(existing, domain.TimelineComment, domain.SystemActor, q.CreatedAt).WithBody(
+			"The board quarantined `" + q.Test + "` as flaky: " + q.Reason + ". This ticket already names that test, so it is " +
+				"the fix and no separate flaky-test ticket was filed. Verification skips the test until this ticket merges " +
+				"and the test passes " + fmt.Sprint(domain.QuarantineReleasePasses) + " runs.")
+		return r.Timeline().Append(ctx, &note)
+	}
 	draft := domain.AutonomousDraft{
 		TicketDraft: domain.TicketDraft{RepoID: q.RepoID, Kind: string(domain.KindBug), Title: clip("Fix flaky test: "+q.Test, 200),
 			Body: "The board quarantined this test as flaky: " + q.Reason + "."},
@@ -297,6 +312,25 @@ func (s *BuildJobService) fileFix(ctx context.Context, r Repos, q *domain.Quaran
 	q.FixTicketID = &id
 	out.events = append(out.events, events...)
 	return nil
+}
+
+// openTicketNaming finds the oldest unfinished ticket in the repo whose title,
+// request or spec names the test.
+func openTicketNaming(ctx context.Context, r Repos, repoID int64, test string) (int64, bool, error) {
+	tickets, err := r.Tickets().List(ctx, TicketFilter{IsScoped: true, RepoIDs: []int64{repoID}})
+	if err != nil {
+		return 0, false, err
+	}
+	var found int64
+	for _, t := range tickets {
+		if t.Stage.IsCompleted() || (found != 0 && t.ID > found) {
+			continue
+		}
+		if strings.Contains(t.Title, test) || strings.Contains(t.Body, test) || strings.Contains(t.Spec, test) {
+			found = t.ID
+		}
+	}
+	return found, found != 0, nil
 }
 
 func fixSpec(q domain.QuarantinedTest) string {
