@@ -93,11 +93,11 @@ func fetchTail(ctx context.Context, client *http.Client, target string, maxBytes
 	if response.StatusCode/100 != 2 {
 		return "", statusError(response.StatusCode)
 	}
-	tail, err := readTail(io.LimitReader(response.Body, maxLogDownload), maxBytes)
+	text, err := readFailuresAndTail(io.LimitReader(response.Body, maxLogDownload), maxBytes)
 	if err != nil {
 		return "", unreachable(err)
 	}
-	return cleanLog(tail, maxBytes), nil
+	return text, nil
 }
 
 // readTail keeps the last maxBytes of a stream without holding all of it.

@@ -203,7 +203,11 @@ running far too long): find why from the ticket.
   workflow's concurrency settings are the cause: file a repair ticket for the
   CI configuration and make the story depend on it.
 - **ci_failed** (the default branch or a release run is red): read the
-  failure with `ci_failed_log`. If an open ticket already covers it, make the
+  failure with `ci_failed_log`. It returns the failure lines from earlier in
+  the log as well as its end. If they do not name the cause, call it again
+  with `max_bytes` 20000, and read every failed job of the run. Missing
+  artifacts never hide a cause the log names: never wait for, or ask the
+  owner for, evidence the log already holds. If an open ticket already covers it, make the
   affected stories depend on that ticket. Otherwise file one repair ticket.
   Never re-run a real failure to make it pass.
 - **runner_offline**: an outside cause. With build-host repair on, bring the
