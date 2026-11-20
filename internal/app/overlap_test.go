@@ -98,6 +98,42 @@ func TestABlockedOlderBuildDoesNotHoldNewerOnesBack(t *testing.T) {
 	}
 }
 
+// 2026-11-20: makercad #218 started before its prerequisite #217, stopped on a
+// question, and held #217 back on shared files; neither moved for 11 hours.
+func TestAStartedBuildWaitingOnTheOwnerDoesNotHoldOthersBack(t *testing.T) {
+	for _, stall := range []string{"question", "blocked"} {
+		t.Run(stall, func(t *testing.T) {
+			f := newFixture(t)
+			api := f.repo("acme/api")
+			started, held := f.ticket("started", api.ID), f.ticket("held", api.ID)
+			f.toReady(started)
+			f.toReady(held)
+			f.toBuildWith(held, "Add src/fea/src/Solver.cpp.")
+			f.toBuildWith(started, "Use src/fea/src/Solver.cpp.")
+			branch := "ob/started"
+			if _, err := f.board.Edit(f.ctx, owner, started, domain.TicketEdit{Branch: &branch}); err != nil {
+				t.Fatalf("set branch: %v", err)
+			}
+			if err := f.store.Write(f.ctx, func(repos app.Repos) error {
+				if stall == "question" {
+					return repos.Questions().Insert(f.ctx, &domain.Question{TicketID: started, Round: 1, Prompt: "Where is the solver?", AskedBy: "agent", AskedAt: f.clock.Now()})
+				}
+				ticket, err := repos.Tickets().Get(f.ctx, started)
+				if err != nil {
+					return err
+				}
+				ticket.BlockedReason = "waiting on the owner"
+				return repos.Tickets().Update(f.ctx, ticket)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if work := f.mustClaim(agent, app.ClaimInput{}); work.Ticket.Ticket.ID != held {
+				t.Fatalf("claimed #%d, want #%d past the stalled build sharing its files", work.Ticket.Ticket.ID, held)
+			}
+		})
+	}
+}
+
 func TestAStartedBuildIsNeverHeldBack(t *testing.T) {
 	f := newFixture(t)
 	api := f.repo("acme/api")
