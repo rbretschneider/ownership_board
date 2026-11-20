@@ -305,7 +305,7 @@ func heldByOverlap(ctx context.Context, repos Repos, ticket domain.Ticket) (bool
 		return false, err
 	}
 	var designs []map[string]bool
-	var underWay []map[string]bool
+	underWay := map[int64]map[string]bool{}
 	for _, other := range all {
 		if other.Design == "" || other.RepoID != ticket.RepoID {
 			continue
@@ -317,16 +317,41 @@ func heldByOverlap(ctx context.Context, repos Repos, ticket domain.Ticket) (bool
 		}
 		started := (other.Stage == domain.StageBuild && other.Branch != "") || other.Stage == domain.StagePR
 		if started || waitsAhead(other, ticket) {
-			underWay = append(underWay, files)
+			underWay[other.ID] = files
 		}
 	}
 	hubs := domain.HubFiles(designs)
-	for _, files := range underWay {
+	stalled, err := stalledIDs(ctx, repos, all)
+	if err != nil {
+		return false, err
+	}
+	for id, files := range underWay {
+		if stalled[id] {
+			continue
+		}
 		if len(domain.SharedFiles(mine, files, hubs)) > 0 {
 			return true, nil
 		}
 	}
 	return false, nil
+}
+
+// stalledIDs marks the tickets that cannot finish without the owner: blocked,
+// or waiting on an unanswered question. Such a build never holds another back
+// (2026-11-20: makercad #218 started before its prerequisite #217, stopped on
+// a question, and held #217 back on shared files for 11 hours, so neither moved).
+func stalledIDs(ctx context.Context, repos Repos, tickets []domain.Ticket) (map[int64]bool, error) {
+	open, err := repos.Questions().OpenCounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	stalled := map[int64]bool{}
+	for _, t := range tickets {
+		if t.IsBlocked() || open[t.ID] > 0 {
+			stalled[t.ID] = true
+		}
+	}
+	return stalled, nil
 }
 
 // waitsAhead reports whether other is a build that has not started yet and
