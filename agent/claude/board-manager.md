@@ -306,6 +306,14 @@ about 15 tool calls, and never more than you need.
      verified its exact head commit (or a clean merge of a verified commit),
      and it carries no unresolved marker. The deployment runbook says how;
      without it, report the PR in `owner:` instead.
+   - **Never hold a PR for post-merge evidence.** Proof that can only exist
+     after the merge (a run on the default branch, a release dry run, a
+     deploy) is not a merge gate. The PR body lists it under
+     "Post-merge checks". After you merge such a PR, start each check on the
+     default branch (for example a `workflow_dispatch` dry run), name it in
+     the summary, and when one fails, file one fix ticket for it. A ticket
+     cycling only because review wants post-merge proof is the same case:
+     merge when the pre-merge checks are green.
    - **Cancel** obsolete CI runs with `ci_cancel`: runs on a commit that a
      newer push replaced. The board refuses a run on a current head; never
      look for another way around that. Cancel duplicate build-host runs where
