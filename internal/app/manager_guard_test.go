@@ -85,6 +85,31 @@ func TestTheManagersLinksExpireAfterSixHours(t *testing.T) {
 	}
 }
 
+// 2026-11-21: makercad #239's links to #218 expired every 6 hours while #218
+// was building, and workers re-claimed #239 every 10 minutes.
+func TestAManagerLinkToWorkStillMovingDoesNotExpire(t *testing.T) {
+	f := newFixture(t)
+	api := f.repo("acme/api")
+	prerequisite := f.autonomous("B2 heatmap", api.ID)
+	story := f.autonomous("C integration", api.ID)
+	if _, err := f.board.LinkTickets(f.ctx, manager, story, "depends_on", prerequisite); err != nil {
+		t.Fatalf("manager link: %v", err)
+	}
+	f.clock.Advance(app.ManagerLinkTTL - time.Hour)
+	title := "B2 heatmap, building"
+	if _, err := f.board.Edit(f.ctx, owner, prerequisite, domain.TicketEdit{Title: &title}); err != nil {
+		t.Fatalf("touch prerequisite: %v", err)
+	}
+	f.clock.Advance(time.Hour + time.Minute)
+	if removed, err := f.board.ExpireManagerLinks(f.ctx, manager); err != nil || removed != 0 {
+		t.Fatalf("removed = %d %v, want the link to moving work kept", removed, err)
+	}
+	f.clock.Advance(app.ManagerLinkTTL)
+	if removed, err := f.board.ExpireManagerLinks(f.ctx, manager); err != nil || removed != 1 {
+		t.Fatalf("removed = %d %v, want the link expired once the prerequisite went quiet", removed, err)
+	}
+}
+
 func TestTheManagerCannotFileADuplicateOfOpenWork(t *testing.T) {
 	f := newFixture(t)
 	api := f.repo("acme/api")
