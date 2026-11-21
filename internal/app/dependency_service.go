@@ -181,6 +181,18 @@ func (s *BoardService) ExpireManagerLinks(ctx context.Context, actor domain.Acto
 			if now.Sub(relation.AddedAt) < ManagerLinkTTL {
 				continue
 			}
+			// A link to work that is still moving is not a forgotten link: keep
+			// it while the prerequisite changed within the TTL (2026-11-21:
+			// makercad #239's links to #218 expired every 6 hours while #218
+			// was building, and workers re-claimed #239 every 10 minutes until
+			// the manager re-added them).
+			prerequisite, err := repos.Tickets().Get(ctx, relation.ToID)
+			if err != nil {
+				return err
+			}
+			if !prerequisite.Stage.IsCompleted() && now.Sub(prerequisite.UpdatedAt) < ManagerLinkTTL {
+				continue
+			}
 			ticket, err := repos.Tickets().Get(ctx, relation.FromID)
 			if err != nil {
 				return err
