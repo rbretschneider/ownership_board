@@ -336,18 +336,24 @@ func heldByOverlap(ctx context.Context, repos Repos, ticket domain.Ticket) (bool
 	return false, nil
 }
 
-// stalledIDs marks the tickets that cannot finish without the owner: blocked,
-// or waiting on an unanswered question. Such a build never holds another back
-// (2026-11-20: makercad #218 started before its prerequisite #217, stopped on
-// a question, and held #217 back on shared files for 11 hours, so neither moved).
+// stalledIDs marks the tickets that cannot finish for now: blocked, waiting on
+// an unanswered question, or waiting on an unfinished dependency. Such a build
+// never holds another back (2026-11-20: makercad #218 started before its
+// prerequisite #217, stopped on a question, and held #217 back on shared files
+// for 11 hours, so neither moved; 2026-11-21: started #218 and #239 waited on
+// #246 through depends_on while holding #246 back on shared files).
 func stalledIDs(ctx context.Context, repos Repos, tickets []domain.Ticket) (map[int64]bool, error) {
 	open, err := repos.Questions().OpenCounts(ctx)
 	if err != nil {
 		return nil, err
 	}
+	waiting, err := repos.Relations().Waiting(ctx)
+	if err != nil {
+		return nil, err
+	}
 	stalled := map[int64]bool{}
 	for _, t := range tickets {
-		if t.IsBlocked() || open[t.ID] > 0 {
+		if t.IsBlocked() || open[t.ID] > 0 || len(waiting[t.ID]) > 0 {
 			stalled[t.ID] = true
 		}
 	}
