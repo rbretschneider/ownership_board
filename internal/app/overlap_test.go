@@ -101,7 +101,7 @@ func TestABlockedOlderBuildDoesNotHoldNewerOnesBack(t *testing.T) {
 // 2026-11-20: makercad #218 started before its prerequisite #217, stopped on a
 // question, and held #217 back on shared files; neither moved for 11 hours.
 func TestAStartedBuildWaitingOnTheOwnerDoesNotHoldOthersBack(t *testing.T) {
-	for _, stall := range []string{"question", "blocked"} {
+	for _, stall := range []string{"question", "blocked", "depends"} {
 		t.Run(stall, func(t *testing.T) {
 			f := newFixture(t)
 			api := f.repo("acme/api")
@@ -117,6 +117,10 @@ func TestAStartedBuildWaitingOnTheOwnerDoesNotHoldOthersBack(t *testing.T) {
 			if err := f.store.Write(f.ctx, func(repos app.Repos) error {
 				if stall == "question" {
 					return repos.Questions().Insert(f.ctx, &domain.Question{TicketID: started, Round: 1, Prompt: "Where is the solver?", AskedBy: "agent", AskedAt: f.clock.Now()})
+				}
+				if stall == "depends" {
+					// 2026-11-21: started #218 waited on #246 and held it back on shared files.
+					return repos.Relations().Insert(f.ctx, domain.Relation{FromID: started, ToID: held, Kind: domain.RelationDependsOn, AddedBy: owner, AddedAt: f.clock.Now()})
 				}
 				ticket, err := repos.Tickets().Get(f.ctx, started)
 				if err != nil {
