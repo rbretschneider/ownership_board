@@ -94,3 +94,20 @@ it("shows loading, then marks a retained host summary stale after polling fails"
  expect(host.textContent).toContain("stale");expect(host.textContent).toContain("1 host online");
  }finally{await act(async()=>root.unmount());vi.useRealTimers();}
 });
+
+// 2026-11-22: the in-progress limit had no control; it only rose as a side
+// effect of adding workers, so the owner could not lift it for one ticket.
+it("lets the owner raise the in-progress limit and shows the saved value", async () => {
+ const initial = {windows_runner_enabled: false, codex_workers: 2, codex_worker_limit: 6, autonomous_in_flight_cap: 7};
+ const editSettings = vi.fn().mockResolvedValue({...initial, autonomous_in_flight_cap: 8});
+ const api = {registeredRunners:vi.fn().mockResolvedValue({hosts:[]}),settings: vi.fn().mockResolvedValue(initial), editSettings} as unknown as BoardApi;
+ const host = document.createElement("div");
+ const root = createRoot(host);
+ await act(async () => { root.render(<ApiContext value={api}><ToastProvider><AgentWorkSection /></ToastProvider></ApiContext>); });
+ const raise = host.querySelector<HTMLButtonElement>('[aria-label="Raise the in-progress limit"]')!;
+ await act(async () => { raise.click(); });
+ expect(editSettings).toHaveBeenCalledWith({autonomous_in_flight_cap: 8});
+ expect(host.querySelector<HTMLInputElement>('input[id$="-in-flight-cap"]')?.value).toBe("8");
+ expect(host.textContent).toContain("Up to 8 autonomous tickets in design or build");
+ await act(async () => root.unmount());
+});

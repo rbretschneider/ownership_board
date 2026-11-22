@@ -55,6 +55,11 @@ export function AgentWorkSection() {
   if(count+other>(latest.current?.autonomous_in_flight_cap??settings.autonomous_in_flight_cap))patch.autonomous_in_flight_cap=Math.min(10,count+other);
   void change(patch);
  };
+ // In-progress limit: how many autonomous tickets may be in design or build at once.
+ const setInFlightCap=(value:number)=>{
+  if(!settings||!Number.isInteger(value))return;
+  void change({autonomous_in_flight_cap:Math.max(1,Math.min(10,value))});
+ };
  return <section className="settings-section" aria-labelledby={`${id}-title`}>
   <h2 id={`${id}-title`} className="settings-section__title">Agent work</h2>
   <div className="field">
@@ -89,6 +94,17 @@ export function AgentWorkSection() {
      </div>
     </div>;
    })}
+   <div className="account-work">
+    <div><label className="field__label" htmlFor={`${id}-in-flight-cap`}>In-progress limit</label>
+     <div className="worker-stepper">
+      <button type="button" className="button button--secondary" aria-label="Lower the in-progress limit" disabled={busy||settings.autonomous_in_flight_cap<=1} onClick={()=>setInFlightCap((latest.current?.autonomous_in_flight_cap??settings.autonomous_in_flight_cap)-1)}><Minus size={18}/></button>
+      <input id={`${id}-in-flight-cap`} className="input" type="number" min={1} max={10} step={1} value={settings.autonomous_in_flight_cap} onChange={e=>{if(e.target.value!=="")setInFlightCap(Number(e.target.value));}}/>
+      <button type="button" className="button button--secondary" aria-label="Raise the in-progress limit" disabled={busy||settings.autonomous_in_flight_cap>=10} onClick={()=>setInFlightCap((latest.current?.autonomous_in_flight_cap??settings.autonomous_in_flight_cap)+1)}><Plus size={18}/></button>
+      <span className="muted small" role="status">{`Up to ${settings.autonomous_in_flight_cap} autonomous ${settings.autonomous_in_flight_cap===1?"ticket":"tickets"} in design or build`}</span>
+     </div>
+     <p className="muted small">New tickets wait in Ready while this many are in design or build. Bugs and tickets already started are not held back.</p>
+    </div>
+   </div>
    <p className="muted small">Each account shares one login across its runners. Current calls finish when paused, so concurrent work can pass the ceiling slightly. Unknown or stale usage allows work, as requested. Up to 10 autonomous stories can be in flight across both accounts. Usage checks use scripts, not model tokens. {busy?"Saving ":""}</p>
   </div>}
  </section>;
