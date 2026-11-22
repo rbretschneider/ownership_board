@@ -590,8 +590,9 @@ func (s *BuildJobService) requeueNoVerdict(ctx context.Context, r Repos, j *doma
 // noVerdict reports whether a failed job's result blames the host, not the commit.
 func noVerdict(result []byte) bool { return domain.JobResultBlamesHost(result) }
 
-// hotFirstJob picks the job a host claims next: the oldest queued job of a hot ticket
-// (HotBuildAttempts or more passes at the code), otherwise the oldest queued job.
+// hotFirstJob picks the job a host claims next: the oldest queued job of a ticket
+// another unfinished ticket depends on, then of a hot ticket (HotBuildAttempts or
+// more passes at the code), otherwise the oldest queued job.
 func hotFirstJob(ctx context.Context, r Repos, h domain.BuildHost, checks bool) (*domain.BuildJob, error) {
 	jobs, e := r.BuildJobs().QueuedForHost(ctx, h, 40)
 	if e != nil {
@@ -604,6 +605,24 @@ func hotFirstJob(ctx context.Context, r Repos, h domain.BuildHost, checks bool) 
 	}
 	if len(jobs) == 0 {
 		return nil, nil
+	}
+	// A ticket others wait on goes first: every hour it queues holds them all
+	// (2026-11-22: makercad #258, the fix #252, #254 and #257 depend on, queued
+	// six hours behind flaky-test tickets in plain arrival order).
+	waiting, e := r.Relations().Waiting(ctx)
+	if e != nil {
+		return nil, e
+	}
+	blocking := map[int64]bool{}
+	for _, prerequisites := range waiting {
+		for _, id := range prerequisites {
+			blocking[id] = true
+		}
+	}
+	for i := range jobs {
+		if blocking[jobs[i].TicketID] {
+			return &jobs[i], nil
+		}
 	}
 	seen := map[int64]bool{}
 	for i := range jobs {
