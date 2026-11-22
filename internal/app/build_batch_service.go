@@ -78,7 +78,7 @@ func (s *BuildJobService) assemble(ctx context.Context, r Repos, lead domain.Bui
 	if !repo.BatchVerify || repo.FullName != lead.Repo {
 		return nil, nil
 	}
-	if hot, err := isHot(ctx, r, lead.TicketID); err != nil || hot {
+	if red, err := likelyRed(ctx, r, lead.TicketID); err != nil || red {
 		return nil, err
 	}
 	size := repo.BatchMax
@@ -98,9 +98,9 @@ func (s *BuildJobService) assemble(ctx context.Context, r Repos, lead domain.Bui
 		if tickets[c.TicketID] {
 			continue
 		}
-		if hot, err := isHot(ctx, r, c.TicketID); err != nil {
+		if red, err := likelyRed(ctx, r, c.TicketID); err != nil {
 			return nil, err
-		} else if hot {
+		} else if red {
 			continue
 		}
 		tickets[c.TicketID] = true
@@ -117,6 +117,22 @@ func (s *BuildJobService) assemble(ctx context.Context, r Repos, lead domain.Bui
 		return compareStrings(a.ID, b.ID)
 	})
 	return newBatch(lead, jobs, "", now)
+}
+
+// likelyRed reports whether a ticket's commit would probably fail and bisect
+// the batch around it: it is hot, or its newest settled board build failed in
+// its own code (2026-11-22: makercad #218, red on its own heatmap test, sat in
+// batches that failed and split for two hours, holding #258 behind it).
+func likelyRed(ctx context.Context, r Repos, ticketID int64) (bool, error) {
+	if hot, err := isHot(ctx, r, ticketID); err != nil || hot {
+		return hot, err
+	}
+	jobs, err := r.BuildJobs().RecentForTicket(ctx, ticketID, recentJobsPerTicket)
+	if err != nil {
+		return false, err
+	}
+	_, _, own := domain.OwnBuildFailure(jobs)
+	return own, nil
 }
 
 func compareStrings(a, b string) int {
