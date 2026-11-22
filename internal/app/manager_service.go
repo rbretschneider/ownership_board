@@ -58,6 +58,10 @@ func (s *BoardService) ManagerFlags(ctx context.Context, actor domain.Actor, sco
 
 // managerFlagsOf derives the manager's flags from loaded ticket summaries.
 func managerFlagsOf(ctx context.Context, repos Repos, tickets []TicketSummary, settings domain.BoardSettings, now time.Time) ([]domain.ManagerFlag, error) {
+	moving, err := queuesMoving(ctx, repos, now)
+	if err != nil {
+		return nil, err
+	}
 	var facts []domain.ManagerTicketFacts
 	for _, summary := range tickets {
 		if !summary.Ticket.IsAutonomous || summary.Ticket.Stage.IsCompleted() || summary.Ticket.Stage == domain.StageEpic {
@@ -68,9 +72,40 @@ func managerFlagsOf(ctx context.Context, repos Repos, tickets []TicketSummary, s
 			return nil, err
 		}
 		facts = append(facts, domain.ManagerTicketFacts{Ticket: summary.Ticket, OpenQuestions: summary.OpenQuestions,
-			WaitingOn: summary.WaitingOn, Attempts: summary.Attempts, RecentJobs: jobs})
+			WaitingOn: summary.WaitingOn, Attempts: summary.Attempts, RecentJobs: jobs, QueueMoving: moving})
 	}
 	return domain.ManagerFlags(facts, settings, now), nil
+}
+
+// queueStartWindow is how recently a host must have started work for its
+// queue to count as moving.
+const queueStartWindow = time.Hour
+
+// queuesMoving reports, per target OS, whether a build host started a job or
+// batch within queueStartWindow. A long queue on a host that keeps starting
+// work is capacity, not a fault (2026-11-22: with a six-hour Windows queue the
+// manager spent about a dollar an hour confirming each "queued 2h" flag).
+func queuesMoving(ctx context.Context, repos Repos, now time.Time) (map[domain.BuildHostOS]bool, error) {
+	moving := map[domain.BuildHostOS]bool{}
+	jobs, err := repos.BuildJobs().ActiveAssignments(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, job := range jobs {
+		if job.StartedAt != nil && now.Sub(*job.StartedAt) < queueStartWindow {
+			moving[job.Target.OS] = true
+		}
+	}
+	batches, err := repos.BuildBatches().ActiveAssignments(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, batch := range batches {
+		if batch.StartedAt != nil && now.Sub(*batch.StartedAt) < queueStartWindow {
+			moving[batch.Target.OS] = true
+		}
+	}
+	return moving, nil
 }
 
 // ManagerStatus returns the manager's settings and today's spend.
