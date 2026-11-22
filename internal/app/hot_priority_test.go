@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/rbretschneider/ownership_board/internal/app"
 	"github.com/rbretschneider/ownership_board/internal/domain"
@@ -50,6 +51,32 @@ func TestAHotBuildIsClaimedBeforeHigherRankedBuilds(t *testing.T) {
 		if got := f.mustClaim(agent, app.ClaimInput{}).Ticket.Ticket.ID; got != id {
 			t.Fatalf("claimed #%d, want #%d (order %v)", got, id, want)
 		}
+	}
+}
+
+// 2026-11-22: makercad #258, the fix three red tickets depended on, waited
+// six hours behind flaky-test tickets in arrival order.
+func TestAWindowsJobOthersWaitOnRunsFirst(t *testing.T) {
+	f, s, m, h := jobFixture(t)
+	for _, q := range []string{
+		`INSERT INTO tickets(id,repo_id,kind,title,stage,lane,rank,created_by,created_at,updated_at,lane_changed_at) VALUES(2,1,'bug','Root fix','build','in_progress',2,'Owner','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z')`,
+		`INSERT INTO tickets(id,repo_id,kind,title,stage,lane,rank,created_by,created_at,updated_at,lane_changed_at) VALUES(3,1,'story','Waits on the fix','build','in_progress',3,'Owner','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z')`,
+		`INSERT INTO relations(from_id,to_id,kind,added_by_kind,added_by_id,added_by_name,added_at) VALUES(3,2,'depends_on','person',1,'Owner','2026-01-01T00:00:00.000Z')`,
+	} {
+		if _, err := f.store.SQL().Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	older := submitJob(t, f, s, m)
+	f.clock.Advance(time.Minute) // arrival order alone would pick the older job
+	m.TicketID, m.SHA = 2, fmt.Sprintf("%040x", 2)
+	fix, _, err := s.Submit(f.ctx, m, bytes.NewBufferString("abc"), func() error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Claim(f.ctx, app.AuthenticatedBuildHost{ID: h.ID})
+	if err != nil || got == nil || got.ID != fix.ID {
+		t.Fatalf("claimed %+v (%v), want the job of the ticket others wait on (%s) before %s", got, err, fix.ID, older.ID)
 	}
 }
 
