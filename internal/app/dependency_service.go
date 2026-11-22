@@ -190,8 +190,17 @@ func (s *BoardService) ExpireManagerLinks(ctx context.Context, actor domain.Acto
 			if err != nil {
 				return err
 			}
-			if !prerequisite.Stage.IsCompleted() && now.Sub(prerequisite.UpdatedAt) < ManagerLinkTTL {
-				continue
+			if !prerequisite.Stage.IsCompleted() {
+				// Worker passes, comments and build jobs land on the timeline
+				// without touching UpdatedAt (2026-11-22: #218 was worked all
+				// night, yet #239's link to it expired at 05:13).
+				last, err := lastActivity(ctx, repos, prerequisite)
+				if err != nil {
+					return err
+				}
+				if now.Sub(last) < ManagerLinkTTL {
+					continue
+				}
 			}
 			ticket, err := repos.Tickets().Get(ctx, relation.FromID)
 			if err != nil {
@@ -223,6 +232,22 @@ func (s *BoardService) ExpireManagerLinks(ctx context.Context, actor domain.Acto
 	}
 	s.writer.sink.Publish(ctx, events)
 	return removed, nil
+}
+
+// lastActivity is when anything last happened on the ticket: its own update
+// or its newest timeline entry.
+func lastActivity(ctx context.Context, repos Repos, ticket domain.Ticket) (time.Time, error) {
+	last := ticket.UpdatedAt
+	entries, err := repos.Timeline().ForTicket(ctx, ticket.ID)
+	if err != nil {
+		return time.Time{}, err
+	}
+	for _, entry := range entries {
+		if entry.At.After(last) {
+			last = entry.At
+		}
+	}
+	return last, nil
 }
 
 // requireSameRepo keeps dependencies within one repo. The message names only
