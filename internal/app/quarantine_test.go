@@ -85,6 +85,11 @@ func TestAFailureAnotherTicketHadGetsAFlakeCheckOfOnlyThatTest(t *testing.T) {
 	if err != nil || !fix.Ticket.IsAutonomous || !strings.Contains(fix.Ticket.Title, flaky) || fix.Ticket.RepoID != 1 {
 		t.Fatalf("fix ticket = %+v, %v", fix.Ticket, err)
 	}
+	// The spec quotes the failing log lines (2026-11-22: without them workers
+	// shipped "cause unconfirmed" fixes for #262, #264 and #266).
+	if !strings.Contains(fix.Ticket.Spec, "## Failure evidence") || !strings.Contains(fix.Ticket.Spec, "- "+flaky+" (Failed)") {
+		t.Fatalf("fix spec lacks the failing log lines:\n%s", fix.Ticket.Spec)
+	}
 	// Every later job carries the list.
 	r.submit(1, 2)
 	next := r.claim()
