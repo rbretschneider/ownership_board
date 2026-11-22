@@ -159,6 +159,25 @@ func TestABatchTakesQueuedCommitsInQueueOrderUpToTheRepoSize(t *testing.T) {
 	}
 }
 
+// 2026-11-22: makercad #218, red on its own heatmap test, kept joining batches
+// that failed and split for two hours, holding the root fix #258 behind it.
+func TestATicketWhoseLastBuildFailedInItsOwnCodeIsNotBatched(t *testing.T) {
+	r := batchFixture(t, 3, 4)
+	earlier := strings.Repeat("e", 64)
+	if _, err := r.f.store.SQL().Exec(`INSERT INTO build_jobs (id, ticket_id, repo, sha, preset, target, target_os, status, attempt, created_at, started_at, finished_at, result, bundle_bytes, bundle_sha256)
+		SELECT ?, ticket_id, repo, ?, preset, target, target_os, 'failed', 1, '2025-12-31T00:00:00.000Z', '2025-12-31T00:00:00.000Z', '2025-12-31T00:01:00.000Z', ?, bundle_bytes, bundle_sha256 FROM build_jobs WHERE id = ?`,
+		earlier, strings.Repeat("a", 40), failing("suite:heatmap colours"), r.jobs[2].ID); err != nil {
+		t.Fatal(err)
+	}
+	got := r.claim()
+	if want := []int64{1, 3}; !slices.Equal(memberTickets(got), want) {
+		t.Fatalf("batch members = %v, want %v without #2, whose last build failed its own test", memberTickets(got), want)
+	}
+	if j := r.job(2); j.BatchID != "" {
+		t.Fatalf("#2 should be verified alone, held by %q", j.BatchID)
+	}
+}
+
 func TestBatchingIsOffUnlessTheRepoOptsIn(t *testing.T) {
 	r := batchFixture(t, 3, 4)
 	if _, err := r.f.store.SQL().Exec(`UPDATE repos SET batch_verify=0`); err != nil {
