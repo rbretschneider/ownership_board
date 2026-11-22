@@ -100,6 +100,23 @@ func TestManagerFlagsAStuckBuildJob(t *testing.T) {
 	}
 }
 
+// 2026-11-22: with a six-hour Windows queue on a busy idaho, every queued
+// ticket raised "queued 2h with no host taking it", and the manager spent
+// about a dollar an hour confirming queue waits.
+func TestALongQueueOnAHostThatKeepsStartingWorkIsNotStuck(t *testing.T) {
+	now := time.Date(2026, 11, 22, 16, 0, 0, 0, time.UTC)
+	ticket := Ticket{ID: 7, IsAutonomous: true, Stage: StageBuild, UpdatedAt: now.Add(-10 * time.Minute)}
+	jobs := []BuildJob{{Status: "queued", SHA: "abcdef1234567890", CreatedAt: now.Add(-3 * time.Hour), Target: BuildJobTarget{OS: "windows"}}}
+	moving := ManagerFlags([]ManagerTicketFacts{{Ticket: ticket, RecentJobs: jobs, QueueMoving: map[BuildHostOS]bool{"windows": true}}}, DefaultBoardSettings(), now)
+	if len(moving) != 0 {
+		t.Fatalf("flags on a moving queue = %+v, want none", moving)
+	}
+	idle := ManagerFlags([]ManagerTicketFacts{{Ticket: ticket, RecentJobs: jobs, QueueMoving: map[BuildHostOS]bool{"linux": true}}}, DefaultBoardSettings(), now)
+	if len(idle) != 1 || idle[0].Fingerprint != "stalled:7:job_queued:abcdef123456" {
+		t.Fatalf("flags when no Windows host started work = %+v, want the stuck-job flag", idle)
+	}
+}
+
 func TestBuildFailureSignatureNamesTheFailingTest(t *testing.T) {
 	cases := map[string]string{
 		"x\n--- first failing case: win-debug/q.xml: policy:loader: Timeout\n": "test: policy:loader (Timeout)",

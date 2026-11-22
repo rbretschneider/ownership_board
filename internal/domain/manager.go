@@ -50,6 +50,9 @@ type ManagerTicketFacts struct {
 	Attempts      StageAttempts
 	// RecentJobs are the ticket's newest build jobs, newest first.
 	RecentJobs []BuildJob
+	// QueueMoving says, per target OS, whether a host started work within the
+	// last hour; a long-queued job on a moving queue is capacity, not stuck.
+	QueueMoving map[BuildHostOS]bool
 }
 
 // ManagerUsage is the manager's spend on one UTC day.
@@ -102,7 +105,7 @@ func ManagerFlags(facts []ManagerTicketFacts, settings BoardSettings, now time.T
 			add(FlagStalled, fmt.Sprintf("since:%d", ticket.UpdatedAt.Unix()),
 				fmt.Sprintf("no movement for %s (no lease, no build job running)", now.Sub(ticket.UpdatedAt).Round(time.Minute)))
 		}
-		if key, detail := stuckJob(fact.RecentJobs, now); key != "" {
+		if key, detail := stuckJob(fact.RecentJobs, fact.QueueMoving, now); key != "" {
 			add(FlagStalled, key, detail)
 		}
 	}
@@ -119,14 +122,14 @@ const (
 
 // stuckJob returns a fingerprint key and detail for a queued or running build
 // job that has waited or run too long, or "" when the queue is moving.
-func stuckJob(jobs []BuildJob, now time.Time) (string, string) {
+func stuckJob(jobs []BuildJob, moving map[BuildHostOS]bool, now time.Time) (string, string) {
 	for _, job := range jobs {
 		sha := job.SHA
 		if len(sha) > 12 {
 			sha = sha[:12]
 		}
 		switch {
-		case job.Status == "queued" && !job.CreatedAt.IsZero() && now.Sub(job.CreatedAt) > jobQueuedTooLong:
+		case job.Status == "queued" && !job.CreatedAt.IsZero() && now.Sub(job.CreatedAt) > jobQueuedTooLong && !moving[job.Target.OS]:
 			return "job_queued:" + sha, fmt.Sprintf("build job for %s queued %s with no host taking it",
 				sha, now.Sub(job.CreatedAt).Round(time.Minute))
 		case job.Status == "running" && job.StartedAt != nil && now.Sub(*job.StartedAt) > jobRunningTooLong:
