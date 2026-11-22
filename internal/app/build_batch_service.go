@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/rbretschneider/ownership_board/internal/domain"
@@ -131,8 +132,12 @@ func likelyRed(ctx context.Context, r Repos, ticketID int64) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	_, _, own := domain.OwnBuildFailure(jobs)
-	return own, nil
+	// Any failure but the host's counts: a verify script's own failure is
+	// reported as "verify:" or "command:", not "test:" (2026-11-22: #218's
+	// heatmap test failed inside makercad's windows_verify.ps1 and #218 was
+	// batched again with #264).
+	job, settled := domain.NewestSettledBuild(jobs)
+	return settled && job.Status == "failed" && !strings.HasPrefix(domain.BuildFailureSignature(job), "host: "), nil
 }
 
 func compareStrings(a, b string) int {
