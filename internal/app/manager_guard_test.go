@@ -96,8 +96,12 @@ func TestAManagerLinkToWorkStillMovingDoesNotExpire(t *testing.T) {
 		t.Fatalf("manager link: %v", err)
 	}
 	f.clock.Advance(app.ManagerLinkTTL - time.Hour)
-	title := "B2 heatmap, building"
-	if _, err := f.board.Edit(f.ctx, owner, prerequisite, domain.TicketEdit{Title: &title}); err != nil {
+	// Worker activity lands on the timeline, not on the ticket's UpdatedAt
+	// (2026-11-22: #218 was worked all night and #239's link still expired).
+	if err := f.store.Write(f.ctx, func(repos app.Repos) error {
+		entry := domain.NewEntry(prerequisite, domain.TimelineComment, domain.SystemActor, f.clock.Now()).WithBody("Windows verification queued")
+		return repos.Timeline().Append(f.ctx, &entry)
+	}); err != nil {
 		t.Fatalf("touch prerequisite: %v", err)
 	}
 	f.clock.Advance(time.Hour + time.Minute)
