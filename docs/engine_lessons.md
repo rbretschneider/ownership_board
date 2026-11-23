@@ -146,6 +146,22 @@ closes a seam.
 | Cause | The manager could not see CI or the build infrastructure through the board, so it guessed from the ticket's timeline. Its CI access was a hand-made token with no guards. |
 | Fix | **Permanent:** CI through the board. `ci_status`, `ci_failed_log`, `ci_rerun` and `ci_cancel` use the board's own connection under server-side guards (never cancel a current head, re-run only completed runs, every action on the ticket's history), and CI sensors raise flags for queued, evicted and failed runs and offline runners. The runbook checks infrastructure first. Build-host ssh is opt in, logged, and refuses deletes. |
 
+### A spec no wall clock can pass
+
+| | |
+|---|---|
+| Symptom | A perf-budget bug looped for days. Each pass tightened the threshold to meet "the budget catches a 2× slowdown", and each Windows run then failed on ordinary noise. The fix-round limit published it to the owner unresolved. |
+| Cause | The acceptance criterion asked a single wall-clock p95 on a shared verification host to pass normal runs and fail every 2× run. The run-to-run spread on that host was itself about 2×. Neither the refiner nor the manager checked the criterion against measured noise. In the meantime the measurement fix it needed had merged from two other tickets. |
+| Fix | The owner waived the criterion. The branch was reset to the default branch plus a short amendment with the evidence. **Lesson:** before a perf criterion is accepted, compare it with the host's measured spread. Before repairing a ticket, check whether the default branch already fixed it. |
+
+### Cold dependency cache behind a red default branch
+
+| | |
+|---|---|
+| Symptom | CI queues reached about 2 hours, and Linux legs took 70–90 min instead of 10–20. |
+| Cause | A presets edit changed the dependency-cache key. The job that saves the cache depended on every test leg passing on the default branch, and a new GL timing step failed there (no GL context on Linux), so the cache was never saved. Every leg rebuilt the native dependencies from source. |
+| Fix | Restores fall back to the newest archive set (safe, because archives are ABI-addressed). The warm job runs after the legs whatever their result. GL timing runs only on the GL runner. **Lesson:** never gate a cache warm on tests passing, and check cache hit rates whenever queue times jump. |
+
 ## Principles these taught
 
 1. **One source of truth per fact.** A verdict, a waiver or an answer kept in two
