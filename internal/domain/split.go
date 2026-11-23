@@ -185,7 +185,7 @@ func NewSplitChild(child SplitChildDraft, parent Ticket, gates Gates, actor Acto
 	if strings.TrimSpace(kind) == "" {
 		kind = string(parent.Kind)
 	}
-	draft := TicketDraft{RepoID: parent.RepoID, Kind: kind, Title: child.Title, Body: child.Body}
+	draft := TicketDraft{RepoID: parent.RepoID, Kind: kind, Title: child.Title, Body: child.Body, Account: string(parent.Account)}
 	ticket, err := NewTicket(draft, actor, now)
 	if err != nil {
 		return Ticket{}, err

@@ -36,6 +36,10 @@ func TestDeploymentMigrationRoundTrip(t *testing.T) {
 			t.Fatalf("policy %s: %v", mode, err)
 		}
 		got := dumpTable(t, db, "tickets")
+		for i := range got {
+			// Columns added by later migrations at their defaults (0029: account).
+			got[i] = strings.ReplaceAll(got[i], " account=string:", "")
+		}
 		want := append([]string(nil), ticketsBefore...)
 		for i := 0; i < 2; i++ {
 			want[i] = strings.ReplaceAll(strings.ReplaceAll(want[i], "lane=string:merged", "lane=string:deployed"), "stage=string:done", "stage=string:deployed")

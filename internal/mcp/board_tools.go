@@ -52,6 +52,7 @@ func (claimWork) Definition() Definition {
 			"repo":          prop("string", "Full name of the repo you are working in, such as acme/api. Omit to take work for any repo."),
 			"wait_seconds":  prop("integer", fmt.Sprintf("Seconds to wait for work, 0 to %d.", maxToolWaitSeconds)),
 			"lease_minutes": prop("integer", "How long to hold the ticket before it can be reclaimed, default 30."),
+			"account":       accountProp("The model account you run on. You get unpinned tickets plus those pinned to this account; without it, only unpinned tickets."),
 		}),
 	}
 }
@@ -61,11 +62,12 @@ func (t claimWork) Call(ctx context.Context, actor domain.Actor, raw json.RawMes
 		Repo         string `json:"repo"`
 		WaitSeconds  int    `json:"wait_seconds"`
 		LeaseMinutes int    `json:"lease_minutes"`
+		Account      string `json:"account"`
 	}
 	if err := decodeArguments(raw, &args); err != nil {
 		return "", err
 	}
-	input := app.ClaimInput{Repo: args.Repo, WaitSeconds: min(args.WaitSeconds, maxToolWaitSeconds), LeaseMinutes: args.LeaseMinutes}
+	input := app.ClaimInput{Repo: args.Repo, WaitSeconds: min(args.WaitSeconds, maxToolWaitSeconds), LeaseMinutes: args.LeaseMinutes, Account: args.Account}
 	work, isClaimed, err := t.s.Agents.Claim(ctx, actor, input)
 	if err != nil || !isClaimed {
 		return "No work is waiting right now.", err
@@ -315,22 +317,24 @@ func (updateTicket) Definition() Definition {
 			"pr_url":  prop("string", "Absolute URL of the pull request."),
 			"branch":  prop("string", "The branch name."),
 			"title":   prop("string", "A clearer title."),
+			"account": accountProp("Pin the ticket to one model account, or \"any\" to unpin. Agents may change it only while the ticket is being refined."),
 		}, "id"),
 	}
 }
 
 func (t updateTicket) Call(ctx context.Context, actor domain.Actor, raw json.RawMessage) (string, error) {
 	var args struct {
-		ID     int64   `json:"id"`
-		RepoID *int64  `json:"repo_id"`
-		PRURL  *string `json:"pr_url"`
-		Branch *string `json:"branch"`
-		Title  *string `json:"title"`
+		ID      int64   `json:"id"`
+		RepoID  *int64  `json:"repo_id"`
+		PRURL   *string `json:"pr_url"`
+		Branch  *string `json:"branch"`
+		Title   *string `json:"title"`
+		Account *string `json:"account"`
 	}
 	if err := decodeArguments(raw, &args); err != nil {
 		return "", err
 	}
-	edit := domain.TicketEdit{RepoID: args.RepoID, PRURL: args.PRURL, Branch: args.Branch, Title: args.Title}
+	edit := domain.TicketEdit{RepoID: args.RepoID, PRURL: args.PRURL, Branch: args.Branch, Title: args.Title, Account: args.Account}
 	detail, err := t.s.Board.Edit(ctx, actor, args.ID, edit)
 	return outcome(detail, "updated.", err)
 }
@@ -395,6 +399,7 @@ func (createTicket) Definition() Definition {
 			"spec": prop("string", "A complete spec. With relation follow_up_of on an autonomous ticket you hold, "+
 				"the follow-up runs autonomously too and starts Ready with this spec; otherwise it is ignored and the ticket is refined as usual."),
 			"depends_on": dependsOnProp(),
+			"account":    accountProp(""),
 		}, "kind", "title"),
 	}
 }
@@ -409,11 +414,12 @@ func (t createTicket) Call(ctx context.Context, actor domain.Actor, raw json.Raw
 		RelatedTicketID int64   `json:"related_ticket_id"`
 		Spec            string  `json:"spec"`
 		DependsOn       []int64 `json:"depends_on"`
+		Account         string  `json:"account"`
 	}
 	if err := decodeArguments(raw, &args); err != nil {
 		return "", err
 	}
-	draft := domain.TicketDraft{RepoID: args.RepoID, Kind: args.Kind, Title: args.Title, Body: args.Body, DependsOn: args.DependsOn}
+	draft := domain.TicketDraft{RepoID: args.RepoID, Kind: args.Kind, Title: args.Title, Body: args.Body, DependsOn: args.DependsOn, Account: args.Account}
 	if (args.Relation == "") != (args.RelatedTicketID == 0) {
 		return "", &ArgumentError{Message: "give relation and related_ticket_id together"}
 	}
@@ -443,6 +449,7 @@ func (createAutonomousTicket) Definition() Definition {
 				"type": "array", "items": map[string]any{"type": "string"}, "maxItems": domain.MaxDeclaredFiles,
 				"description": "Repo-relative paths the work expects to change. Required for the board manager: a filing whose files an open ticket already names is refused, and the manager comments on that ticket instead.",
 			},
+			"account": accountProp(""),
 		}, "kind", "title", "spec", "repo_id"),
 	}
 }
@@ -456,17 +463,27 @@ func (t createAutonomousTicket) Call(ctx context.Context, actor domain.Actor, ra
 		RepoID    int64    `json:"repo_id"`
 		DependsOn []int64  `json:"depends_on"`
 		Files     []string `json:"files"`
+		Account   string   `json:"account"`
 	}
 	if err := decodeArguments(raw, &args); err != nil {
 		return "", err
 	}
 	draft := domain.AutonomousDraft{
-		TicketDraft: domain.TicketDraft{RepoID: args.RepoID, Kind: args.Kind, Title: args.Title, Body: args.Body, DependsOn: args.DependsOn},
+		TicketDraft: domain.TicketDraft{RepoID: args.RepoID, Kind: args.Kind, Title: args.Title, Body: args.Body, DependsOn: args.DependsOn, Account: args.Account},
 		Spec:        args.Spec,
 		Files:       args.Files,
 	}
 	detail, err := t.s.Board.CreateAutonomous(ctx, actor, draft)
 	return outcome(detail, "filed as autonomous; the runner takes it from here to a pull request.", err)
+}
+
+// accountProp describes a ticket's account pin. The default text explains
+// what each model can do, so whoever files the ticket can decide.
+func accountProp(description string) map[string]any {
+	if description == "" {
+		description = "Pin the ticket to one model account, or leave it out (any account). " + domain.AccountCapabilities
+	}
+	return map[string]any{"type": "string", "enum": []string{"any", string(domain.AccountCodex), string(domain.AccountClaude)}, "description": description}
 }
 
 // dependsOnProp describes the depends_on list of the create tools.

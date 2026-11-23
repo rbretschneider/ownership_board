@@ -42,6 +42,11 @@ export function TicketHeader({ ticket, lanes, stages, repos, run }: TicketHeader
   };
   // The board refuses to turn autonomy on before the spec is past review or
   // while the ticket waits at a checkpoint.
+  const account = ticket.account ?? "";
+  const changeAccount = (next: string) => {
+    const label = next === "codex" ? "Codex only" : next === "claude" ? "Claude only" : "Any account";
+    void run(() => api.editTicket(ticket.id, { account: next === "" ? "any" : (next as "codex" | "claude") }), `Account: ${label}`);
+  };
   const mayTurnAutonomous = AUTONOMOUS_STAGES.includes(ticket.stage);
   const toggleAutonomous = (next: boolean) => {
     void run(
@@ -86,6 +91,15 @@ export function TicketHeader({ ticket, lanes, stages, repos, run }: TicketHeader
         </div>
         <div className="field">
           <RepoCombobox repos={repos} value={repoValue} onChange={changeRepo} label="Repository" noneLabel={NO_REPO_LABEL} />
+        </div>
+        <div className="field">
+          <label className="field__label" htmlFor="ticket-account">Account</label>
+          <select id="ticket-account" className="input select" value={account} onChange={(e) => changeAccount(e.target.value)} aria-describedby="ticket-account-hint">
+            <option value="">Any account</option>
+            <option value="codex">Codex only</option>
+            <option value="claude">Claude only</option>
+          </select>
+          <p id="ticket-account-hint" className="muted small">Codex can generate images (art, textures); Claude writes code only. Pinned tickets wait for their account.</p>
         </div>
       </div>
       <label className="switch" htmlFor="ticket-autonomous">

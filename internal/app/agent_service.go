@@ -32,6 +32,10 @@ type ClaimInput struct {
 	Repo         string
 	WaitSeconds  int
 	LeaseMinutes int
+	// Account is the model account the agent runs on ("codex" or "claude").
+	// It claims unpinned tickets plus those pinned to that account; an agent
+	// that names none claims only unpinned tickets.
+	Account string
 }
 
 // NewAgentService wires the service to its dependencies.
@@ -116,14 +120,21 @@ func (s *AgentService) Brief(ctx context.Context, id int64) (string, error) {
 
 // claimRequest is a validated ClaimInput.
 type claimRequest struct {
-	filter TicketFilter
-	lease  time.Duration
+	filter  TicketFilter
+	lease   time.Duration
+	account domain.Account
 }
 
-// filterFor widens a repo-scoped claim to unassigned tickets being refined.
+// filterFor widens a repo-scoped claim to unassigned tickets being refined,
+// and keeps account-pinned tickets for agents on that account where the
+// model's own abilities matter: claiming from Ready, design and build. Anyone
+// may refine a pinned ticket's spec or deploy it.
 func (r claimRequest) filterFor(stage domain.Stage) TicketFilter {
 	filter := r.filter
 	filter.IncludeUnassigned = filter.IsScoped && stage == domain.StageRefine
+	if stage == domain.StageReady || stage == domain.StageDesign || stage == domain.StageBuild {
+		filter.FilterAccount, filter.Account = true, r.account
+	}
 	return filter
 }
 
@@ -138,8 +149,12 @@ func (s *AgentService) claimRequest(ctx context.Context, actor domain.Actor, inp
 	if err != nil {
 		return claimRequest{}, err
 	}
+	account, err := domain.ParseAccount(input.Account)
+	if err != nil {
+		return claimRequest{}, err
+	}
 	filter, err := s.repoFilter(ctx, input.Repo)
-	return claimRequest{filter: filter, lease: lease}, err
+	return claimRequest{filter: filter, lease: lease, account: account}, err
 }
 
 func (s *AgentService) repoFilter(ctx context.Context, fullName string) (TicketFilter, error) {

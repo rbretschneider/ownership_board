@@ -25,11 +25,13 @@ func (s *server) claim(w http.ResponseWriter, r *http.Request, who caller) error
 		Repo         string `json:"repo"`
 		WaitSeconds  int    `json:"wait_seconds"`
 		LeaseMinutes int    `json:"lease_minutes"`
+		// Account is the model account the agent runs on: "codex" or "claude".
+		Account string `json:"account"`
 	}
 	if err := decodeOptionalJSON(w, r, &body); err != nil {
 		return err
 	}
-	input := app.ClaimInput{Repo: body.Repo, WaitSeconds: body.WaitSeconds, LeaseMinutes: body.LeaseMinutes}
+	input := app.ClaimInput{Repo: body.Repo, WaitSeconds: body.WaitSeconds, LeaseMinutes: body.LeaseMinutes, Account: body.Account}
 	work, isClaimed, err := s.deps.Agents.Claim(r.Context(), who.actor, input)
 	if err != nil {
 		return err
