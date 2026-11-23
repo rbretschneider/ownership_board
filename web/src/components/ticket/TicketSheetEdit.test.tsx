@@ -85,3 +85,39 @@ it("lets the owner edit the spec and design in any stage", async () => {
     host.remove();
   }
 });
+
+it("pins a ticket to one account from the header", async () => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  const pinned: TicketDetail = { ...building, account: "codex" };
+  const api = {
+    ticket: vi.fn().mockResolvedValue(building),
+    editTicket: vi.fn().mockResolvedValue(pinned),
+  };
+  const success = vi.fn();
+  try {
+    await act(async () => root.render(
+      <ApiContext.Provider value={api as unknown as BoardApi}>
+        <ToastContext.Provider value={{ error: vi.fn(), success, info: vi.fn() }}>
+          <CurrentUserContext.Provider value={deploymentUser}>
+            <TicketSheet ticketId={1} lanes={lanes} stages={[]} repos={[deploymentRepo]} tickets={[building]} refreshSignal={0} onChanged={vi.fn()} />
+          </CurrentUserContext.Provider>
+        </ToastContext.Provider>
+      </ApiContext.Provider>,
+    ));
+    const select = document.querySelector<HTMLSelectElement>("#ticket-account")!;
+    expect(select.value).toBe("");
+    expect(document.body.textContent).toContain("Codex can generate images");
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
+      setter.call(select, "codex");
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(api.editTicket).toHaveBeenCalledWith(1, { account: "codex" });
+    expect(success).toHaveBeenCalledWith("Account: Codex only");
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
+  }
+});

@@ -218,9 +218,10 @@ func (t *Ticket) ClearBlockForDrop() {
 
 // AgentMayEdit limits which fields an agent may change in each stage: what the
 // ticket is (title, body, kind, repo) only while refining, and the delivery
-// fields (branch, pr_url) only while building. The autonomous flag is the
-// owner's alone, and so is an autonomous ticket's repo: the owner agreed to
-// skip the checkpoints for that repo, not for whichever one an agent picks.
+// fields (branch, pr_url) only while building, and the account pin until work
+// starts. The autonomous flag is the owner's alone, and so is an autonomous
+// ticket's repo: the owner agreed to skip the checkpoints for that repo, not
+// for whichever one an agent picks.
 func (t *Ticket) AgentMayEdit(fields []string) error {
 	for _, field := range fields {
 		if field == "autonomous" || (field == "repo" && t.IsAutonomous) {
@@ -228,7 +229,11 @@ func (t *Ticket) AgentMayEdit(fields []string) error {
 		}
 		isRefineField := field == "title" || field == "body" || field == "kind" || field == "repo"
 		isBuildField := field == "branch" || field == "pr_url"
-		if (isRefineField && t.Stage != StageRefine) || (isBuildField && t.Stage != StageBuild) {
+		// The account pin may change until work starts (refine or Ready), so the
+		// manager can pin a queued art ticket to Codex (2026-11-23).
+		isQueueField := field == "account"
+		if (isRefineField && t.Stage != StageRefine) || (isBuildField && t.Stage != StageBuild) ||
+			(isQueueField && t.Stage != StageRefine && t.Stage != StageReady) {
 			return Forbiddenf("an agent cannot change %s while ticket %d is in %s", field, t.ID, t.Stage)
 		}
 	}

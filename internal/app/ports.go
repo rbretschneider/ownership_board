@@ -67,6 +67,10 @@ type TicketFilter struct {
 	// ExcludeIDs leaves out these tickets, such as builds held back for
 	// sharing files with a build already under way.
 	ExcludeIDs []int64
+	// FilterAccount limits results to tickets open to Account: unpinned ones,
+	// plus those pinned to Account when it names one.
+	FilterAccount bool
+	Account       domain.Account
 }
 
 // TicketRepository persists tickets.

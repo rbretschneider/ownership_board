@@ -65,11 +65,13 @@ func (s *server) createTicket(w http.ResponseWriter, r *http.Request, who caller
 		Spec            string `json:"spec"`
 		// IsAutonomous starts the ticket on autopilot; people only.
 		IsAutonomous bool `json:"is_autonomous"`
+		// Account pins the ticket to one model account: "", "codex" or "claude".
+		Account string `json:"account"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
 	}
-	draft := domain.TicketDraft{RepoID: valueOrZero(body.RepoID), Kind: body.Kind, Title: body.Title, Body: body.Body, DependsOn: body.DependsOn, IsAutonomous: body.IsAutonomous}
+	draft := domain.TicketDraft{RepoID: valueOrZero(body.RepoID), Kind: body.Kind, Title: body.Title, Body: body.Body, DependsOn: body.DependsOn, IsAutonomous: body.IsAutonomous, Account: body.Account}
 	if (body.Relation == "") != (body.RelatedTicketID == 0) {
 		return domain.Invalidf("give relation and related_ticket_id together")
 	}
@@ -101,6 +103,8 @@ type editBody struct {
 	Branch *string    `json:"branch"`
 	// IsAutonomous is the owner's to change; agents are refused.
 	IsAutonomous *bool `json:"is_autonomous"`
+	// Account pins the ticket to one model account: "", "codex" or "claude".
+	Account *string `json:"account"`
 }
 
 func (s *server) editTicket(w http.ResponseWriter, r *http.Request, who caller) error {
@@ -113,7 +117,7 @@ func (s *server) editTicket(w http.ResponseWriter, r *http.Request, who caller) 
 		return err
 	}
 	edit := domain.TicketEdit{
-		Kind: body.Kind, Title: body.Title, Body: body.Body, PRURL: body.PRURL, Branch: body.Branch, IsAutonomous: body.IsAutonomous,
+		Kind: body.Kind, Title: body.Title, Body: body.Body, PRURL: body.PRURL, Branch: body.Branch, IsAutonomous: body.IsAutonomous, Account: body.Account,
 	}
 	if body.RepoID.isSet {
 		repoID := body.RepoID.value

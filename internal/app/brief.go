@@ -66,6 +66,7 @@ var actionInstructions = map[domain.WorkAction]string{
 - If anything material is unclear, ask. Post ONE round of at most 5 questions with a one-paragraph summary of what you understood. Prefer multiple-choice options and mark the one you recommend; the human usually answers from a phone. Asking keeps the ticket in Todo, notifies the human and ends your lease. Then stop working on this ticket.
 - Otherwise write the spec: problem, scope, out of scope, acceptance criteria as a numbered list, and notes on approach and risk. Record the key choices with record_decision, then call save_spec with submit: true. The board then waits for the owner to approve the spec, or marks it ready when this repo needs no approval.
 - An answer marked "your call" means: use your recommendation, record it with record_decision, and say why.
+- Codex (GPT) can generate images; Claude only writes code. If the deliverable includes generated images (art, textures, icons), pin the ticket with update_ticket account "codex" before you save the spec. Leave every other ticket on any account.
 - If you cannot go on and no question would help, call mark_blocked with a short reason.
 - Do not write code while refining.`,
 
@@ -305,6 +306,10 @@ func (r *briefRenderer) facts(input BriefInput) {
 	}
 	if ticket.IsAutonomous && input.Action != domain.ActionDeploy {
 		r.b.WriteString("- Mode: **autonomous**: no checkpoints and no questions; the owner reviews the pull request\n")
+	}
+	if ticket.Account != domain.AccountAny {
+		fmt.Fprintf(&r.b, "- Account: **%s**: only an agent on the %s account works this ticket. %s\n",
+			ticket.Account.Label(), ticket.Account, domain.AccountCapabilities)
 	}
 	if ticket.Lease != nil {
 		fmt.Fprintf(&r.b, "- Lease: %s until %s\n", oneLine(cmp.Or(input.LeaseHolder, ticket.Lease.Holder)), ticket.Lease.ExpiresAt.UTC().Format(timeLayout))

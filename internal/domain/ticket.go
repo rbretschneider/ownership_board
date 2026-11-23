@@ -26,6 +26,8 @@ type Ticket struct {
 	Lease         *Lease
 	WorkModel     string
 	BlockedReason string
+	// Account pins the ticket to one model account; AccountAny leaves it open.
+	Account Account
 	// Revisions count saves of the spec and design; approvals record which
 	// revision the owner signed off, so a later edit needs a new approval.
 	SpecRevision           int
@@ -61,6 +63,8 @@ type TicketDraft struct {
 	// person may set it, and it needs a repo: the owner skips the checkpoints
 	// for that repo.
 	IsAutonomous bool
+	// Account pins the ticket to one model account ("", "codex" or "claude").
+	Account string
 }
 
 // AutonomousDraft is a ticket whose spec the owner already agreed in a chat
@@ -84,6 +88,8 @@ type TicketEdit struct {
 	PRURL        *string
 	Branch       *string
 	IsAutonomous *bool
+	// Account changes the ticket's account pin ("", "codex" or "claude").
+	Account *string
 }
 
 // NewTicket validates a draft and returns an unsaved ticket in todo/refine.
@@ -109,10 +115,14 @@ func NewTicket(draft TicketDraft, actor Actor, now time.Time) (Ticket, error) {
 	if draft.IsAutonomous && draft.RepoID == 0 {
 		return Ticket{}, Invalidf("choose a repo to start a ticket on autopilot")
 	}
+	account, err := ParseAccount(draft.Account)
+	if err != nil {
+		return Ticket{}, err
+	}
 	return Ticket{
 		RepoID: draft.RepoID, Kind: kind, Title: title, Body: body, Lane: LaneTodo, Stage: StageRefine,
-		IsAutonomous: draft.IsAutonomous,
-		CreatedBy:    actor.Name, CreatedAt: now, UpdatedAt: now, LaneChangedAt: now,
+		IsAutonomous: draft.IsAutonomous, Account: account,
+		CreatedBy: actor.Name, CreatedAt: now, UpdatedAt: now, LaneChangedAt: now,
 	}, nil
 }
 
@@ -140,6 +150,10 @@ func NewInheritedAutonomousTicket(draft AutonomousDraft, parent Ticket, actor Ac
 	}
 	if draft.RepoID != parent.RepoID {
 		return Ticket{}, Invalidf("an autonomous follow-up stays in its parent's repo")
+	}
+	if draft.Account == "" {
+		// A follow-up of a pinned ticket usually needs the same model.
+		draft.Account = string(parent.Account)
 	}
 	return readyAutonomous(draft, actor, now)
 }
@@ -272,7 +286,7 @@ func (t *Ticket) Release(now time.Time) {
 func (t *Ticket) Apply(edit TicketEdit, now time.Time) ([]string, error) {
 	next := *t
 	steps := []func(*Ticket, TicketEdit) (string, error){
-		applyRepo, applyKind, applyTitle, applyBody, applyPRURL, applyBranch, applyAutonomous,
+		applyRepo, applyKind, applyTitle, applyBody, applyPRURL, applyBranch, applyAutonomous, applyAccount,
 	}
 	var changed []string
 	for _, step := range steps {
@@ -301,6 +315,18 @@ func applyRepo(t *Ticket, edit TicketEdit) (string, error) {
 	t.RepoID = *edit.RepoID
 	t.HealthCheckMergeSequence = 0
 	return "repo", nil
+}
+
+func applyAccount(t *Ticket, edit TicketEdit) (string, error) {
+	if edit.Account == nil {
+		return "", nil
+	}
+	account, err := ParseAccount(*edit.Account)
+	if err != nil || account == t.Account {
+		return "", err
+	}
+	t.Account = account
+	return "account", nil
 }
 
 func applyKind(t *Ticket, edit TicketEdit) (string, error) {

@@ -82,6 +82,14 @@ anything else, so never try.
     owner was already told in the last 24 hours. Do not repeat it. Write
     "Nothing." unless there is something new, and give a number for any
     capacity advice (queue length, wait time).
+13. **Know what each account can do.** Codex (OpenAI GPT) writes code and
+    generates images (art, textures, icons). Claude (Anthropic) writes code
+    only and cannot generate images. A ticket whose deliverable includes
+    generated images gets `account: "codex"` when you file it, or through
+    `update_ticket` when you find it unpinned in Todo or Ready (the board
+    refuses a pin change once work starts). Pin to Claude only when the
+    owner asks; leave every other ticket unpinned. A pinned ticket waits while
+    its account is spent: that is not a stall, so never unpin it to move it.
 
 ## Infrastructure checklist
 

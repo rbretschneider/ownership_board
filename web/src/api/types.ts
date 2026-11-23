@@ -236,6 +236,8 @@ export interface TicketSummary {
   needs_owner: boolean;
   /** Runs to a pull request with no checkpoints or questions; set by a delegate agent or the owner. */
   is_autonomous: boolean;
+  /** Model account the ticket is pinned to; "" lets either account take it. */
+  account?: TicketAccount;
   /** Server-owned marker for a scheduled architecture review. */
   readonly is_health_check?: boolean;
   /** "" when not blocked. Plain text, written by an agent. */
@@ -533,6 +535,9 @@ export interface RequestChangesInput extends ApproveInput {
 }
 
 /** Body of PATCH /tickets/{id}. */
+/** A ticket's model-account pin: "" for any, or one account. */
+export type TicketAccount = "" | "codex" | "claude";
+
 export type EditTicket = Partial<{
   /** null clears the repo. */
   repo_id: number | null;
@@ -542,6 +547,7 @@ export type EditTicket = Partial<{
   pr_url: string;
   branch: string;
   is_autonomous: boolean;
+  account: TicketAccount | "any";
 }>;
 
 /** One answer submitted by the human. */
