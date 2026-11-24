@@ -418,7 +418,11 @@ func fixSpec(q domain.QuarantinedTest, evidence string) string {
 		"verification runs skip it until it is fixed. Evidence: `" + string(q.Evidence) + "`.\n\n" + logs +
 		"## Scope\n\nFind why the test passes or fails on the same code and make it deterministic. Fix the test " +
 		"or the code under test, whichever is wrong. Do not delete the test or weaken what it checks.\n\n" +
-		"## Acceptance criteria\n\n1. The cause of the flakiness is named in the PR.\n" +
+		// 2026-11-24, Ryan: a flake that cannot be reproduced on demand cannot be proven; three fix
+		// tickets looped through review asking for that proof. Stability and sensitivity are the gates.
+		"## Acceptance criteria\n\n1. The PR names the most likely cause of the flakiness and the evidence for it. " +
+		"When the failure cannot be reproduced on demand, a clearly labelled hypothesis is enough, as long as " +
+		"criteria 2 and 3 hold. Review judges the fix by criteria 2 and 3, not by proof of the original failure.\n" +
 		"2. The test passes repeatedly on the build host (run it at least 10 times in a row).\n" +
 		"3. The test still fails when the behavior it checks is broken.\n\n" +
 		"The board releases the test from quarantine after this ticket merges and the test passes " +
