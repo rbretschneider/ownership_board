@@ -90,6 +90,13 @@ func TestAFailureAnotherTicketHadGetsAFlakeCheckOfOnlyThatTest(t *testing.T) {
 	if !strings.Contains(fix.Ticket.Spec, "## Failure evidence") || !strings.Contains(fix.Ticket.Spec, "- "+flaky+" (Failed)") {
 		t.Fatalf("fix spec lacks the failing log lines:\n%s", fix.Ticket.Spec)
 	}
+	// Stability and sensitivity gate the fix; an unreproducible cause may be a labelled
+	// hypothesis (2026-11-24: three fix tickets looped through review asking for proof).
+	for _, want := range []string{"clearly labelled hypothesis is enough", "at least 10 times in a row", "still fails when the behavior it checks is broken"} {
+		if !strings.Contains(fix.Ticket.Spec, want) {
+			t.Fatalf("fix spec lacks %q:\n%s", want, fix.Ticket.Spec)
+		}
+	}
 	// Every later job carries the list.
 	r.submit(1, 2)
 	next := r.claim()
