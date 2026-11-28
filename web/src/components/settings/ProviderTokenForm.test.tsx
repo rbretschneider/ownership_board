@@ -24,7 +24,7 @@ async function mount(onSubmit: ReturnType<typeof vi.fn>) {
   );
   const fill = async () => {
     await act(async () => {
-      type(host.querySelector<HTMLInputElement>("#t-account")!, "http://10.0.10.11:3021");
+      type(host.querySelector<HTMLInputElement>("#t-account")!, "http://192.0.2.10:3000");
       type(host.querySelector<HTMLInputElement>("#t-token")!, "fj_token");
     });
   };
@@ -41,11 +41,11 @@ it("keeps agent access off unless the person turns it on", async () => {
     expect(option.checked).toBe(false);
     await view.fill();
     await view.submit();
-    expect(onSubmit).toHaveBeenLastCalledWith("http://10.0.10.11:3021", "fj_token", false);
+    expect(onSubmit).toHaveBeenLastCalledWith("http://192.0.2.10:3000", "fj_token", false);
     await act(async () => option.click());
     await view.fill();
     await view.submit();
-    expect(onSubmit).toHaveBeenLastCalledWith("http://10.0.10.11:3021", "fj_token", true);
+    expect(onSubmit).toHaveBeenLastCalledWith("http://192.0.2.10:3000", "fj_token", true);
   } finally {
     await view.unmount();
   }

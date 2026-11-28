@@ -28,7 +28,7 @@ func TestPRStatusIsSanitized(t *testing.T) {
 	 {"ticket":31,"url":"https://github.com/acme/cad/pull/32","verdict":"repair","reason":"checks_failed","mergeable":"WEIRD","head":"zz"},
 	 {"ticket":7,"url":"https://evil.example/pull/1","verdict":"running","reason":""},
 	 {"ticket":12,"url":"javascript://evil.example/a/b/pulls/1","verdict":"running","reason":""},
-	 {"ticket":13,"url":"http://10.0.10.11:3021/team/app/pulls/4","verdict":"green_owner","reason":"","mergeable":"MERGEABLE"},
+	 {"ticket":13,"url":"http://192.0.2.10:3000/team/app/pulls/4","verdict":"green_owner","reason":"","mergeable":"MERGEABLE"},
 	 {"ticket":8,"url":"https://github.com/acme/cad/pull/9","verdict":"explode","reason":""},
 	 {"ticket":9,"url":"https://github.com/acme/cad/pull/9","verdict":"repair","reason":""},
 	 {"ticket":10,"url":"https://github.com/acme/cad/pull/10","verdict":"running","reason":"conflict"},
