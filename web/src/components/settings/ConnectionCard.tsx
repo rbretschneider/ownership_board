@@ -48,6 +48,7 @@ export function ConnectionCard(props: ConnectionCardProps) {
             {isServerManaged ? "Set on the server" : describeAccount(connection)}
           </span>
           <span className="muted small">{describeSync(connection)}</span>
+          {connection.allow_agent_access && <span className="muted small">Board agents may use this token</span>}
         </div>
         {statusIcon(needsReconnect, syncError)}
       </div>
@@ -88,9 +89,11 @@ export function ConnectionCard(props: ConnectionCardProps) {
           title={`Reconnect ${spec.title}`}
           field={spec.field}
           tokenHint={spec.tokenHint}
+          option={spec.option}
+          isOptionInitiallyOn={connection.allow_agent_access}
           initialAccount={connection.provider === "forgejo" ? connection.base_url : connection.email}
           submitLabel="Reconnect"
-          onSubmit={(account, token) => spec.submit(api, account, token)}
+          onSubmit={(account, token, isOptionOn) => spec.submit(api, account, token, isOptionOn)}
           onConnected={(updated) => {
             setReconnecting(false);
             props.onConnected(updated);

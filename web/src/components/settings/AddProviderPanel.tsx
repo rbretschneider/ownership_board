@@ -53,8 +53,9 @@ export function AddProviderPanel({ connections, onConnected }: AddProviderPanelP
               title={`Connect ${chosen.title}`}
               field={chosen.field}
               tokenHint={chosen.tokenHint}
+              option={chosen.option}
               submitLabel="Connect"
-              onSubmit={(account, token) => chosen.submit(api, account, token)}
+              onSubmit={(account, token, isOptionOn) => chosen.submit(api, account, token, isOptionOn)}
               onConnected={(connection) => {
                 setChosen(null);
                 setOpen(false);

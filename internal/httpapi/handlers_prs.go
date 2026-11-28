@@ -76,7 +76,10 @@ const (
 )
 
 var (
-	prURLPattern       = regexp.MustCompile(`^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/[0-9]{1,9}$`)
+	// A GitHub pull request, or a Forgejo/Gitea one (/pulls/N, often plain
+	// http on a LAN host with a port).
+	prURLPattern = regexp.MustCompile(`^(https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/[0-9]{1,9}|` +
+		`https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pulls/[0-9]{1,9})$`)
 	prCheckNamePattern = regexp.MustCompile(`^[A-Za-z0-9 _.,:;()/#+&'\[\]-]{1,80}$`)
 	prHeadPattern      = regexp.MustCompile(`^[0-9a-f]{7,12}$`)
 	prVerdicts         = map[string]bool{"running": true, "no_checks": true, "draft": true, "checking_mergeable": true,

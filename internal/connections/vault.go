@@ -28,6 +28,7 @@ type Record struct {
 	ConnectedBy      int64
 	ConnectedAt      time.Time
 	UpdatedAt        time.Time
+	AllowAgentAccess bool
 }
 
 // vault seals and opens records. The associated data binds each ciphertext to
@@ -64,6 +65,7 @@ func (v vault) seal(record Record) (SealedRecord, error) {
 		Email: record.Email, AccessTokenEnc: access, RefreshTokenEnc: refresh,
 		AccessExpiresAt: record.AccessExpiresAt, RefreshExpiresAt: record.RefreshExpiresAt, Status: record.Status,
 		Generation: record.Generation, ConnectedBy: record.ConnectedBy, ConnectedAt: record.ConnectedAt, UpdatedAt: record.UpdatedAt,
+		AllowAgentAccess: record.AllowAgentAccess,
 	}, nil
 }
 
@@ -74,7 +76,7 @@ func (v vault) open(sealed SealedRecord) (Record, error) {
 		Provider: sealed.Provider, BaseURL: sealed.BaseURL, Account: sealed.Account, AccountID: sealed.AccountID,
 		Email: sealed.Email, AccessExpiresAt: sealed.AccessExpiresAt, RefreshExpiresAt: sealed.RefreshExpiresAt,
 		Status: sealed.Status, Generation: sealed.Generation, ConnectedBy: sealed.ConnectedBy,
-		ConnectedAt: sealed.ConnectedAt, UpdatedAt: sealed.UpdatedAt,
+		ConnectedAt: sealed.ConnectedAt, UpdatedAt: sealed.UpdatedAt, AllowAgentAccess: sealed.AllowAgentAccess,
 	}
 	var err error
 	if record.AccessToken, err = v.box.Open(sealed.AccessTokenEnc, associatedData(record, "access")); err != nil {

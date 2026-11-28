@@ -39,6 +39,9 @@ type SealedRecord struct {
 	ConnectedBy      int64
 	ConnectedAt      time.Time
 	UpdatedAt        time.Time
+	// AllowAgentAccess is the owner's opt-in to hand this connection's token
+	// to board agents for git and pull request work (Forgejo only).
+	AllowAgentAccess bool
 }
 
 // Store persists connections. Put is a compare-and-swap: it writes only if the

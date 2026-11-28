@@ -5,7 +5,7 @@ import { canConnectGitHub, describeAccount, describeSync, hasCard, isNotInstalle
 function connection(overrides: Partial<Connection> = {}): Connection {
   return {
     provider: "github", label: "GitHub", is_available: true, is_connected: false, status: "disconnected",
-    managed_by: null, account: "", base_url: "", email: "", connected_at: null, repo_count: 0, last_sync: null, ...overrides,
+    managed_by: null, account: "", base_url: "", email: "", connected_at: null, repo_count: 0, last_sync: null, allow_agent_access: false, ...overrides,
   };
 }
 

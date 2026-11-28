@@ -571,3 +571,17 @@ func TestThreeLaneCatalogAndPRSubmission(t *testing.T) {
 		}
 	}
 }
+
+func TestForgeCredentialIsAgentOnlyAndForgejoOnly(t *testing.T) {
+	browser, token := signedIn(t)
+	repo := browser.expect(http.StatusCreated, "POST", "/api/v1/repos", `{"full_name":"acme/api"}`)
+	path := "/api/v1/agent/repos/" + jsonNumber(repo["id"]) + "/forge-credential"
+	browser.expect(http.StatusForbidden, "GET", path, "")
+	agent := browser.asAgent(token)
+	agent.worker = "w1"
+	body := agent.expect(http.StatusBadRequest, "GET", path, "")
+	if message := body["error"].(map[string]any)["message"].(string); !strings.Contains(message, "only for Forgejo repos") {
+		t.Fatalf("message = %q", message)
+	}
+	agent.expect(http.StatusNotFound, "GET", "/api/v1/agent/repos/999/forge-credential", "")
+}

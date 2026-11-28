@@ -163,7 +163,7 @@ func (f *ForgejoCI) find(ctx context.Context, repo string, id int64) (forgejoTas
 }
 
 func (f *ForgejoCI) get(ctx context.Context, repo, path string, out any) error {
-	if err := checkRepoName(repo); err != nil {
+	if err := CheckRepoName(repo); err != nil {
 		return err
 	}
 	return f.getter.get(ctx, f.baseURL+"/api/v1/repos/"+repo+path, out)

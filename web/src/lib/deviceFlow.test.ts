@@ -23,7 +23,7 @@ function connection(overrides: Partial<Connection> = {}): Connection {
   return {
     provider: "github", label: "GitHub", is_available: true, is_connected: true, status: "connected",
     managed_by: "settings", account: "octo", base_url: "", email: "", connected_at: "2026-01-01T10:00:00Z",
-    repo_count: 3, last_sync: null, ...overrides,
+    repo_count: 3, last_sync: null, allow_agent_access: false, ...overrides,
   };
 }
 

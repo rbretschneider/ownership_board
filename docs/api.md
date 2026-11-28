@@ -180,6 +180,7 @@ while it would leave a dependency across repos. Relations
 | POST | `/api/v1/agent/tickets/{id}/release` | | `TicketDetail` |
 | GET  | `/api/v1/agent/tickets/{id}/brief` | | the brief, as `text/markdown` |
 | POST | `/api/v1/agent/tickets/{id}/pr-state` | `{state: "merged"\|"closed"\|"open"\|"repair", note?}` | `TicketDetail`. Needs no lease. |
+| GET  | `/api/v1/agent/repos/{id}/forge-credential` | | `{provider, base_url, clone_url, account, token}` for a Forgejo repo, `Cache-Control: no-store`. Refused (403) to people, delegate and manager tokens, and when the owner has not turned on agent access for the Forgejo connection; 400 for a non-Forgejo repo; 409 when Forgejo is only configured by server env or needs reconnecting. REST only, never an MCP tool. See [connections.md](connections.md#agent-access-forgejo). |
 | POST | `/mcp` | JSON-RPC | MCP streamable HTTP (tools listed in [agents.md](agents.md)) |
 
 `wait_seconds` (0 to 600) long-polls: the request stays open until a card
