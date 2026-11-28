@@ -50,6 +50,17 @@ func (s *RepoService) List(ctx context.Context) ([]domain.Repo, error) {
 	return list, err
 }
 
+// Get returns one repo by id.
+func (s *RepoService) Get(ctx context.Context, id int64) (domain.Repo, error) {
+	var repo domain.Repo
+	err := s.store.Read(ctx, func(repos Repos) error {
+		var err error
+		repo, err = repos.CodeRepos().Get(ctx, id)
+		return err
+	})
+	return repo, err
+}
+
 // CreateManual adds a repo no provider lists.
 func (s *RepoService) CreateManual(ctx context.Context, actor domain.Actor, draft domain.ManualRepoDraft) (domain.Repo, error) {
 	if !actor.IsHuman() {

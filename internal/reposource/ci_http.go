@@ -134,9 +134,9 @@ func cleanLog(raw []byte, maxBytes int) string {
 	return strings.ToValidUTF8(strings.TrimSpace(text), "")
 }
 
-// checkRepoName refuses a repository name that could walk a request off the
+// CheckRepoName refuses a repository name that could walk a request off the
 // provider's API.
-func checkRepoName(fullName string) error {
+func CheckRepoName(fullName string) error {
 	if !repoFullName.MatchString(fullName) || strings.Contains(fullName, "..") {
 		return domain.Invalidf("%q is not an owner/name repository", fullName)
 	}

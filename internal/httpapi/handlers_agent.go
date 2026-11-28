@@ -15,6 +15,7 @@ func (s *server) agentRoutes(rt *router) {
 	rt.agentOnly("POST /api/v1/agent/tickets/{id}/release", s.release)
 	rt.agentOnly("GET /api/v1/agent/tickets/{id}/brief", s.brief)
 	rt.agentOnly("POST /api/v1/agent/tickets/{id}/pr-state", s.reportPRState)
+	rt.agentOnly("GET /api/v1/agent/repos/{id}/forge-credential", s.forgeCredential)
 	rt.agentOnly("POST /mcp", s.mcp)
 	rt.agentOnly("GET /mcp", s.mcpStreamUnsupported)
 	rt.agentOnly("DELETE /mcp", s.mcpStreamUnsupported)

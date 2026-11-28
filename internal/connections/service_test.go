@@ -355,7 +355,7 @@ func TestTokensNeverLeak(t *testing.T) {
 	h.github.refreshStatus.Store(http.StatusOK)
 	h.github.refreshBody.Store(`{"error":"bad_refresh_token"}`)
 	_ = h.repos.SyncProvider(h.ctx, domain.ProviderGitHub)
-	_, _ = h.service.ConnectForgejo(h.ctx, h.admin, h.github.server.URL, "fj_FORGEJO_CANARY")
+	_, _ = h.service.ConnectForgejo(h.ctx, h.admin, connections.ForgejoInput{BaseURL: h.github.server.URL, Token: "fj_FORGEJO_CANARY"})
 	views, err := h.service.List(h.ctx, h.admin)
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -373,8 +373,8 @@ func TestTokensNeverLeak(t *testing.T) {
 
 func TestFailedValidationGivesOneFixedMessage(t *testing.T) {
 	h := newHarness(t, connections.Policy{})
-	_, notForgejo := h.service.ConnectForgejo(h.ctx, h.admin, h.github.server.URL, "token")
-	_, unreachable := h.service.ConnectForgejo(h.ctx, h.admin, "http://127.0.0.1:1", "token")
+	_, notForgejo := h.service.ConnectForgejo(h.ctx, h.admin, connections.ForgejoInput{BaseURL: h.github.server.URL, Token: "token"})
+	_, unreachable := h.service.ConnectForgejo(h.ctx, h.admin, connections.ForgejoInput{BaseURL: "http://127.0.0.1:1", Token: "token"})
 	if notForgejo == nil || unreachable == nil || notForgejo.Error() != unreachable.Error() {
 		t.Fatalf("messages differ, which reveals what is at the address: %q vs %q", notForgejo, unreachable)
 	}

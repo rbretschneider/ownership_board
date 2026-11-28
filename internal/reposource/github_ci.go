@@ -236,7 +236,7 @@ func (g *GitHubCI) post(ctx context.Context, repo, path string) error {
 }
 
 func (g *GitHubCI) repoURL(repo, path string) (string, error) {
-	if err := checkRepoName(repo); err != nil {
+	if err := CheckRepoName(repo); err != nil {
 		return "", err
 	}
 	return g.apiURL + "/repos/" + repo + path, nil

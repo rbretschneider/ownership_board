@@ -38,6 +38,8 @@ type View struct {
 	ConnectedAt *time.Time
 	RepoCount   int
 	LastSync    *app.SyncOutcome
+	// AllowAgentAccess says board agents may borrow the stored token.
+	AllowAgentAccess bool
 }
 
 // FlowView is a started device sign-in, without the device code.

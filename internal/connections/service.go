@@ -169,16 +169,35 @@ func (s *Service) CancelGitHub(admin Admin, flowID string) error {
 	return nil
 }
 
+// AgentCredentialFor looks up the repo by id and hands out its forge
+// credential; see AgentCredential.
+func (s *Service) AgentCredentialFor(ctx context.Context, actor domain.Actor, repoID int64) (AgentCredential, error) {
+	repo, err := s.repos.Get(ctx, repoID)
+	if err != nil {
+		return AgentCredential{}, err
+	}
+	return s.AgentCredential(ctx, actor, repo)
+}
+
+// ForgejoInput is what the owner types to connect Forgejo or Gitea.
+type ForgejoInput struct {
+	BaseURL string
+	Token   string
+	// AllowAgentAccess lets board workers and the merge sweep borrow the token
+	// to clone, push and open or merge pull requests.
+	AllowAgentAccess bool
+}
+
 // ConnectForgejo validates a pasted Forgejo or Gitea token and stores it.
-func (s *Service) ConnectForgejo(ctx context.Context, admin Admin, baseURL, token string) (View, error) {
+func (s *Service) ConnectForgejo(ctx context.Context, admin Admin, input ForgejoInput) (View, error) {
 	if err := admin.require(); err != nil {
 		return View{}, err
 	}
-	normalized, err := reposource.NormalizeForgejoURL(baseURL, s.policy.AllowedForgejoHosts)
+	normalized, err := reposource.NormalizeForgejoURL(input.BaseURL, s.policy.AllowedForgejoHosts)
 	if err != nil {
 		return View{}, err
 	}
-	secret, err := reposource.CheckToken(token)
+	secret, err := reposource.CheckToken(input.Token)
 	if err != nil {
 		return View{}, err
 	}
@@ -186,7 +205,8 @@ func (s *Service) ConnectForgejo(ctx context.Context, admin Admin, baseURL, toke
 	if err != nil {
 		return View{}, err
 	}
-	return s.connect(ctx, admin, Record{Provider: domain.ProviderForgejo, BaseURL: normalized, Account: login, AccessToken: secret})
+	return s.connect(ctx, admin, Record{Provider: domain.ProviderForgejo, BaseURL: normalized, Account: login, AccessToken: secret,
+		AllowAgentAccess: input.AllowAgentAccess})
 }
 
 // ConnectBitbucket validates pasted Bitbucket credentials and stores them.
@@ -330,6 +350,7 @@ func (s *Service) view(ctx context.Context, provider domain.Provider, summary ap
 	if isStored {
 		view.ManagedBy, view.Status, view.Account = ManagedBySettings, record.Status, record.Account
 		view.BaseURL, view.Email, view.ConnectedAt = record.BaseURL, record.Email, &record.ConnectedAt
+		view.AllowAgentAccess = record.AllowAgentAccess
 		return view, nil
 	}
 	if s.catalog.isEnvConfigured(provider) {

@@ -72,8 +72,46 @@ non-expiring token, it is stored without refresh data.
   Redirects are not followed when the request carries a token.
 - Bitbucket: `{email?, token}`, validated with `GET /2.0/user`.
 
-Both are entered only by a signed-in person. The guidance says to use
-read-only tokens (Forgejo `read:repository`, Bitbucket repository read).
+Both are entered only by a signed-in person. For repo sync alone, use
+read-only tokens (Forgejo `read:user` + `read:repository`, Bitbucket
+repository read).
+
+### Agent access (Forgejo)
+
+The Forgejo form has a switch, **Let board agents use this token**, off by
+default. With it on, board workers and the merge sweep borrow the stored token
+through `GET /api/v1/agent/repos/{id}/forge-credential` to clone, push
+`ob/<ticket>-*` branches, open and update pull requests, read commit statuses
+and reviews, and merge green PRs where the repo's **Agent merges green PRs**
+grant allows it. That needs a token with `read:user` and `write:repository`.
+Forgejo cannot mint per-repo tokens through its API, so the scope is whatever
+the token's account can reach; a dedicated bot account added as a collaborator
+on the repos agents work on is the narrow option. Branch protection on the
+Forgejo side stays the real guard against an unwanted merge, as on GitHub.
+
+Rules, all fail closed:
+
+- Only an agent token (not a person, not a delegate or manager token).
+- Only a repo synced from Forgejo, with a plain `owner/name`.
+- Only a connection stored in Settings with the switch on. Server-env
+  `FORGEJO_TOKEN` is never handed out.
+- `clone_url` is built from the connection's base URL, not from the URL
+  Forgejo reports, so the token only ever goes to the address the owner typed
+  (Forgejo reports its `ROOT_URL`, which may be a name workers cannot reach).
+- The response is `no-store` and REST-only; no MCP tool exposes it, so a model
+  cannot ask for it through its tool list. Each hand-out is logged with the
+  agent, repo and host, never the token.
+
+What Forgejo cannot do, and how the board handles it:
+
+| Board feature | Forgejo | Board behaviour |
+|---|---|---|
+| PR state, draft, mergeability | `GET /repos/{o}/{r}/pulls/{n}` | `mergeable: false` means conflict *or* still checking; the sweep treats it as unknown until the PR has been quiet for 10 minutes, then as a conflict |
+| Checks for a commit | combined commit status (`/commits/{sha}/status`) | each Actions job is a status context; branch-protection required contexts that never reported show as *expected* |
+| Reviews | `/pulls/{n}/reviews` | latest non-dismissed review per reviewer; any *request changes* blocks |
+| Merge | `POST /pulls/{n}/merge` with `head_commit_id` | merges only the exact head that was checked; Forgejo enforces branch protection |
+| CI job logs, re-run, cancel, runners | no API | refused with "do it in the Forgejo web UI"; repair passes get no log tail |
+| GitHub-only waivers (GL runner session, known-blocker tests) | n/a | never apply to Forgejo PRs |
 
 ## Storage
 
@@ -102,7 +140,7 @@ connection wins.
 | POST | `/api/v1/connections/github/device/{flow_id}/poll` | | `DevicePoll` |
 | POST | `/api/v1/connections/github/device/{flow_id}/confirm` | | `Connection`; stores it and starts a background sync |
 | DELETE | `/api/v1/connections/github/device/{flow_id}` | | `204`, cancels the flow |
-| PUT | `/api/v1/connections/forgejo` | `{base_url, token}` | `Connection` (validated, then a background sync starts) |
+| PUT | `/api/v1/connections/forgejo` | `{base_url, token, allow_agent_access?}` | `Connection` (validated, then a background sync starts) |
 | PUT | `/api/v1/connections/bitbucket` | `{email, token}` (`email` may be empty for an access token) | `Connection` |
 | DELETE | `/api/v1/connections/{provider}` | | `204`, forgets the stored tokens |
 
@@ -120,6 +158,7 @@ type Connection = {
   connected_at: string | null;
   repo_count: number;
   last_sync: { at: string; error: string } | null;
+  allow_agent_access: boolean;   // forgejo only: board agents may borrow the token
 };
 type DeviceFlow = {
   flow_id: string; user_code: string;
@@ -193,7 +232,8 @@ These override anything above that disagrees.
   live there. Optional `FORGEJO_ALLOWED_HOSTS` limits it to named hosts.
   Validation requires a response shaped like a Forgejo user, read with a 64 KiB
   cap and a 10 s timeout.
-- **Scopes (SEC-07).** Forgejo: `read:user` and `read:repository`. Bitbucket: a
+- **Scopes (SEC-07).** Forgejo: `read:user` and `read:repository`, or
+  `read:user` and `write:repository` when agent access is on. Bitbucket: a
   scoped API token or access token with `read:repository:bitbucket` and
   `read:user:bitbucket`. The form names these and warns that the board cannot
   verify that a token is read-only.

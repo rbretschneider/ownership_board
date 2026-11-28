@@ -15,6 +15,12 @@ export interface AccountField {
   isUrlWarned?: boolean;
 }
 
+/** An opt-in checkbox below the token, off unless the person ticks it. */
+export interface FormOption {
+  label: string;
+  hint: string;
+}
+
 /** Props for {@link ProviderTokenForm}. */
 export interface ProviderTokenFormProps {
   /** Unique prefix for element ids. */
@@ -22,10 +28,13 @@ export interface ProviderTokenFormProps {
   title: string;
   field: AccountField;
   tokenHint: string;
+  option?: FormOption;
   /** Pre-fill for a reconnect. */
   initialAccount?: string;
+  /** Pre-fill for the option on a reconnect. */
+  isOptionInitiallyOn?: boolean;
   submitLabel: string;
-  onSubmit: (account: string, token: string) => Promise<Connection>;
+  onSubmit: (account: string, token: string, isOptionOn: boolean) => Promise<Connection>;
   onConnected: (connection: Connection) => void;
   onCancel?: () => void;
 }
@@ -38,11 +47,13 @@ export function ProviderTokenForm(props: ProviderTokenFormProps) {
   const { idPrefix, field } = props;
   const [account, setAccount] = useState(props.initialAccount ?? "");
   const [token, setToken] = useState("");
+  const [isOptionOn, setOptionOn] = useState(props.isOptionInitiallyOn ?? false);
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setBusy] = useState(false);
   const accountId = `${idPrefix}-account`;
   const tokenId = `${idPrefix}-token`;
   const errorId = `${idPrefix}-error`;
+  const optionId = `${idPrefix}-option`;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -54,7 +65,7 @@ export function ProviderTokenForm(props: ProviderTokenFormProps) {
     setBusy(true);
     setError(null);
     try {
-      const connection = await submitSecret(token, () => setToken(""), (secret) => props.onSubmit(account.trim(), secret));
+      const connection = await submitSecret(token, () => setToken(""), (secret) => props.onSubmit(account.trim(), secret, isOptionOn));
       props.onConnected(connection);
     } catch (cause) {
       setError(`${cause instanceof Error ? cause.message : String(cause)} Check the details and try again.`);
@@ -104,6 +115,24 @@ export function ProviderTokenForm(props: ProviderTokenFormProps) {
         />
         <p id={`${tokenId}-hint`} className="field__hint">{props.tokenHint}</p>
       </div>
+      {props.option !== undefined && (
+        <div className="field">
+          <label className="switch" htmlFor={optionId}>
+            <input
+              id={optionId}
+              type="checkbox"
+              role="switch"
+              className="switch__input"
+              checked={isOptionOn}
+              onChange={(e) => setOptionOn(e.target.checked)}
+              aria-describedby={`${optionId}-hint`}
+            />
+            <span className="switch__track" aria-hidden="true" />
+            <span className="switch__label">{props.option.label}</span>
+          </label>
+          <p id={`${optionId}-hint`} className="field__hint">{props.option.hint}</p>
+        </div>
+      )}
       {error !== null && <p id={errorId} className="form-error" role="alert">{error}</p>}
       <div className="row-actions">
         {props.onCancel !== undefined && (

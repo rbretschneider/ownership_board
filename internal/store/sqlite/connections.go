@@ -22,7 +22,7 @@ func NewConnectionStore(db *DB) *ConnectionStore {
 }
 
 const connectionColumns = `provider, base_url, account, account_id, email, access_token_enc, refresh_token_enc,
-	access_expires_at, refresh_expires_at, status, generation, connected_by, connected_at, updated_at`
+	access_expires_at, refresh_expires_at, status, generation, connected_by, connected_at, updated_at, allow_agent_access`
 
 // Get implements connections.Store.
 func (s *ConnectionStore) Get(ctx context.Context, provider domain.Provider) (connections.SealedRecord, bool, error) {
@@ -62,7 +62,7 @@ func (s *ConnectionStore) Delete(ctx context.Context, provider domain.Provider) 
 
 func insertConnection(ctx context.Context, tx *sql.Tx, r connections.SealedRecord) (bool, error) {
 	result, err := tx.ExecContext(ctx,
-		`INSERT INTO provider_connections (`+connectionColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO provider_connections (`+connectionColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT (provider) DO NOTHING`,
 		connectionValues(r)...)
 	return affectedOne(result, err)
@@ -74,7 +74,7 @@ func updateConnection(ctx context.Context, tx *sql.Tx, r connections.SealedRecor
 	result, err := tx.ExecContext(ctx,
 		`UPDATE provider_connections SET base_url = ?, account = ?, account_id = ?, email = ?, access_token_enc = ?,
 			refresh_token_enc = ?, access_expires_at = ?, refresh_expires_at = ?, status = ?, generation = ?,
-			connected_by = ?, connected_at = ?, updated_at = ?
+			connected_by = ?, connected_at = ?, updated_at = ?, allow_agent_access = ?
 		 WHERE provider = ? AND generation = ?`, args...)
 	return affectedOne(result, err)
 }
@@ -91,7 +91,7 @@ func connectionValues(r connections.SealedRecord) []any {
 	return []any{
 		string(r.Provider), r.BaseURL, r.Account, r.AccountID, r.Email, r.AccessTokenEnc, r.RefreshTokenEnc,
 		formatOptionalTime(r.AccessExpiresAt), formatOptionalTime(r.RefreshExpiresAt), string(r.Status), r.Generation,
-		r.ConnectedBy, formatTime(r.ConnectedAt), formatTime(r.UpdatedAt),
+		r.ConnectedBy, formatTime(r.ConnectedAt), formatTime(r.UpdatedAt), r.AllowAgentAccess,
 	}
 }
 
@@ -100,7 +100,7 @@ func scanConnection(row scanner) (connections.SealedRecord, error) {
 	var provider, status, connectedAt, updatedAt string
 	var accessExpires, refreshExpires sql.NullString
 	err := row.Scan(&provider, &r.BaseURL, &r.Account, &r.AccountID, &r.Email, &r.AccessTokenEnc, &r.RefreshTokenEnc,
-		&accessExpires, &refreshExpires, &status, &r.Generation, &r.ConnectedBy, &connectedAt, &updatedAt)
+		&accessExpires, &refreshExpires, &status, &r.Generation, &r.ConnectedBy, &connectedAt, &updatedAt, &r.AllowAgentAccess)
 	if err != nil {
 		return connections.SealedRecord{}, err
 	}

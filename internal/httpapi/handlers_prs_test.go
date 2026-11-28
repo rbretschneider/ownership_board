@@ -27,12 +27,14 @@ func TestPRStatusIsSanitized(t *testing.T) {
 	 {"ticket":92,"url":"https://github.com/acme/mix/pull/25","verdict":"merged","reason":""},
 	 {"ticket":31,"url":"https://github.com/acme/cad/pull/32","verdict":"repair","reason":"checks_failed","mergeable":"WEIRD","head":"zz"},
 	 {"ticket":7,"url":"https://evil.example/pull/1","verdict":"running","reason":""},
+	 {"ticket":12,"url":"javascript://evil.example/a/b/pulls/1","verdict":"running","reason":""},
+	 {"ticket":13,"url":"http://10.0.10.11:3021/team/app/pulls/4","verdict":"green_owner","reason":"","mergeable":"MERGEABLE"},
 	 {"ticket":8,"url":"https://github.com/acme/cad/pull/9","verdict":"explode","reason":""},
 	 {"ticket":9,"url":"https://github.com/acme/cad/pull/9","verdict":"repair","reason":""},
 	 {"ticket":10,"url":"https://github.com/acme/cad/pull/10","verdict":"running","reason":"conflict"},
 	 {"ticket":-1,"url":"https://github.com/acme/cad/pull/11","verdict":"running","reason":""}]}`)
 	got := readPRStatus(path)
-	if got.ObservedAt == nil || len(got.PRs) != 2 {
+	if got.ObservedAt == nil || len(got.PRs) != 3 {
 		t.Fatalf("%+v", got)
 	}
 	first := got.PRs[0]
@@ -44,6 +46,9 @@ func TestPRStatusIsSanitized(t *testing.T) {
 	}
 	if second := got.PRs[1]; second.Reason != "checks_failed" || second.Mergeable != "" || second.Head != "" {
 		t.Fatalf("second %+v", second)
+	}
+	if forgejo := got.PRs[2]; forgejo.TicketID != 13 || forgejo.Mergeable != "MERGEABLE" {
+		t.Fatalf("forgejo %+v", forgejo)
 	}
 	raw, _ := json.Marshal(got)
 	if strings.Contains(string(raw), "secret") || strings.Contains(string(raw), "script>") || strings.Contains(string(raw), "evil") {

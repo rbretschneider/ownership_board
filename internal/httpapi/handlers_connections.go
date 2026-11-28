@@ -37,6 +37,8 @@ type connectionDTO struct {
 	ConnectedAt *time.Time             `json:"connected_at"`
 	RepoCount   int                    `json:"repo_count"`
 	LastSync    *lastSyncDTO           `json:"last_sync"`
+	// AllowAgentAccess: board agents may borrow this connection's token.
+	AllowAgentAccess bool `json:"allow_agent_access"`
 }
 
 type lastSyncDTO struct {
@@ -108,13 +110,15 @@ func (s *server) cancelGitHub(w http.ResponseWriter, r *http.Request, who caller
 
 func (s *server) connectForgejo(w http.ResponseWriter, r *http.Request, who caller) error {
 	var body struct {
-		BaseURL string `json:"base_url"`
-		Token   string `json:"token"`
+		BaseURL          string `json:"base_url"`
+		Token            string `json:"token"`
+		AllowAgentAccess bool   `json:"allow_agent_access"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return err
 	}
-	view, err := s.deps.Connections.ConnectForgejo(r.Context(), adminOf(who), body.BaseURL, body.Token)
+	input := connections.ForgejoInput{BaseURL: body.BaseURL, Token: body.Token, AllowAgentAccess: body.AllowAgentAccess}
+	view, err := s.deps.Connections.ConnectForgejo(r.Context(), adminOf(who), input)
 	return respondConnection(w, view, err)
 }
 
@@ -167,7 +171,7 @@ func toConnection(view connections.View) connectionDTO {
 	dto := connectionDTO{
 		Provider: view.Provider, Label: view.Label, IsAvailable: view.IsAvailable, Status: view.Status, IsConnected: view.Status == connections.StatusConnected,
 		Account: view.Account, BaseURL: view.BaseURL, Email: view.Email, ConnectedAt: view.ConnectedAt,
-		RepoCount: view.RepoCount, LastSync: toLastSync(view.LastSync),
+		RepoCount: view.RepoCount, LastSync: toLastSync(view.LastSync), AllowAgentAccess: view.AllowAgentAccess,
 	}
 	if view.ManagedBy != "" {
 		managedBy := view.ManagedBy

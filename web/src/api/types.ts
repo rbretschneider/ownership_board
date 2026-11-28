@@ -177,6 +177,8 @@ export interface Connection {
   connected_at: string | null;
   repo_count: number;
   last_sync: SyncOutcome | null;
+  /** Board workers and the merge sweep may borrow this token (Forgejo only). */
+  allow_agent_access: boolean;
 }
 
 /** Answer to POST /connections/github/device. */
@@ -207,6 +209,8 @@ export interface DevicePoll {
 export interface ForgejoConnectionInput {
   base_url: string;
   token: string;
+  /** Let board agents clone, push and open or merge PRs with this token. */
+  allow_agent_access: boolean;
 }
 
 /** Body of PUT /connections/bitbucket. */
